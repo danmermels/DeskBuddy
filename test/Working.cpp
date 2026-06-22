@@ -5,6 +5,7 @@
 #include <WiFiUdp.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include "../Credentials.h"
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -12,12 +13,6 @@
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
 #endif
-
-const char *ssid     = "MARINA";
-const char *password = "marina.br";
-
-const String endpoint = "https://api.openweathermap.org/data/2.5/weather?lat=-23.53&units=metric&lon=-46.67&leng=fr&appid=";
-const String key = "12afe2bff954a255506fd24c6b17425f";
 
 struct tm  ts;
 char buf[80];
@@ -44,7 +39,7 @@ U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0);
 void setup(void) {
   Serial.begin(115200);
   u8g2.begin();
-  WiFi.begin(ssid, password);
+  WiFi.begin(SSID, PASS);
   Serial.println(payload);
 
   while ( WiFi.status() != WL_CONNECTED ) {
@@ -73,7 +68,7 @@ int timer = millis()-timeline;
 //WEATHER REFRESH
   if (millis()-refreshWeather > 600000) {
     HTTPClient http;
-    http.begin(endpoint + key); //Specify the URL
+    http.begin(String(OpenWeatherCall) + OpenWeatherKey); //Specify the URL
     int httpCode = http.GET();  //Make the request
 
     if (httpCode > 0) { //Check for the returning code

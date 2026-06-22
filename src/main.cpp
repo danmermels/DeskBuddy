@@ -5,6 +5,8 @@
 #include <WiFiUdp.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <ArduinoOTA.h>
+#include "../Credentials.h"
 
 #ifdef U8X8_HAVE_HW_SPI
 #include <SPI.h>
@@ -12,11 +14,6 @@
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
 #endif
-
-const char *ssid     = "MARINA";
-const char *password = "marina.br";
-const String endpoint = "https://api.openweathermap.org/data/2.5/weather?lat=-23.53&units=metric&lon=-46.67&leng=fr&appid=";
-const String key = "12afe2bff954a255506fd24c6b17425f";
 
 struct tm  ts;
 char buf[80];
@@ -28,8 +25,19 @@ u_long modetimer = 10000;
 u_long away = 0;
 u_long desk = 0;
 
-//IR VARIABLES
-const int IRpin = 34;
+// Pin definitions for ESP32-C3
+// Default I2C pins for ESP32-C3 are SDA=8, SCL=9.
+// IR pin must be an ADC pin. GPIO 3 is a good choice (ADC1_CH3).
+const int SDA_pin = 8;
+const int SCL_pin = 9;
+const int IRpin = 3;
+
+// Static IP Configuration
+IPAddress local_IP(192, 168, 15, 160);  // Set static IP to 192.168.15.160
+IPAddress gateway(192, 168, 15, 1);    // Gateway for 192.168.15.x network
+IPAddress subnet(255, 255, 255, 0);     // Subnet mask
+IPAddress primaryDNS(1, 1, 1, 1);       // Primary DNS (optional, default to 1.1.1.1)
+IPAddress secondaryDNS(8, 8, 8, 8);     // Secondary DNS (optional, default to 8.8.8.8)
 int IRValue;
 int IRValOLD;
 u_long IRValConstTime;
@@ -50,11 +58,38 @@ NTPClient timeClient(ntpUDP);
 //DISPLAY CONSTRUCTOR
 U8G2_SSD1306_128X32_UNIVISION_F_HW_I2C u8g2(U8G2_R0); 
 
+const char* getWiFiStatusName(wl_status_t status) {
+  switch (status) {
+    case WL_IDLE_STATUS:     return "IDLE";
+    case WL_NO_SSID_AVAIL:   return "NO_SSID";
+    case WL_SCAN_COMPLETED:  return "SCAN_COMPLETED";
+    case WL_CONNECTED:       return "CONNECTED";
+    case WL_CONNECT_FAILED:  return "FAILED";
+    case WL_CONNECTION_LOST: return "CONNECTION_LOST";
+    case WL_DISCONNECTED:    return "DISCONNECTED";
+    default:                 return "UNKNOWN";
+  }
+}
+
 //SETUP FUNCTION
 void setup(void) {
   Serial.begin(115200);
+  
+  // Initialize I2C with specified pins for ESP32-C3
+  Wire.begin(SDA_pin, SCL_pin);
   u8g2.begin();
-  WiFi.begin(ssid, password);
+
+  // Set Hostname
+  WiFi.setHostname("DeskBuddy");
+  
+  // Configure static IP
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("STA Failed to configure static IP");
+  } else {
+    Serial.println("Static IP configured successfully");
+  }
+  
+  WiFi.begin(SSID, PASS);
   //Serial.println(payload);
 
   while ( WiFi.status() != WL_CONNECTED ) {
@@ -64,10 +99,41 @@ void setup(void) {
 
   timeClient.begin();
   timeClient.setTimeOffset(-10800);
+
+  #pragma region OTA
+  ArduinoOTA
+    .onStart([]() {
+      String type;
+      if (ArduinoOTA.getCommand() == U_FLASH)
+        type = "sketch";
+      else // U_SPIFFS
+        type = "filesystem";
+      Serial.println("Start updating " + type);
+    })
+    .onEnd([]() {
+      Serial.println("\nEnd");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]: ", error);
+      if      (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+      else if (error == OTA_END_ERROR) Serial.println("End Failed");
+    });
+
+  ArduinoOTA.begin();
+  #pragma endregion
 }
 
 //LOOP FUNCTION
 void loop(void) {
+  if (WiFi.status() == WL_CONNECTED) {
+    ArduinoOTA.handle();
+  }
 
 //GO TO
   timeNeedle = millis()-timeline;
@@ -134,7 +200,7 @@ void loop(void) {
 //WEATHER REFRESH
   if (millis()-refreshWeather > 600000) {
     HTTPClient http;
-    http.begin(endpoint + key); //Specify the URL
+    http.begin(String(OpenWeatherCall) + OpenWeatherKey); //Specify the URL
     int httpCode = http.GET();  //Make the request
     if (httpCode > 0) { //Check for the returning code
       payload = http.getString();
@@ -268,7 +334,18 @@ void loop(void) {
   Serial.print(" - UsrMode:");
   Serial.print(UsrMode);
   Serial.print(" - Timeline:");
-  Serial.println(timeNeedle/1000);
+  Serial.print(timeNeedle/1000);
+  Serial.print(" - WiFi:");
+  wl_status_t wifiStatus = WiFi.status();
+  Serial.print(getWiFiStatusName(wifiStatus));
+  if (wifiStatus == WL_CONNECTED) {
+    Serial.print("(");
+    Serial.print(WiFi.RSSI());
+    Serial.print("dBm, ");
+    Serial.print(WiFi.localIP());
+    Serial.print(")");
+  }
+  Serial.println();
 
 //PACE
   delay (500);

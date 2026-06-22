@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"NTPClient",
+			"Oled",
+			"U8g2",
+			"U8g2lib",
+			"bblanchon"
+		]
+	}
+}
