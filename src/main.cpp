@@ -10,40 +10,98 @@
 #include <ArduinoOTA.h>
 #include <WebServer.h>
 #include <ld2410.h>
-#include <SimpleKalmanFilter.h>
 #include <Preferences.h>
+#include <LittleFS.h>
 #include "Behaviour.h"
-#include "AwayImage.h"
 #include "../Credentials.h"
 
 // User States
-#define STATE_AWAY      0
-#define STATE_STILL     1
-#define STATE_ACTIVE    2
-#define STATE_RESTLESS  3
+#define STATE_AWAY        0
+#define STATE_FOCUS       1
+#define STATE_BUSY        2
+#define STATE_DISTRACTED  3
+#define STATE_REGULAR     4
 
-// Distance threshold for presence at the desk (in cm) and attention state thresholds
+// Configuration limits
 int deskDistanceLimit = 120;
-float activeThreshold = 15.0;
-float restlessThreshold = 80.0;
+int focusDistanceLimit = 50;
+int motionRatioLimit = 15;
 
 // Hardware Instances
 TFT_eSPI tft = TFT_eSPI();
 ld2410 radar;
 WebServer server(80);
 
-// Kalman Filters for smoothing radar signals
-// Parameters: SimpleKalmanFilter(measurement_uncertainty, estimation_uncertainty, process_noise)
-SimpleKalmanFilter movingDistFilter(5.0, 5.0, 0.05);
-SimpleKalmanFilter movingEnergyFilter(5.0, 5.0, 0.05);
-SimpleKalmanFilter staticDistFilter(5.0, 5.0, 0.05);
-SimpleKalmanFilter staticEnergyFilter(5.0, 5.0, 0.05);
+#include <algorithm>
+
+class RollingMedianFilter {
+public:
+  RollingMedianFilter(int maxSize = 100) {
+    _maxSize = maxSize;
+    _buffer = new float[_maxSize];
+    clear();
+  }
+
+  ~RollingMedianFilter() {
+    delete[] _buffer;
+  }
+
+  void clear() {
+    _head = 0;
+    _count = 0;
+    for (int i = 0; i < _maxSize; i++) {
+      _buffer[i] = 0.0;
+    }
+  }
+
+  void add(float val) {
+    _buffer[_head] = val;
+    _head = (_head + 1) % _maxSize;
+    if (_count < _maxSize) {
+      _count++;
+    }
+  }
+
+  float getMedian(int windowSize) {
+    if (windowSize <= 0) return 0.0;
+    if (windowSize > _maxSize) windowSize = _maxSize;
+    
+    int countToCopy = (_count < windowSize) ? _count : windowSize;
+    if (countToCopy == 0) return 0.0;
+
+    float* temp = new float[countToCopy];
+    int idx = _head;
+    for (int i = 0; i < countToCopy; i++) {
+      idx = (idx - 1 + _maxSize) % _maxSize;
+      temp[i] = _buffer[idx];
+    }
+
+    std::sort(temp, temp + countToCopy);
+    
+    float result;
+    if (countToCopy % 2 == 1) {
+      result = temp[countToCopy / 2];
+    } else {
+      result = (temp[countToCopy / 2 - 1] + temp[countToCopy / 2]) / 2.0;
+    }
+    delete[] temp;
+    return result;
+  }
+
+private:
+  float* _buffer;
+  int _maxSize;
+  int _head;
+  int _count;
+};
+
+// Rolling Median Filter for smoothing detection distance signal
+RollingMedianFilter detectionDistFilter(100);
+// Rolling Median Filter for motion target debouncing to filter spikes
+RollingMedianFilter motionFilter(10);
 
 // Filtered values
-float filteredMovingDist = 0.0;
-float filteredMovingEnergy = 0.0;
-float filteredStaticDist = 0.0;
-float filteredStaticEnergy = 0.0;
+float filteredDetectionDist = 0.0;
 
 // Productivity & Timing Metrics
 unsigned long totalDeskTime = 0;
@@ -64,7 +122,10 @@ unsigned long lastStretchReminderTime = 0;
 volatile bool isAILoading = false;
 String aiResponse = "";
 volatile bool hasNewAIResponse = false;
+volatile bool lastResponseIsAi = false;
 String currentPrompt = "";
+String lastTriggeredEventDetail = "";
+String currentUserName = "human";
 SemaphoreHandle_t geminiMutex = NULL;
 volatile bool otaInProgress = false;
 
@@ -73,9 +134,47 @@ Preferences preferences;
 float targetHours = 8.0;
 int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
 int dailyAiRequestCount = 0;
+String userName = "human";
 bool firstSitToday = true;
+uint32_t firstSitEpoch = 0;
+unsigned long longestSittingStreak = 0;
+bool streakAlertTriggered = false;
 int lastNtpDay = -1;
 int lastTriggeredEventType = EVENT_FIRST_SIT;
+float filterWindow = 2.0;
+
+// Radar Gate Sensitivity Thresholds (0-100)
+int g0mSens = 100;
+int g0sSens = 50;
+int g1mSens = 100;
+int g1sSens = 50;
+int g2mSens = 100;
+int g2sSens = 50;
+int g3mSens = 80;
+int g3sSens = 50;
+int g4mSens = 100;
+int g4sSens = 50;
+int g5mSens = 100;
+int g5sSens = 50;
+int g6mSens = 100;
+int g6sSens = 50;
+
+// Raw radar values
+int rawDetectionDist = 0;
+bool sensorPresenceDetected = false;
+bool sensorMovingTargetDetected = false;
+bool sensorStaticPresenceDetected = false;
+
+// Session-specific and cumulative motion tracking
+unsigned long sessionDeskTime = 0;
+unsigned long sessionMotionTime = 0;
+unsigned long totalMotionTime = 0;
+int motionCount = 0;
+
+// Session-specific distance tracking
+unsigned long sessionDistanceSum = 0;
+unsigned long sessionDistanceCount = 0;
+float sessionDistanceAverage = 0.0;
 
 // Animated Ring Colors & Parameters
 struct RGBColor {
@@ -86,9 +185,10 @@ struct RGBColor {
 
 const RGBColor stateColors[] = {
   {80, 80, 80},     // STATE_AWAY: Dark Grey
-  {0, 120, 255},    // STATE_STILL: Deep Blue
-  {0, 220, 80},     // STATE_ACTIVE: Forest Green
-  {255, 50, 50}     // STATE_RESTLESS: Soft Red
+  {0, 120, 255},    // STATE_FOCUS: Deep Blue
+  {0, 220, 80},     // STATE_BUSY: Forest Green
+  {255, 50, 50},    // STATE_DISTRACTED: Soft Red
+  {200, 200, 200}   // STATE_REGULAR: Soft White
 };
 
 RGBColor currentRingColor = {80, 80, 80};
@@ -100,8 +200,7 @@ const unsigned long ringTransitionDuration = 1000; // 1 second
 // NTP Client & Weather Data
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
-unsigned long refreshTime = 0;
-unsigned long refreshWeather = 0;
+unsigned long lastHourlyUpdate = 0;
 int temp = 0;
 String weatherDesc = "Clear";
 struct tm ts;
@@ -130,19 +229,65 @@ String formatTime(unsigned long ms) {
   return String(minutes) + "m";
 }
 
+// Formatting helper for epoch timestamp to HH:MM (local time already shifted offset)
+String formatEpochTime(uint32_t epoch) {
+  if (epoch == 0) return "Not registered yet";
+  time_t rawTime = (time_t)epoch;
+  struct tm * gmTimeInfo = gmtime(&rawTime);
+  char timeStr[10];
+  snprintf(timeStr, sizeof(timeStr), "%02d:%02d", gmTimeInfo->tm_hour, gmTimeInfo->tm_min);
+  return String(timeStr);
+}
+
 // Converts state ID to string representation
 const char* getPresenceStateName(int state) {
   switch (state) {
-    case STATE_AWAY:      return "Away";
-    case STATE_STILL:     return "Still (Focus)";
-    case STATE_ACTIVE:    return "Active (Working)";
-    case STATE_RESTLESS:  return "Restless";
-    default:              return "Unknown";
+    case STATE_AWAY:        return "Away";
+    case STATE_FOCUS:       return "Focus";
+    case STATE_BUSY:        return "Busy";
+    case STATE_DISTRACTED:  return "Distracted";
+    case STATE_REGULAR:     return "Regular Activity";
+    default:                return "Unknown";
   }
 }
 
+// Draw custom PackBits-RLE compressed image from LittleFS to TFT
+void drawRLEImage(const char* filename, int16_t x, int16_t y) {
+  fs::File file = LittleFS.open(filename, "r");
+  if (!file) return;
+
+  uint16_t w, h;
+  if (file.read((uint8_t*)&w, 2) != 2 || file.read((uint8_t*)&h, 2) != 2) {
+    file.close();
+    return;
+  }
+
+  tft.setAddrWindow(x, y, w, h);
+
+  while (file.available() > 0) {
+    uint8_t header = file.read();
+    uint8_t count = (header & 0x7F) + 1;
+    if (header & 0x80) {
+      // Repeating run packet
+      uint16_t color;
+      if (file.read((uint8_t*)&color, 2) == 2) {
+        tft.pushColor(color, count);
+      }
+    } else {
+      // Raw non-repeating packet
+      for (int i = 0; i < count; i++) {
+        uint16_t color;
+        if (file.read((uint8_t*)&color, 2) == 2) {
+          tft.pushColor(color, 1);
+        }
+      }
+    }
+  }
+  file.close();
+}
+
 // Helper to draw auto-wrapped text in the center of the round TFT
-void drawCenteredWrappedText(String text, uint16_t color) {
+void drawCenteredWrappedText(String text, uint16_t color, bool isAi = false) {
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(color, TFT_BLACK);
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
@@ -171,6 +316,18 @@ void drawCenteredWrappedText(String text, uint16_t color) {
     y += 30;
     if (y > 180) break; // Avoid vertical overflow
   }
+
+  if (isAi) {
+    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    tft.drawString("(AI GENERATED)", 120, 210, 2);
+  }
+}
+
+// Dynamic quote personalization helper
+String personalizeQuote(String quote, String name) {
+  char formattedQuote[128];
+  snprintf(formattedQuote, sizeof(formattedQuote), quote.c_str(), name.c_str());
+  return String(formattedQuote);
 }
 
 // Asynchronous FreeRTOS Task for Gemini HTTPS Queries
@@ -210,7 +367,14 @@ void queryGeminiTask(void * parameter) {
         }
         
         xSemaphoreTake(geminiMutex, portMAX_DELAY);
-        aiResponse = generatedText;
+        lastResponseIsAi = true;
+        if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
+          char welcomeMsg[128];
+          snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", generatedText.c_str(), lastTriggeredEventDetail.c_str());
+          aiResponse = String(welcomeMsg);
+        } else {
+          aiResponse = generatedText;
+        }
         hasNewAIResponse = true;
         xSemaphoreGive(geminiMutex);
         success = true;
@@ -229,11 +393,25 @@ void queryGeminiTask(void * parameter) {
       case EVENT_STRETCH:       quote = localStretch[randIdx]; break;
       case EVENT_FOCUS_END:     quote = localFocus[randIdx]; break;
       case EVENT_SLACKER:       quote = localSlacker[randIdx]; break;
+      case EVENT_STREAK_BEATEN: quote = localStreakBeaten[randIdx]; break;
       default:                  quote = localWelcomeBack[randIdx]; break;
     }
     
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    aiResponse = String(quote);
+    lastResponseIsAi = false;
+    String nameCopy = currentUserName;
+    xSemaphoreGive(geminiMutex);
+
+    String personalQuote = personalizeQuote(String(quote), nameCopy);
+    
+    xSemaphoreTake(geminiMutex, portMAX_DELAY);
+    if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
+      char welcomeMsg[128];
+      snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), lastTriggeredEventDetail.c_str());
+      aiResponse = String(welcomeMsg);
+    } else {
+      aiResponse = personalQuote;
+    }
     hasNewAIResponse = true;
     xSemaphoreGive(geminiMutex);
   }
@@ -245,6 +423,12 @@ void queryGeminiTask(void * parameter) {
 // Coordinated behaviour trigger: runs background Gemini task or picks local fallback
 void triggerBehaviour(int eventType, String detail = "") {
   lastTriggeredEventType = eventType;
+
+  xSemaphoreTake(geminiMutex, portMAX_DELAY);
+  lastTriggeredEventDetail = detail;
+  currentUserName = userName;
+  xSemaphoreGive(geminiMutex);
+
   bool useAI = false;
   if (aiMode == 2) {
     // Frequent mode: all events can trigger AI
@@ -266,21 +450,28 @@ void triggerBehaviour(int eventType, String detail = "") {
     char formattedPrompt[256];
     switch (eventType) {
       case EVENT_FIRST_SIT:
-        basePrompt = PROMPT_FIRST_SIT_OF_DAY;
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FIRST_SIT_OF_DAY, userName.c_str());
+        basePrompt = String(formattedPrompt);
         break;
       case EVENT_WELCOME_BACK:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_WELCOME_BACK, detail.c_str());
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_WELCOME_BACK, userName.c_str(), detail.c_str());
         basePrompt = String(formattedPrompt);
         break;
       case EVENT_STRETCH:
-        basePrompt = PROMPT_STRETCH_REMINDER;
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_STRETCH_REMINDER, userName.c_str());
+        basePrompt = String(formattedPrompt);
         break;
       case EVENT_FOCUS_END:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FOCUS_CONGRATS, detail.c_str());
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FOCUS_CONGRATS, userName.c_str(), detail.c_str());
         basePrompt = String(formattedPrompt);
         break;
       case EVENT_SLACKER:
-        basePrompt = PROMPT_SLACKER_ROAST;
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_SLACKER_ROAST, userName.c_str());
+        basePrompt = String(formattedPrompt);
+        break;
+      case EVENT_STREAK_BEATEN:
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_STREAK_BEATEN, userName.c_str(), detail.c_str());
+        basePrompt = String(formattedPrompt);
         break;
     }
 
@@ -288,12 +479,13 @@ void triggerBehaviour(int eventType, String detail = "") {
       dailyAiRequestCount++;
       // Format details including Productivity Score & history
       String fullPrompt = basePrompt + "\nContext details:\n";
+      fullPrompt += "User's Name: " + userName + "\n";
       fullPrompt += "At Desk Time: " + formatTime(totalDeskTime) + "\n";
       fullPrompt += "Focus Time: " + formatTime(totalFocusTime) + "\n";
       fullPrompt += "Break Time: " + formatTime(totalBreakTime) + "\n";
       fullPrompt += "Breaks taken: " + String(breakCount) + "\n";
       fullPrompt += "Productivity Score: " + String(productivityScore) + "%\n";
-      fullPrompt += "Instruction: Respond with one short, witty sentence in English or Portuguese under 30 characters.";
+      fullPrompt += "Instruction: Address the user as " + userName + ". Respond with one short, witty sentence in English or Portuguese under 30 characters.";
 
       xSemaphoreTake(geminiMutex, portMAX_DELAY);
       currentPrompt = fullPrompt;
@@ -319,14 +511,82 @@ void triggerBehaviour(int eventType, String detail = "") {
       case EVENT_STRETCH:       quote = localStretch[randIdx]; break;
       case EVENT_FOCUS_END:     quote = localFocus[randIdx]; break;
       case EVENT_SLACKER:       quote = localSlacker[randIdx]; break;
+      case EVENT_STREAK_BEATEN: quote = localStreakBeaten[randIdx]; break;
     }
+
+    String personalQuote = personalizeQuote(String(quote), userName);
 
     // Immediately post fallback quote to display thread-safely
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    aiResponse = String(quote);
+    lastResponseIsAi = false;
+    if (eventType == EVENT_WELCOME_BACK || eventType == EVENT_STREAK_BEATEN) {
+      char welcomeMsg[128];
+      snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), detail.c_str());
+      aiResponse = String(welcomeMsg);
+    } else {
+      aiResponse = personalQuote;
+    }
     hasNewAIResponse = true;
     xSemaphoreGive(geminiMutex);
   }
+}
+
+// Save daily statistics to LittleFS using an atomic rename pattern
+void saveDailyStats() {
+  fs::File file = LittleFS.open("/stats.json.tmp", "w");
+  if (!file) {
+    return;
+  }
+  DynamicJsonDocument doc(512);
+  doc["firstSitToday"] = firstSitToday;
+  doc["firstSitEpoch"] = firstSitEpoch;
+  doc["breakCount"] = breakCount;
+  doc["totalDeskTime"] = totalDeskTime;
+  doc["totalFocusTime"] = totalFocusTime;
+  doc["totalBreakTime"] = totalBreakTime;
+  doc["dailyAiRequestCount"] = dailyAiRequestCount;
+  doc["lastNtpDay"] = lastNtpDay;
+  doc["longestSittingStreak"] = longestSittingStreak;
+  doc["userName"] = userName;
+
+  if (serializeJson(doc, file) == 0) {
+    file.close();
+    return;
+  }
+  file.close();
+
+  if (LittleFS.exists("/stats.json")) {
+    LittleFS.remove("/stats.json");
+  }
+  LittleFS.rename("/stats.json.tmp", "/stats.json");
+}
+
+// Load daily statistics from LittleFS
+void loadDailyStats() {
+  if (!LittleFS.exists("/stats.json")) {
+    return;
+  }
+  fs::File file = LittleFS.open("/stats.json", "r");
+  if (!file) {
+    return;
+  }
+  DynamicJsonDocument doc(512);
+  DeserializationError error = deserializeJson(doc, file);
+  if (!error) {
+    firstSitToday = doc["firstSitToday"] | true;
+    firstSitEpoch = doc["firstSitEpoch"] | 0;
+    breakCount = doc["breakCount"] | 0;
+    totalDeskTime = doc["totalDeskTime"] | 0UL;
+    totalFocusTime = doc["totalFocusTime"] | 0UL;
+    totalBreakTime = doc["totalBreakTime"] | 0UL;
+    dailyAiRequestCount = doc["dailyAiRequestCount"] | 0;
+    lastNtpDay = doc["lastNtpDay"] | -1;
+    longestSittingStreak = doc["longestSittingStreak"] | 0UL;
+    if (doc.containsKey("userName")) {
+      userName = doc["userName"].as<String>();
+    }
+  }
+  file.close();
 }
 
 // Web Server Route Handlers
@@ -339,7 +599,26 @@ void handleRoot() {
   <title>DeskBuddy Radar Dashboard</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
-    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px; width: 100%; max-width: 450px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; }
+    .header { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 450px; margin-bottom: 10px; padding: 0 10px; box-sizing: border-box; }
+    .header h1 { margin: 0; font-size: 1.6rem; color: #38bdf8; font-weight: 800; letter-spacing: -0.025em; }
+    .cog-btn {
+      color: #94a3b8;
+      cursor: pointer;
+      transition: color 0.2s, transform 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cog-btn:hover {
+      color: #38bdf8;
+      transform: rotate(45deg);
+    }
+    .cog-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px; width: 100%; max-width: 450px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; box-sizing: border-box; }
     .ai-card {
       background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
       border: 1px solid #38bdf8;
@@ -364,11 +643,22 @@ void handleRoot() {
       color: #38bdf8;
       text-align: center;
       line-height: 1.5;
-      margin: 15px 0;
+      margin: 15px 0 5px 0;
       min-height: 2.5rem;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+    .ai-badge {
+      display: none;
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: -5px;
+      margin-bottom: 10px;
+      text-align: center;
+      font-weight: bold;
     }
     .ai-loading-container {
       display: flex;
@@ -391,6 +681,207 @@ void handleRoot() {
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+    .led {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .led-off {
+      background-color: #334155;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+    }
+    .presence-on {
+      background-color: #10b981;
+      box-shadow: 0 0 12px #10b981, inset 0 2px 4px rgba(255,255,255,0.4);
+    }
+    .movement-on {
+      background-color: #3b82f6;
+      box-shadow: 0 0 12px #3b82f6, inset 0 2px 4px rgba(255,255,255,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>DeskBuddy</h1>
+    <a href="/settings" class="cog-btn" title="Settings">
+      <svg viewBox="0 0 24 24">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+    </a>
+  </div>
+
+  <div class="card ai-card">
+    <h1>DeskBuddy's Message</h1>
+    <div class="ai-message" id="aiMessage">Waiting for activity...</div>
+    <div class="ai-badge" id="aiBadge">(AI Generated)</div>
+    <div class="ai-loading-container" id="aiLoading" style="display: none;">
+      <div class="spinner"></div>
+      <span>DeskBuddy is thinking...</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1 style="margin-bottom: 15px;">Live Sensor Indicators</h1>
+    <div style="display: flex; justify-content: space-around; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div id="presenceLight" class="led led-off"></div>
+        <span class="label" style="font-weight: 500;">Presence Detected</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div id="movementLight" class="led led-off"></div>
+        <span class="label" style="font-weight: 500;">Motion Detected</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1>Productivity History</h1>
+    <div class="metric">
+      <span class="label">Total Desk Time</span>
+      <span class="value" id="deskTime">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Total Focus Time</span>
+      <span class="value" id="focusTime">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Total Break Time</span>
+      <span class="value" id="breakTime">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Break Count</span>
+      <span class="value" id="breaks">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Latest Break Duration</span>
+      <span class="value" id="latestBreak">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Longest Sitting Streak</span>
+      <span class="value" id="longestStreak">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">First Sit of Day</span>
+      <span class="value" id="firstSitTime">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Session Motion Ratio</span>
+      <span class="value"><span id="motionRatio">-</span> %</span>
+    </div>
+    <div class="metric">
+      <span class="label">Session Average Distance</span>
+      <span class="value"><span id="sessionDistAvg">-</span> cm</span>
+    </div>
+    <div class="metric">
+      <span class="label">Live Detection Distance</span>
+      <span class="value"><span id="liveDetectionDist">-</span> cm</span>
+    </div>
+    <div class="metric">
+      <span class="label">Total Motion Time</span>
+      <span class="value" id="motionTime">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Motion Trigger Count</span>
+      <span class="value" id="motionCount">-</span>
+    </div>
+    <div class="metric">
+      <span class="label">Productivity Score</span>
+      <span class="value" id="score">-</span>
+    </div>
+  </div>
+
+  <script>
+    function updateMetrics() {
+      fetch('/radar-data')
+        .then(response => response.json())
+        .then(data => {
+          let presenceLight = document.getElementById('presenceLight');
+          if (presenceLight) {
+            presenceLight.className = data.presenceDetected ? 'led presence-on' : 'led led-off';
+          }
+          let movementLight = document.getElementById('movementLight');
+          if (movementLight) {
+            movementLight.className = data.movingTargetDetected ? 'led movement-on' : 'led led-off';
+          }
+          
+          document.getElementById('deskTime').innerText = data.deskTime;
+          document.getElementById('focusTime').innerText = data.focusTime;
+          document.getElementById('breakTime').innerText = data.breakTime;
+          document.getElementById('breaks').innerText = data.breaks;
+          document.getElementById('latestBreak').innerText = data.latestBreak;
+          document.getElementById('longestStreak').innerText = data.longestStreak;
+          document.getElementById('firstSitTime').innerText = data.firstSitTime;
+          document.getElementById('motionRatio').innerText = data.motionRatio;
+          document.getElementById('sessionDistAvg').innerText = data.sessionDistAvg;
+          document.getElementById('liveDetectionDist').innerText = data.detectionDist;
+          document.getElementById('motionTime').innerText = data.totalMotionTime;
+          document.getElementById('motionCount').innerText = data.motionCount;
+          
+          let scoreColor = "score-high";
+          if (data.score < 40) scoreColor = "score-low";
+          else if (data.score < 70) scoreColor = "score-med";
+          document.getElementById('score').innerHTML = `<span class="${scoreColor}">${data.score}%</span>`;
+          
+          if (data.aiMessage && data.aiMessage.trim() !== "") {
+            document.getElementById('aiMessage').innerText = data.aiMessage;
+          } else {
+            document.getElementById('aiMessage').innerText = "Waiting for activity...";
+          }
+          document.getElementById('aiLoading').style.display = data.aiLoading ? "flex" : "none";
+          
+          const isAi = data.isAiGenerated && data.aiMessage && data.aiMessage.trim() !== "" && data.aiMessage !== "Waiting for activity...";
+          document.getElementById('aiBadge').style.display = isAi ? "block" : "none";
+          
+          setTimeout(updateMetrics, 250);
+        })
+        .catch(err => {
+          console.error("Error fetching radar data:", err);
+          setTimeout(updateMetrics, 250);
+        });
+    }
+    updateMetrics();
+  </script>
+</body>
+</html>
+  )rawhtml";
+  server.send(200, "text/html", html);
+}
+
+void handleSettings() {
+  String html = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeskBuddy Settings</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .settings-header { display: flex; align-items: center; width: 100%; max-width: 600px; margin-bottom: 15px; gap: 15px; padding: 0 10px; box-sizing: border-box; }
+    .settings-header h1 { margin: 0; font-size: 1.6rem; color: #38bdf8; font-weight: 800; }
+    .back-btn {
+      color: #94a3b8;
+      cursor: pointer;
+      transition: color 0.2s, transform 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .back-btn:hover {
+      color: #38bdf8;
+      transform: translateX(-3px);
+    }
+    .back-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px; width: 100%; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; box-sizing: border-box; }
+    h1 { font-size: 1.5rem; color: #38bdf8; text-align: center; margin-bottom: 20px; }
+    .metric { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; align-items: center; }
+    .metric:last-child { border: none; }
+    .label { color: #94a3b8; }
+    .value { font-weight: bold; }
     .settings-input {
       background: #0f172a;
       color: #f8fafc;
@@ -448,20 +939,26 @@ void handleRoot() {
     .slider::-webkit-slider-thumb:hover {
       transform: scale(1.2);
     }
+    .chart-container { position: relative; width: 100%; height: 220px; margin-top: 15px; }
+    canvas { display: block; background: #0b0f19; border-radius: 8px; border: 1px solid #334155; width: 100%; height: 100%; }
+    .legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 0.8rem; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .legend-color { width: 12px; height: 12px; border-radius: 3px; }
+    .toggle-container { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; margin: 4px 0; }
   </style>
 </head>
 <body>
-  <div class="card ai-card">
-    <h1>DeskBuddy's Message</h1>
-    <div class="ai-message" id="aiMessage">Waiting for activity...</div>
-    <div class="ai-loading-container" id="aiLoading" style="display: none;">
-      <div class="spinner"></div>
-      <span>DeskBuddy is thinking...</span>
-    </div>
+  <div class="settings-header">
+    <a href="/" class="back-btn" title="Back to Dashboard">
+      <svg viewBox="0 0 24 24">
+        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+      </svg>
+    </a>
+    <h1>DeskBuddy Settings</h1>
   </div>
 
-  <div class="card" style="width: 100%; max-width: 450px;">
-    <h1>DeskBuddy Settings</h1>
+  <div class="card">
+    <h1>General Settings</h1>
     <form action="/save-settings" method="POST">
       <div class="metric">
         <span class="label">AI Mode</span>
@@ -472,22 +969,26 @@ void handleRoot() {
         </select>
       </div>
       <div class="metric">
+        <span class="label">User Name</span>
+        <input type="text" name="userName" id="userNameInput" class="settings-input" style="width: 150px; text-align: left;">
+      </div>
+      <div class="metric">
         <span class="label">Daily Target Hours</span>
         <input type="number" step="0.1" min="0.1" max="24.0" name="targetHours" id="targetHoursInput" class="settings-input">
       </div>
       <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
         <div style="display: flex; justify-content: space-between;">
-          <span class="label">Active State Threshold (Energy)</span>
-          <span class="value" id="actThreshVal">15%</span>
+          <span class="label">Focus Distance Limit (cm)</span>
+          <span class="value" id="focusDistLimVal">50 cm</span>
         </div>
-        <input type="range" name="actThresh" id="actThreshSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('actThreshVal').innerText = this.value + '%'">
+        <input type="range" name="focusDistLim" id="focusDistLimSlider" min="20" max="150" step="5" class="slider" oninput="document.getElementById('focusDistLimVal').innerText = this.value + ' cm'">
       </div>
       <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
         <div style="display: flex; justify-content: space-between;">
-          <span class="label">Restless State Threshold (Energy)</span>
-          <span class="value" id="restThreshVal">80%</span>
+          <span class="label">Motion Ratio Threshold (%)</span>
+          <span class="value" id="motionRatioLimVal">15%</span>
         </div>
-        <input type="range" name="restThresh" id="restThreshSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('restThreshVal').innerText = this.value + '%'">
+        <input type="range" name="motionRatioLim" id="motionRatioLimSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('motionRatioLimVal').innerText = this.value + '%'">
       </div>
       <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
         <div style="display: flex; justify-content: space-between;">
@@ -496,176 +997,404 @@ void handleRoot() {
         </div>
         <input type="range" name="distLimit" id="distLimitSlider" min="50" max="300" step="5" class="slider" oninput="document.getElementById('distLimitVal').innerText = this.value + ' cm'">
       </div>
+      <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+        <div style="display: flex; justify-content: space-between;">
+          <span class="label">Filter Window (Seconds)</span>
+          <span class="value" id="filterWindowVal">2.0s</span>
+        </div>
+        <input type="range" name="filterWindow" id="filterWindowSlider" min="0.5" max="10.0" step="0.5" class="slider" oninput="document.getElementById('filterWindowVal').innerText = parseFloat(this.value).toFixed(1) + 's'">
+      </div>
+      <details style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 10px;">
+        <summary style="cursor: pointer; color: #38bdf8; font-weight: bold; padding: 5px 0; outline: none;">Gate Sensitivity Trigger Levels (Gates 0-6)</summary>
+        <div style="margin-top: 10px; max-height: 350px; overflow-y: auto; padding-right: 5px;">
+          <!-- Gate 0 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 0 Moving Sensitivity</span>
+              <span class="value" id="g0mSensVal">90</span>
+            </div>
+            <input type="range" name="g0mSens" id="g0mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 0 Static Sensitivity</span>
+              <span class="value" id="g0sSensVal">90</span>
+            </div>
+            <input type="range" name="g0sSens" id="g0sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 1 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 1 Moving Sensitivity</span>
+              <span class="value" id="g1mSensVal">60</span>
+            </div>
+            <input type="range" name="g1mSens" id="g1mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 1 Static Sensitivity</span>
+              <span class="value" id="g1sSensVal">40</span>
+            </div>
+            <input type="range" name="g1sSens" id="g1sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 2 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 2 Moving Sensitivity</span>
+              <span class="value" id="g2mSensVal">50</span>
+            </div>
+            <input type="range" name="g2mSens" id="g2mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 2 Static Sensitivity</span>
+              <span class="value" id="g2sSensVal">40</span>
+            </div>
+            <input type="range" name="g2sSens" id="g2sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 3 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 3 Moving Sensitivity</span>
+              <span class="value" id="g3mSensVal">40</span>
+            </div>
+            <input type="range" name="g3mSens" id="g3mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 3 Static Sensitivity</span>
+              <span class="value" id="g3sSensVal">40</span>
+            </div>
+            <input type="range" name="g3sSens" id="g3sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 4 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 4 Moving Sensitivity</span>
+              <span class="value" id="g4mSensVal">45</span>
+            </div>
+            <input type="range" name="g4mSens" id="g4mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 4 Static Sensitivity</span>
+              <span class="value" id="g4sSensVal">40</span>
+            </div>
+            <input type="range" name="g4sSens" id="g4sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 5 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 5 Moving Sensitivity</span>
+              <span class="value" id="g5mSensVal">50</span>
+            </div>
+            <input type="range" name="g5mSens" id="g5mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 5 Static Sensitivity</span>
+              <span class="value" id="g5sSensVal">40</span>
+            </div>
+            <input type="range" name="g5sSens" id="g5sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 6 -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 6 Moving Sensitivity</span>
+              <span class="value" id="g6mSensVal">50</span>
+            </div>
+            <input type="range" name="g6mSens" id="g6mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6mSensVal').innerText = this.value">
+          </div>
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 6 Static Sensitivity</span>
+              <span class="value" id="g6sSensVal">40</span>
+            </div>
+            <input type="range" name="g6sSens" id="g6sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6sSensVal').innerText = this.value">
+          </div>
+        </div>
+      </details>
       <div style="text-align: center; margin-top: 15px;">
         <button type="submit" class="btn">Save Configuration</button>
       </div>
     </form>
   </div>
 
-  <div class="card" style="width: 100%; max-width: 450px;">
-    <h1>Test Behavior Triggers</h1>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; justify-items: center; margin-top: 10px;">
-      <button class="btn" style="width: 100%; font-size: 0.85rem; padding: 8px 12px;" onclick="triggerTest(0)">First Sit</button>
-      <button class="btn" style="width: 100%; font-size: 0.85rem; padding: 8px 12px;" onclick="triggerTest(1)">Welcome Back</button>
-      <button class="btn" style="width: 100%; font-size: 0.85rem; padding: 8px 12px;" onclick="triggerTest(2)">Stretch</button>
-      <button class="btn" style="width: 100%; font-size: 0.85rem; padding: 8px 12px;" onclick="triggerTest(3)">Focus End</button>
-      <button class="btn" style="grid-column: span 2; width: 100%; font-size: 0.85rem; padding: 8px 12px;" onclick="triggerTest(4)">Slacker Roast</button>
+  <div class="card">
+    <h1>Radar Signal History</h1>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; justify-content: center; border-bottom: 1px solid #334155; padding-bottom: 10px;">
+      <div class="toggle-container">
+        <input type="checkbox" id="showDetectionDist" checked style="cursor:pointer;" onchange="drawChart()">
+        <label for="showDetectionDist" style="cursor:pointer; color:#06b6d4; font-weight:bold;">Detection Dist</label>
+      </div>
+    </div>
+    <div class="toggle-container" style="justify-content: center; margin-bottom: 10px;">
+      <input type="checkbox" id="showRawCheckbox" checked style="cursor:pointer;" onchange="drawChart()">
+      <label for="showRawCheckbox" style="cursor:pointer; color:#94a3b8;">Show Raw Signals (Dashed Lines)</label>
+    </div>
+    <div class="chart-container">
+      <canvas id="radarChart"></canvas>
+    </div>
+    <div class="legend">
+      <div class="legend-item">
+        <span class="legend-color" style="background: #06b6d4;"></span>
+        <span style="color:#94a3b8;">Detection Dist (cm)</span>
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <h1>DeskBuddy Live Radar</h1>
-    <div class="metric">
-      <span class="label">Presence Status</span>
-      <span class="value" id="presence"><span class="badge badge-away">AWAY</span></span>
-    </div>
-    <div class="metric">
-      <span class="label">User State</span>
-      <span class="value" id="state">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Moving Distance</span>
-      <span class="value" id="movingDist">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Moving Energy</span>
-      <span class="value" id="movingEnergy">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Stationary Distance</span>
-      <span class="value" id="staticDist">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Stationary Energy</span>
-      <span class="value" id="staticEnergy">-</span>
-    </div>
-  </div>
-  
-  <div class="card">
-    <h1>Productivity History</h1>
-    <div class="metric">
-      <span class="label">Total Desk Time</span>
-      <span class="value" id="deskTime">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Total Focus Time</span>
-      <span class="value" id="focusTime">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Total Break Time</span>
-      <span class="value" id="breakTime">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Break Count</span>
-      <span class="value" id="breaks">-</span>
-    </div>
-    <div class="metric">
-      <span class="label">Productivity Score</span>
-      <span class="value" id="score">-</span>
+  <div class="card" style="text-align: center;">
+    <h1>System Actions</h1>
+    <div style="display: flex; gap: 10px; justify-content: center;">
+      <button class="btn" style="background: #eab308; color: #0f172a; flex: 1; font-size: 0.95rem; padding: 10px 12px;" onclick="resetStats()">Reset Daily Stats</button>
+      <button class="btn" style="background: #ef4444; color: white; flex: 1; font-size: 0.95rem; padding: 10px 12px;" onclick="resetESP()">Reboot DeskBuddy</button>
     </div>
   </div>
 
   <script>
-    function updateMetrics() {
+    let maxPoints = 240;
+    let history = {
+      detectionDist: [],
+      rawDetectionDist: []
+    };
+    
+    function drawChart() {
+      let canvas = document.getElementById('radarChart');
+      if (!canvas) return;
+      let ctx = canvas.getContext('2d');
+      let w = canvas.width = canvas.clientWidth;
+      let h = canvas.height = canvas.clientHeight;
+      
+      ctx.clearRect(0, 0, w, h);
+      
+      let chartLeft = 35;
+      
+      // Draw grid lines and labels
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px sans-serif';
+      ctx.textBaseline = 'middle';
+      
+      let gridLevels = [20, 40, 60, 80];
+      gridLevels.forEach(val => {
+        let py = h - ((val - 20) / 60) * h;
+        if (py < 5) py = 5;
+        if (py > h - 5) py = h - 5;
+        
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, py);
+        ctx.lineTo(w, py);
+        ctx.stroke();
+        
+        ctx.fillText(val, 5, py);
+      });
+      
+      let showRaw = document.getElementById('showRawCheckbox').checked;
+      
+      function drawLine(data, color, isDashed = false) {
+        if (!data || data.length < 2) return;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isDashed ? 1.5 : 2;
+        if (isDashed) {
+          ctx.setLineDash([4, 4]);
+        } else {
+          ctx.setLineDash([]);
+        }
+        ctx.beginPath();
+        for (let i = 0; i < data.length; i++) {
+          let x = chartLeft + (i / (maxPoints - 1)) * (w - chartLeft);
+          let val = data[i];
+          if (val > 80) val = 80;
+          if (val < 20) val = 20;
+          let y = h - ((val - 20) / 60) * h;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      
+      if (document.getElementById('showDetectionDist').checked) {
+        drawLine(history.detectionDist, '#06b6d4');
+        if (showRaw) drawLine(history.rawDetectionDist, 'rgba(6, 182, 212, 0.85)', true);
+      }
+      
+      ctx.setLineDash([]);
+    }
+
+    function updateRadarChartAndSettings() {
       fetch('/radar-data')
         .then(response => response.json())
         .then(data => {
-          document.getElementById('presence').innerHTML = data.presence 
-            ? '<span class="badge badge-present">PRESENT</span>' 
-            : '<span class="badge badge-away">AWAY</span>';
-          document.getElementById('state').innerText = data.state;
-          document.getElementById('movingDist').innerText = data.movingDist + " cm";
-          document.getElementById('movingEnergy').innerText = data.movingEnergy + " %";
-          document.getElementById('staticDist').innerText = data.staticDist + " cm";
-          document.getElementById('staticEnergy').innerText = data.staticEnergy + " %";
+          history.detectionDist.push(data.detectionDist);
+          history.rawDetectionDist.push(data.rawDetectionDist);
           
-          document.getElementById('deskTime').innerText = data.deskTime;
-          document.getElementById('focusTime').innerText = data.focusTime;
-          document.getElementById('breakTime').innerText = data.breakTime;
-          document.getElementById('breaks').innerText = data.breaks;
+          Object.keys(history).forEach(key => {
+            if (history[key].length > maxPoints) history[key].shift();
+          });
           
-          let scoreColor = "score-high";
-          if (data.score < 40) scoreColor = "score-low";
-          else if (data.score < 70) scoreColor = "score-med";
-          document.getElementById('score').innerHTML = `<span class="${scoreColor}">${data.score}%</span>`;
+          drawChart();
           
-          // Update AI message & loading status
-          if (data.aiMessage && data.aiMessage.trim() !== "") {
-            document.getElementById('aiMessage').innerText = data.aiMessage;
-          } else {
-            document.getElementById('aiMessage').innerText = "Waiting for activity...";
-          }
-          document.getElementById('aiLoading').style.display = data.aiLoading ? "flex" : "none";
-          
-          // Populate settings fields once on load
           if (!window.settingsPopulated) {
             document.getElementById('aiModeSelect').value = data.aiMode;
             document.getElementById('targetHoursInput').value = data.targetHours;
+            document.getElementById('userNameInput').value = data.userName;
             
-            document.getElementById('actThreshSlider').value = data.actThresh;
-            document.getElementById('actThreshVal').innerText = data.actThresh + '%';
+            document.getElementById('focusDistLimSlider').value = data.focusDistLim;
+            document.getElementById('focusDistLimVal').innerText = data.focusDistLim + ' cm';
             
-            document.getElementById('restThreshSlider').value = data.restThresh;
-            document.getElementById('restThreshVal').innerText = data.restThresh + '%';
+            document.getElementById('motionRatioLimSlider').value = data.motionRatioLim;
+            document.getElementById('motionRatioLimVal').innerText = data.motionRatioLim + '%';
             
             document.getElementById('distLimitSlider').value = data.distLimit;
             document.getElementById('distLimitVal').innerText = data.distLimit + ' cm';
+
+            document.getElementById('filterWindowSlider').value = data.filterWindow;
+            document.getElementById('filterWindowVal').innerText = parseFloat(data.filterWindow).toFixed(1) + 's';
+            
+            document.getElementById('g0mSensSlider').value = data.g0mSens;
+            document.getElementById('g0mSensVal').innerText = data.g0mSens;
+            document.getElementById('g0sSensSlider').value = data.g0sSens;
+            document.getElementById('g0sSensVal').innerText = data.g0sSens;
+            
+            document.getElementById('g1mSensSlider').value = data.g1mSens;
+            document.getElementById('g1mSensVal').innerText = data.g1mSens;
+            document.getElementById('g1sSensSlider').value = data.g1sSens;
+            document.getElementById('g1sSensVal').innerText = data.g1sSens;
+            document.getElementById('g2mSensSlider').value = data.g2mSens;
+            document.getElementById('g2mSensVal').innerText = data.g2mSens;
+            document.getElementById('g2sSensSlider').value = data.g2sSens;
+            document.getElementById('g2sSensVal').innerText = data.g2sSens;
+
+            document.getElementById('g3mSensSlider').value = data.g3mSens;
+            document.getElementById('g3mSensVal').innerText = data.g3mSens;
+            document.getElementById('g3sSensSlider').value = data.g3sSens;
+            document.getElementById('g3sSensVal').innerText = data.g3sSens;
+
+            document.getElementById('g4mSensSlider').value = data.g4mSens;
+            document.getElementById('g4mSensVal').innerText = data.g4mSens;
+            document.getElementById('g4sSensSlider').value = data.g4sSens;
+            document.getElementById('g4sSensVal').innerText = data.g4sSens;
+
+            document.getElementById('g5mSensSlider').value = data.g5mSens;
+            document.getElementById('g5mSensVal').innerText = data.g5mSens;
+            document.getElementById('g5sSensSlider').value = data.g5sSens;
+            document.getElementById('g5sSensVal').innerText = data.g5sSens;
+
+            document.getElementById('g6mSensSlider').value = data.g6mSens;
+            document.getElementById('g6mSensVal').innerText = data.g6mSens;
+            document.getElementById('g6sSensSlider').value = data.g6sSens;
+            document.getElementById('g6sSensVal').innerText = data.g6sSens;
             
             window.settingsPopulated = true;
           }
+
+          setTimeout(updateRadarChartAndSettings, 250);
         })
-        .catch(err => console.error("Error fetching radar data:", err));
+        .catch(err => {
+          console.error("Error fetching radar data:", err);
+          setTimeout(updateRadarChartAndSettings, 250);
+        });
     }
     
-    updateMetrics();
-    setInterval(updateMetrics, 1000);
+    updateRadarChartAndSettings();
 
-    function triggerTest(eventType) {
-      fetch('/trigger-test?event=' + eventType)
-        .then(response => {
-          if (!response.ok) {
-            alert('Trigger failed.');
-          }
-        });
+    function resetStats() {
+      if (confirm("Are you sure you want to reset your daily stats? This will clear all recorded times and break counts.")) {
+        fetch('/reset-stats')
+          .then(response => {
+            alert("Daily stats have been reset.");
+            location.reload();
+          })
+          .catch(err => alert("Failed to reset daily stats."));
+      }
+    }
+
+    function resetESP() {
+      if (confirm("Are you sure you want to reboot DeskBuddy?")) {
+        fetch('/reset-esp')
+          .then(response => {
+            alert("DeskBuddy is rebooting... You will be redirected in 5 seconds.");
+            setTimeout(() => { window.location.href = "/"; }, 5000);
+          })
+          .catch(err => alert("Failed to trigger reboot."));
+      }
     }
   </script>
 </body>
 </html>
-)rawhtml";
+  )rawhtml";
   server.send(200, "text/html", html);
 }
 
 void handleRadarData() {
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(1024);
   doc["presence"] = (currentPresenceState != STATE_AWAY);
   doc["state"] = getPresenceStateName(currentPresenceState);
+  doc["presenceDetected"] = sensorPresenceDetected;
+  doc["movingTargetDetected"] = sensorMovingTargetDetected;
   
-  if (radar.isConnected()) {
-    doc["movingDist"] = (int)filteredMovingDist;
-    doc["movingEnergy"] = (int)filteredMovingEnergy;
-    doc["staticDist"] = (int)filteredStaticDist;
-    doc["staticEnergy"] = (int)filteredStaticEnergy;
-  } else {
-    doc["movingDist"] = 0;
-    doc["movingEnergy"] = 0;
-    doc["staticDist"] = 0;
-    doc["staticEnergy"] = 0;
-  }
+  // Distance metrics (always return current stored values to avoid single-frame connection dropouts)
+  doc["detectionDist"] = (int)filteredDetectionDist;
+  doc["rawDetectionDist"] = rawDetectionDist;
+  doc["sessionDistAvg"] = (int)sessionDistanceAverage;
   
   doc["deskTime"] = formatTime(totalDeskTime);
   doc["focusTime"] = formatTime(totalFocusTime);
   doc["breakTime"] = formatTime(totalBreakTime);
   doc["breaks"] = breakCount;
+  doc["latestBreak"] = formatTime(latestBreakDuration);
+  doc["longestStreak"] = formatTime(longestSittingStreak);
+  doc["firstSitTime"] = formatEpochTime(firstSitEpoch);
   doc["score"] = productivityScore;
   doc["aiMode"] = aiMode;
   doc["targetHours"] = targetHours;
-  doc["actThresh"] = activeThreshold;
-  doc["restThresh"] = restlessThreshold;
+  doc["userName"] = userName;
+  doc["focusDistLim"] = focusDistanceLimit;
+  doc["motionRatioLim"] = motionRatioLimit;
+  doc["motionRatio"] = (sessionDeskTime > 0) ? std::min((int)((sessionMotionTime * 100) / sessionDeskTime), 100) : 0;
+  doc["totalMotionTime"] = formatTime(totalMotionTime);
+  doc["motionCount"] = motionCount;
   doc["distLimit"] = deskDistanceLimit;
+  doc["filterWindow"] = filterWindow;
+  
+  // Gate sensitivities (only populate if connected, otherwise return 0)
+  if (radar.isConnected()) {
+    doc["g0mSens"] = g0mSens;
+    doc["g0sSens"] = g0sSens;
+    doc["g1mSens"] = g1mSens;
+    doc["g1sSens"] = g1sSens;
+    doc["g2mSens"] = g2mSens;
+    doc["g2sSens"] = g2sSens;
+    doc["g3mSens"] = g3mSens;
+    doc["g3sSens"] = g3sSens;
+    doc["g4mSens"] = g4mSens;
+    doc["g4sSens"] = g4sSens;
+    doc["g5mSens"] = g5mSens;
+    doc["g5sSens"] = g5sSens;
+    doc["g6mSens"] = g6mSens;
+    doc["g6sSens"] = g6sSens;
+  } else {
+    doc["g0mSens"] = 0;
+    doc["g0sSens"] = 0;
+    doc["g1mSens"] = 0;
+    doc["g1sSens"] = 0;
+    doc["g2mSens"] = 0;
+    doc["g2sSens"] = 0;
+    doc["g3mSens"] = 0;
+    doc["g3sSens"] = 0;
+    doc["g4mSens"] = 0;
+    doc["g4sSens"] = 0;
+    doc["g5mSens"] = 0;
+    doc["g5sSens"] = 0;
+    doc["g6mSens"] = 0;
+    doc["g6sSens"] = 0;
+  }
   
   // Add AI response thread-safely
   xSemaphoreTake(geminiMutex, portMAX_DELAY);
   doc["aiMessage"] = aiResponse;
+  doc["isAiGenerated"] = lastResponseIsAi;
   xSemaphoreGive(geminiMutex);
   doc["aiLoading"] = isAILoading;
   
@@ -678,22 +1407,66 @@ void handleSaveSettings() {
   if (server.hasArg("aiMode") && server.hasArg("targetHours")) {
     aiMode = server.arg("aiMode").toInt();
     targetHours = server.arg("targetHours").toFloat();
+    if (server.hasArg("userName")) userName = server.arg("userName");
     
-    if (server.hasArg("actThresh")) activeThreshold = server.arg("actThresh").toFloat();
-    if (server.hasArg("restThresh")) restlessThreshold = server.arg("restThresh").toFloat();
+    if (server.hasArg("focusDistLim")) focusDistanceLimit = server.arg("focusDistLim").toInt();
+    if (server.hasArg("motionRatioLim")) motionRatioLimit = server.arg("motionRatioLim").toInt();
     if (server.hasArg("distLimit")) deskDistanceLimit = server.arg("distLimit").toInt();
+    if (server.hasArg("filterWindow")) {
+      filterWindow = server.arg("filterWindow").toFloat();
+    }
     
+    if (server.hasArg("g0mSens")) g0mSens = server.arg("g0mSens").toInt();
+    if (server.hasArg("g0sSens")) g0sSens = server.arg("g0sSens").toInt();
+    if (server.hasArg("g1mSens")) g1mSens = server.arg("g1mSens").toInt();
+    if (server.hasArg("g1sSens")) g1sSens = server.arg("g1sSens").toInt();
+    if (server.hasArg("g2mSens")) g2mSens = server.arg("g2mSens").toInt();
+    if (server.hasArg("g2sSens")) g2sSens = server.arg("g2sSens").toInt();
+    if (server.hasArg("g3mSens")) g3mSens = server.arg("g3mSens").toInt();
+    if (server.hasArg("g3sSens")) g3sSens = server.arg("g3sSens").toInt();
+    if (server.hasArg("g4mSens")) g4mSens = server.arg("g4mSens").toInt();
+    if (server.hasArg("g4sSens")) g4sSens = server.arg("g4sSens").toInt();
+    if (server.hasArg("g5mSens")) g5mSens = server.arg("g5mSens").toInt();
+    if (server.hasArg("g5sSens")) g5sSens = server.arg("g5sSens").toInt();
+    if (server.hasArg("g6mSens")) g6mSens = server.arg("g6mSens").toInt();
+    if (server.hasArg("g6sSens")) g6sSens = server.arg("g6sSens").toInt();
+
     preferences.begin("deskbuddy", false);
     preferences.putInt("aiMode", aiMode);
     preferences.putFloat("targetHours", targetHours);
-    preferences.putFloat("actThresh", activeThreshold);
-    preferences.putFloat("restThresh", restlessThreshold);
+    preferences.putString("userName", userName);
+    preferences.putInt("focusDistLim", focusDistanceLimit);
+    preferences.putInt("motionRatioLim", motionRatioLimit);
     preferences.putInt("distLimit", deskDistanceLimit);
+    preferences.putFloat("filterWindow", filterWindow);
+    preferences.putInt("g0mSens", g0mSens);
+    preferences.putInt("g0sSens", g0sSens);
+    preferences.putInt("g1mSens", g1mSens);
+    preferences.putInt("g1sSens", g1sSens);
+    preferences.putInt("g2mSens", g2mSens);
+    preferences.putInt("g2sSens", g2sSens);
+    preferences.putInt("g3mSens", g3mSens);
+    preferences.putInt("g3sSens", g3sSens);
+    preferences.putInt("g4mSens", g4mSens);
+    preferences.putInt("g4sSens", g4sSens);
+    preferences.putInt("g5mSens", g5mSens);
+    preferences.putInt("g5sSens", g5sSens);
+    preferences.putInt("g6mSens", g6mSens);
+    preferences.putInt("g6sSens", g6sSens);
     preferences.end();
+    
+    saveDailyStats();
     
     // Dynamically adjust physical radar gates according to new range limit
     if (radar.isConnected()) {
-      int requiredGates = (deskDistanceLimit + 74) / 75;
+      radar.setGateSensitivityThreshold(0, g0mSens, g0sSens);
+      radar.setGateSensitivityThreshold(1, g1mSens, g1sSens);
+      radar.setGateSensitivityThreshold(2, g2mSens, g2sSens);
+      radar.setGateSensitivityThreshold(3, g3mSens, g3sSens);
+      radar.setGateSensitivityThreshold(4, g4mSens, g4sSens);
+      radar.setGateSensitivityThreshold(5, g5mSens, g5sSens);
+      radar.setGateSensitivityThreshold(6, g6mSens, g6sSens);
+      int requiredGates = (deskDistanceLimit + 19) / 20;
       if (requiredGates < 2) requiredGates = 2;
       if (requiredGates > 8) requiredGates = 8;
       radar.setMaxValues(requiredGates, requiredGates, 5);
@@ -707,20 +1480,29 @@ void handleSaveSettings() {
   }
 }
 
-void handleTriggerTest() {
-  if (server.hasArg("event")) {
-    int eventType = server.arg("event").toInt();
-    if (eventType == EVENT_WELCOME_BACK) {
-      triggerBehaviour(eventType, "15m");
-    } else if (eventType == EVENT_FOCUS_END) {
-      triggerBehaviour(eventType, "45m");
-    } else {
-      triggerBehaviour(eventType);
-    }
-    server.send(200, "text/plain", "Triggered");
-  } else {
-    server.send(400, "text/plain", "Missing event parameter");
-  }
+
+
+void handleResetStats() {
+  firstSitToday = true;
+  firstSitEpoch = 0;
+  breakCount = 0;
+  totalDeskTime = 0;
+  totalFocusTime = 0;
+  totalBreakTime = 0;
+  dailyAiRequestCount = 0;
+  longestSittingStreak = 0;
+  latestBreakDuration = 0;
+  totalMotionTime = 0;
+  motionCount = 0;
+  sessionDeskTime = 0;
+  sessionMotionTime = 0;
+  sessionDistanceSum = 0;
+  sessionDistanceCount = 0;
+  sessionDistanceAverage = 0.0;
+
+  saveDailyStats();
+
+  server.send(200, "text/plain", "Daily Stats Reset");
 }
 
 // Asynchronous WiFi Reconnection Checker
@@ -743,6 +1525,8 @@ void updateTFTDisplay(unsigned long now) {
   static int lastDisplayedState = -1;
   static int lastDisplayedTimeMin = -1;
   static bool forceRingRedraw = false;
+  static String lastMetricText = "";
+  static uint16_t lastMetricColor = 0;
 
   // Handle bezel ring animation transition
   RGBColor targetColor = stateColors[currentPresenceState];
@@ -788,12 +1572,13 @@ void updateTFTDisplay(unsigned long now) {
   if (hasNewAIResponse) {
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
     String responseCopy = aiResponse;
+    bool isAiCopy = lastResponseIsAi;
     hasNewAIResponse = false;
     xSemaphoreGive(geminiMutex);
 
     // Enter AI screen mode for 8 seconds
     aiScreenEndTime = now + 8000;
-    drawCenteredWrappedText(responseCopy, TFT_SKYBLUE);
+    drawCenteredWrappedText(responseCopy, TFT_SKYBLUE, isAiCopy);
     lastDisplayedPage = -2; // Reset page state to force redraw when AI screen finishes
     forceRingRedraw = true;
     return;
@@ -808,9 +1593,7 @@ void updateTFTDisplay(unsigned long now) {
   // If user is AWAY
   if (currentPresenceState == STATE_AWAY) {
     if (lastDisplayedState != STATE_AWAY) {
-      tft.fillScreen(TFT_BLACK);
-      tft.setSwapBytes(true);
-      tft.pushImage(0, 0, 240, 240, away_img_data);
+      drawRLEImage("/away.rle", 0, 0);
 
       lastDisplayedState = STATE_AWAY;
       lastDisplayedPage = -1;
@@ -827,6 +1610,7 @@ void updateTFTDisplay(unsigned long now) {
     tft.fillScreen(TFT_BLACK);
     lastDisplayedPage = 0;
     forceRingRedraw = true;
+    lastMetricText = "";
   }
 
   tft.setTextDatum(MC_DATUM);
@@ -849,13 +1633,12 @@ void updateTFTDisplay(unsigned long now) {
   static int metricIndex = 0;
   
   if (now - lastMetricSwitch > 15000) {
-    metricIndex = (metricIndex + 1) % 6;
+    metricIndex = (metricIndex + 1) % 5;
     lastMetricSwitch = now;
-    tft.fillRect(15, 175, 210, 32, TFT_BLACK); // Clear text area
   }
 
   String metricText = "";
-  uint16_t metricColor = TFT_WHITE;
+  uint16_t metricColor = tft.color565(100, 100, 100);
 
   switch (metricIndex) {
     case 0: {
@@ -864,76 +1647,102 @@ void updateTFTDisplay(unsigned long now) {
         pct = (int)((totalDeskTime * 100.0f) / (targetHours * 3600.0f * 1000.0f));
       }
       if (pct > 100) pct = 100;
-      metricText = "Day Done: " + String(pct) + "%";
-      metricColor = tft.color565(251, 191, 36); // Vibrant amber yellow
+      metricText = "Day: " + String(pct) + "%";
       break;
     }
     case 1:
       metricText = "Score: " + String(productivityScore) + "%";
-      if (productivityScore >= 70) metricColor = TFT_GREEN;
-      else if (productivityScore >= 40) metricColor = TFT_YELLOW;
-      else metricColor = TFT_RED;
       break;
     case 2:
       metricText = "Sitting: " + formatTime(now - continuousPresenceStart);
-      metricColor = TFT_LIGHTGREY;
       break;
     case 3:
-      metricText = "Last Break: " + formatTime(latestBreakDuration);
-      metricColor = TFT_LIGHTGREY;
+      metricText = "Breaks: " + String(breakCount);
       break;
     case 4:
-      metricText = "Breaks: " + String(breakCount);
-      metricColor = TFT_LIGHTGREY;
-      break;
-    case 5:
       metricText = "Focus: " + formatTime(totalFocusTime);
-      metricColor = TFT_SKYBLUE;
       break;
   }
 
-  tft.setTextColor(metricColor, TFT_BLACK);
-  tft.drawString(metricText, 120, 190, 4);
+  if (metricText != lastMetricText || metricColor != lastMetricColor) {
+    tft.fillRect(42, 176, 156, 28, TFT_BLACK); // Clear text area safely without clipping bezel ring
+    tft.setTextColor(metricColor, TFT_BLACK);
+    tft.drawString(metricText, 120, 190, 4);
+    lastMetricText = metricText;
+    lastMetricColor = metricColor;
+  }
 }
 
 void setup(void) {
-  Serial.begin(115200);
-  delay(2000);
-  Serial.flush();
-
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
   aiMode = preferences.getInt("aiMode", 1);
   targetHours = preferences.getFloat("targetHours", 8.0);
-  activeThreshold = preferences.getFloat("actThresh", 15.0);
-  restlessThreshold = preferences.getFloat("restThresh", 80.0);
+  userName = preferences.getString("userName", "human");
+  focusDistanceLimit = preferences.getInt("focusDistLim", 50);
+  motionRatioLimit = preferences.getInt("motionRatioLim", 15);
   deskDistanceLimit = preferences.getInt("distLimit", 120);
+  filterWindow = preferences.getFloat("filterWindow", 2.0);
+  g0mSens = preferences.getInt("g0mSens", 90);
+  g0sSens = preferences.getInt("g0sSens", 90);
+  g1mSens = preferences.getInt("g1mSens", 60);
+  g1sSens = preferences.getInt("g1sSens", 40);
+  g2mSens = preferences.getInt("g2mSens", 50);
+  g2sSens = preferences.getInt("g2sSens", 40);
+  g3mSens = preferences.getInt("g3mSens", 40);
+  g3sSens = preferences.getInt("g3sSens", 40);
+  g4mSens = preferences.getInt("g4mSens", 45);
+  g4sSens = preferences.getInt("g4sSens", 40);
+  g5mSens = preferences.getInt("g5mSens", 50);
+  g5sSens = preferences.getInt("g5sSens", 40);
+  g6mSens = preferences.getInt("g6mSens", 50);
+  g6sSens = preferences.getInt("g6sSens", 40);
   preferences.end();
+
+  // Initialize LittleFS & load daily stats
+  if (LittleFS.begin(true)) {
+    loadDailyStats();
+  }
 
   // Initialize TFT Display & show splash screen
   tft.init();
   tft.setRotation(0);
-  tft.setSwapBytes(true);
-  tft.pushImage(0, 0, 240, 240, away_img_data);
+  drawRLEImage("/away.rle", 0, 0);
+  
   unsigned long bootStartTime = millis();
 
   // Initialize Serial1 for Radar on Pins 0 (RX) and 5 (TX)
   Serial1.begin(256000, SERIAL_8N1, 0, 5); 
   delay(500);
-  // Serial.print("LD2410 radar sensor initialising: ");
   if (radar.begin(Serial1)) {
-    // Serial.println("OK");
-    // Serial.print("Configuring radar sensor (max range 3.0m, 5s timeout): ");
-    int requiredGates = (deskDistanceLimit + 74) / 75;
+    // Configure sensor distance resolution to 0.2m (20cm) programmatically
+    uint8_t enter_cmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
+    Serial1.write(enter_cmd, sizeof(enter_cmd));
+    delay(150);
+    uint8_t res_cmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xAA, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
+    Serial1.write(res_cmd, sizeof(res_cmd));
+    delay(150);
+    uint8_t exit_cmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
+    Serial1.write(exit_cmd, sizeof(exit_cmd));
+    delay(200);
+    
+    // Restart to apply new resolution
+    radar.requestRestart();
+    delay(1000); // Give the module time to reboot and load firmware settings
+    
+    // Re-verify serial connection and configure gates
+    radar.setGateSensitivityThreshold(0, g0mSens, g0sSens);
+    radar.setGateSensitivityThreshold(1, g1mSens, g1sSens);
+    radar.setGateSensitivityThreshold(2, g2mSens, g2sSens);
+    radar.setGateSensitivityThreshold(3, g3mSens, g3sSens);
+    radar.setGateSensitivityThreshold(4, g4mSens, g4sSens);
+    radar.setGateSensitivityThreshold(5, g5mSens, g5sSens);
+    radar.setGateSensitivityThreshold(6, g6mSens, g6sSens);
+    
+    int requiredGates = (deskDistanceLimit + 19) / 20;
     if (requiredGates < 2) requiredGates = 2;
     if (requiredGates > 8) requiredGates = 8;
-    if (radar.setMaxValues(requiredGates, requiredGates, 5)) {
-      // Serial.println("SUCCESS");
-    } else {
-      // Serial.println("FAIL");
-    }
-  } else {
-    // Serial.println("not connected");
+    radar.setMaxValues(requiredGates, requiredGates, 5);
   }
 
   // Set Hostname & Configure static IP
@@ -941,12 +1750,9 @@ void setup(void) {
   WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
   WiFi.begin(SSID, PASS);
 
-  // Serial.println("Connecting to Wi-Fi...");
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    // Serial.print(".");
   }
-  // Serial.println("\nWiFi Connected! IP: " + WiFi.localIP().toString());
 
   // Setup NTP Client
   timeClient.begin();
@@ -954,11 +1760,16 @@ void setup(void) {
 
   // Setup Web Server
   server.on("/", handleRoot);
+  server.on("/settings", handleSettings);
   server.on("/radar-data", handleRadarData);
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
-  server.on("/trigger-test", handleTriggerTest);
+  server.on("/reset-stats", handleResetStats);
+  server.on("/reset-esp", []() {
+    server.send(200, "text/plain", "Rebooting");
+    delay(500);
+    ESP.restart();
+  });
   server.begin();
-  // Serial.println("Web Server started on Port 80.");
 
   // Setup Mutex for Gemini Thread Safety
   geminiMutex = xSemaphoreCreateMutex();
@@ -967,30 +1778,20 @@ void setup(void) {
   ArduinoOTA
     .onStart([]() {
       otaInProgress = true;
-      // Serial.println("OTA Update started...");
     })
     .onEnd([]() {
-      // Serial.println("\nOTA Update finished successfully! Rebooting...");
     })
     .onProgress([](unsigned int progress, unsigned int total) {
-      // Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
     })
     .onError([](ota_error_t error) {
-      // Serial.printf("Error[%u]\n", error);
     });
   ArduinoOTA.begin();
-  // Serial.println("OTA enabled.");
 
   lastLoopTime = millis();
   lastStateTransitionTime = millis();
   
   // Force NTP and Weather update on the very first loop execution
-  refreshTime = millis() - 3600000 - 1000;
-  refreshWeather = millis() - 3600000 - 1000;
-  
-  // Trigger initial test query to verify Gemini connection
-  // Serial.println("Triggering test query to Gemini AI...");
-  // triggerBehaviour(EVENT_FIRST_SIT);
+  lastHourlyUpdate = millis() - 3600000 - 1000;
 
   // Ensure splash screen displays for at least 4 seconds total at boot
   unsigned long elapsedBoot = millis() - bootStartTime;
@@ -1021,34 +1822,23 @@ void loop(void) {
     } else if (currentDay != lastNtpDay) {
       lastNtpDay = currentDay;
       firstSitToday = true;
+      firstSitEpoch = 0;
       breakCount = 0;
       totalDeskTime = 0;
       totalFocusTime = 0;
       totalBreakTime = 0;
       dailyAiRequestCount = 0;
+      longestSittingStreak = 0;
+      latestBreakDuration = 0;
+      totalMotionTime = 0;
+      motionCount = 0;
+      saveDailyStats();
     }
   }
 
-  static bool simulationOverride = false;
-  static bool simPresent = false;
-  static int simState = STATE_AWAY;
-
-  if (Serial.available() > 0) {
-    char cmd = Serial.read();
-    if (cmd == 'p') {
-      // Serial.println("\n[SIMULATION] Override: Force PRESENT.");
-      simulationOverride = true;
-      simPresent = true;
-      simState = STATE_ACTIVE;
-    } else if (cmd == 'a') {
-      // Serial.println("\n[SIMULATION] Override: Force AWAY.");
-      simulationOverride = true;
-      simPresent = false;
-      simState = STATE_AWAY;
-    } else if (cmd == 'r') {
-      // Serial.println("\n[SIMULATION] Override CLEARED. Resuming Radar mode.");
-      simulationOverride = false;
-    }
+  // Safety NTP capture if first sit happened before time was synced
+  if (firstSitEpoch == 0 && !firstSitToday && timeClient.isTimeSet()) {
+    firstSitEpoch = timeClient.getEpochTime();
   }
 
   static bool stablePresence = false;
@@ -1056,56 +1846,65 @@ void loop(void) {
 
   bool rawPresent = false;
   int rawState = STATE_AWAY;
+  sensorPresenceDetected = false;
+  sensorMovingTargetDetected = false;
+  sensorStaticPresenceDetected = false;
 
-  if (simulationOverride) {
-    rawPresent = simPresent;
-    rawState = simState;
-  } else {
-    // Read from the physical radar sensor
-    radar.read();
-    if (radar.isConnected()) {
-      // 1. Process Moving Target Filter
-      if (radar.movingTargetDetected()) {
-        filteredMovingDist = movingDistFilter.updateEstimate((float)radar.movingTargetDistance());
-        filteredMovingEnergy = movingEnergyFilter.updateEstimate((float)radar.movingTargetEnergy());
-      } else {
-        filteredMovingDist = 0.0;
-        filteredMovingEnergy = 0.0;
+  // Read from the physical radar sensor
+  radar.read();
+  if (radar.isConnected()) {
+    sensorPresenceDetected = radar.presenceDetected();
+    sensorStaticPresenceDetected = radar.stationaryTargetDetected();
+
+    if (radar.presenceDetected()) {
+      rawDetectionDist = radar.detectionDistance();
+    } else {
+      rawDetectionDist = 0;
+    }
+
+    // Update filtered values at a fixed 10Hz frequency (every 100ms)
+    static unsigned long lastFilterUpdate = 0;
+    static bool filteredMovingTarget = false;
+    if (now - lastFilterUpdate >= 100) {
+      lastFilterUpdate = now;
+      
+      // Filter motion detection
+      motionFilter.add(radar.movingTargetDetected() ? 1.0f : 0.0f);
+      filteredMovingTarget = (motionFilter.getMedian(10) > 0.5f);
+
+      if (rawDetectionDist > 0) {
+        detectionDistFilter.add((float)rawDetectionDist);
+        // Accumulate session distance stats
+        sessionDistanceSum += rawDetectionDist;
+        sessionDistanceCount++;
+        sessionDistanceAverage = (float)sessionDistanceSum / sessionDistanceCount;
       }
-
-      // 2. Process Stationary Target Filter
-      if (radar.stationaryTargetDetected()) {
-        filteredStaticDist = staticDistFilter.updateEstimate((float)radar.stationaryTargetDistance());
-        filteredStaticEnergy = staticEnergyFilter.updateEstimate((float)radar.stationaryTargetEnergy());
-      } else {
-        filteredStaticDist = 0.0;
-        filteredStaticEnergy = 0.0;
-      }
-
-      // 3. Process Presence & State Logic using filtered values
-      if (radar.presenceDetected()) {
-        bool nearMoving = false;
-        bool nearStatic = false;
-        
-        if (filteredMovingDist > 0.0 && filteredMovingDist <= deskDistanceLimit) {
-          nearMoving = true;
-        }
-        if (filteredStaticDist > 0.0 && filteredStaticDist <= deskDistanceLimit) {
-          nearStatic = true;
-        }
-        
-        if (nearMoving || nearStatic) {
-          rawPresent = true;
-          if (nearMoving && filteredMovingEnergy > restlessThreshold) {
-            rawState = STATE_RESTLESS; // Heavy movement without holding a stable body presence (stretching/fidgeting)
-          } else if (nearMoving && filteredMovingEnergy > activeThreshold) {
-            rawState = STATE_ACTIVE;   // Normal desk movements (typing/mouse work)
-          } else {
-            rawState = STATE_STILL;    // Very quiet body presence, deep focus
-          }
-        }
+      int samples = (int)(filterWindow * 10.0f);
+      if (samples < 1) samples = 1;
+      if (samples > 100) samples = 100;
+      if (rawDetectionDist > 0) {
+        filteredDetectionDist = detectionDistFilter.getMedian(samples);
       }
     }
+    
+    sensorMovingTargetDetected = filteredMovingTarget;
+  }
+
+  rawPresent = sensorPresenceDetected;
+  if (rawPresent) {
+    float currentDist = (sessionDistanceAverage > 0.0) ? sessionDistanceAverage : (float)rawDetectionDist;
+    bool inFocusZone = (currentDist > 0.0 && currentDist < focusDistanceLimit);
+    int motionRatio = (sessionDeskTime > 0) ? (sessionMotionTime * 100) / sessionDeskTime : 0;
+    if (motionRatio > 100) motionRatio = 100;
+    bool highMotion = (motionRatio > motionRatioLimit);
+
+    if (inFocusZone) {
+      rawState = highMotion ? STATE_BUSY : STATE_FOCUS;
+    } else {
+      rawState = highMotion ? STATE_DISTRACTED : STATE_REGULAR;
+    }
+  } else {
+    rawState = STATE_AWAY;
   }
 
   // Debouncing logic to filter sensor instability/boundary jitter
@@ -1113,125 +1912,122 @@ void loop(void) {
     unsigned long debounceLimit = rawPresent ? 2000 : 10000; // 2s to confirm presence, 10s to confirm away
     if (now - lastPresenceChangeTime > debounceLimit) {
       stablePresence = rawPresent;
-      // Serial.printf("[RADAR] Presence stable transition to: %s\n", stablePresence ? "PRESENT" : "AWAY");
     }
   } else {
     lastPresenceChangeTime = now;
   }
 
   bool targetPresent = stablePresence;
-  int targetState = stablePresence ? ((rawState != STATE_AWAY) ? rawState : STATE_ACTIVE) : STATE_AWAY;
+  int targetState = stablePresence ? ((rawState != STATE_AWAY) ? rawState : STATE_REGULAR) : STATE_AWAY;
 
-  // High-frequency debug printout for sensor calibration (disabled for performance)
-  /*
-  static unsigned long lastCalibrationPrint = 0;
-  if (now - lastCalibrationPrint > 100) { // Print every 100ms
-    lastCalibrationPrint = now;
-    if (radar.isConnected()) {
-      Serial.printf("Presence:%d MovDist:%.1f MovEnergy:%.1f StaDist:%.1f StaEnergy:%.1f\n",
-        radar.presenceDetected() ? 1 : 0,
-        filteredMovingDist,
-        filteredMovingEnergy,
-        filteredStaticDist,
-        filteredStaticEnergy
-      );
-    } else {
-      Serial.println("Radar sensor not connected / reading...");
-    }
-  }
-  */
+
 
   // Handle Presence State Machine Transitions
   if (targetPresent) {
+    // Accumulate desk time if static presence is detected
+    if (sensorStaticPresenceDetected) {
+      totalDeskTime += elapsed;
+      sessionDeskTime += elapsed;
+    }
+    
+    // Accumulate focus time
+    if (currentPresenceState == STATE_FOCUS) {
+      totalFocusTime += elapsed;
+    }
+
+    // Accumulate motion time
+    if (sensorMovingTargetDetected) {
+      sessionMotionTime += elapsed;
+      totalMotionTime += elapsed;
+    }
+
+    // Count motion occurrences
+    static bool lastMovingState = false;
+    if (sensorMovingTargetDetected) {
+      if (!lastMovingState) {
+        motionCount++;
+        lastMovingState = true;
+      }
+    } else {
+      lastMovingState = false;
+    }
+
     if (currentPresenceState == STATE_AWAY) {
       // Transition: Away -> Present
       unsigned long breakDuration = now - lastStateTransitionTime;
-      breakCount++;
-      latestBreakDuration = breakDuration;
       
-      // Trigger First Sit or Welcome Back
       if (firstSitToday) {
         firstSitToday = false;
+        firstSitEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
         triggerBehaviour(EVENT_FIRST_SIT);
-      } else if (breakDuration > 10000) {
+        
+        // Reset session metrics on first sit
+        sessionDeskTime = 0;
+        sessionMotionTime = 0;
+        sessionDistanceSum = 0;
+        sessionDistanceCount = 0;
+        sessionDistanceAverage = 0.0;
+      } else if (breakDuration >= 180000UL) { // Only count break if away > 3 minutes
+        breakCount++;
+        latestBreakDuration = breakDuration;
         triggerBehaviour(EVENT_WELCOME_BACK, formatTime(breakDuration));
+        
+        // Reset session metrics on true break return
+        sessionDeskTime = 0;
+        sessionMotionTime = 0;
+        sessionDistanceSum = 0;
+        sessionDistanceCount = 0;
+        sessionDistanceAverage = 0.0;
       }
       
       currentPresenceState = targetState;
       lastStateTransitionTime = now;
       continuousPresenceStart = now;
       lastStretchReminderTime = now;
-      if (targetState == STATE_STILL) {
+      if (targetState == STATE_FOCUS) {
         continuousStillStart = now;
       }
     } else {
-      // Accumulate desk time
-      totalDeskTime += elapsed;
-      if (currentPresenceState == STATE_STILL) {
-        totalFocusTime += elapsed;
+      // If we just entered focus state, record start time
+      if (targetState == STATE_FOCUS && currentPresenceState != STATE_FOCUS) {
+        continuousStillStart = now;
       }
+      currentPresenceState = targetState;
+    }
       
-      // Keep state with debouncing for quiet focus state
-      static unsigned long lastStateChangeAttempt = 0;
-      static int pendingState = STATE_AWAY;
+    // Trigger Stretch alert after 45 minutes of continuous presence
+    if (now - lastStretchReminderTime > 2700000UL) {
+      triggerBehaviour(EVENT_STRETCH);
+      lastStretchReminderTime = now;
+    }
 
-      if (targetState != currentPresenceState) {
-        if (currentPresenceState == STATE_STILL) {
-          // Currently in Still (Focus). Transitioning out to Active or Restless requires debounce.
-          if (pendingState != targetState) {
-            pendingState = targetState;
-            lastStateChangeAttempt = now;
-          } else if (now - lastStateChangeAttempt > 10000) { // Require 10 seconds of continuous Active/Restless
-            currentPresenceState = targetState;
-            lastStateTransitionTime = now;
-          }
-        } else {
-          // Currently in Active or Restless. 
-          if (targetState == STATE_STILL) {
-            // Quieting down: require 30 seconds of continuous Still to enter focus
-            if (pendingState != STATE_STILL) {
-              pendingState = STATE_STILL;
-              lastStateChangeAttempt = now;
-            } else if (now - lastStateChangeAttempt > 30000) {
-              currentPresenceState = STATE_STILL;
-              lastStateTransitionTime = now;
-              continuousStillStart = now;
-            }
-          } else {
-            // Transitions between Active and Restless are instantaneous
-            currentPresenceState = targetState;
-            lastStateTransitionTime = now;
-            pendingState = currentPresenceState;
-          }
-        }
-      } else {
-        pendingState = currentPresenceState;
+    // Trigger Slacker Roast if sitting > 1 hour and score < 35%
+    static unsigned long lastSlackerRoastTime = 0;
+    unsigned long continuousSittingTime = now - continuousPresenceStart;
+    if (continuousSittingTime > 3600000UL && productivityScore < 35) {
+      if (now - lastSlackerRoastTime > 3600000UL) {
+        triggerBehaviour(EVENT_SLACKER);
+        lastSlackerRoastTime = now;
       }
-      
-      // Trigger Stretch alert after 45 minutes of continuous presence
-      if (now - lastStretchReminderTime > 2700000UL) {
-        triggerBehaviour(EVENT_STRETCH);
-        lastStretchReminderTime = now;
-      }
+    }
 
-      // Trigger Slacker Roast if sitting > 1 hour and score < 35%
-      static unsigned long lastSlackerRoastTime = 0;
-      unsigned long continuousSittingTime = now - continuousPresenceStart;
-      if (continuousSittingTime > 3600000UL && productivityScore < 35) {
-        if (now - lastSlackerRoastTime > 3600000UL) {
-          triggerBehaviour(EVENT_SLACKER);
-          lastSlackerRoastTime = now;
-        }
-      }
+    // Evaluate and update longest sitting streak
+    unsigned long currentStreak = now - continuousPresenceStart;
+    if (longestSittingStreak >= 60000UL && currentStreak > longestSittingStreak && !streakAlertTriggered) {
+      streakAlertTriggered = true;
+      triggerBehaviour(EVENT_STREAK_BEATEN, formatTime(longestSittingStreak));
+    }
+    if (currentStreak > longestSittingStreak && currentStreak >= 60000UL) {
+      longestSittingStreak = currentStreak;
     }
   } else {
     if (currentPresenceState != STATE_AWAY) {
       // Transition: Present -> Away
+      streakAlertTriggered = false;
       unsigned long focusSessionDuration = 0;
-      if (currentPresenceState == STATE_STILL) {
+      if (currentPresenceState == STATE_FOCUS) {
         focusSessionDuration = now - continuousStillStart;
       }
-      // Serial.println("User stood up.");
       
       // Trigger Focus session congrats if user focused for > 15s
       if (focusSessionDuration > 15000) {
@@ -1244,23 +2040,47 @@ void loop(void) {
       // Accumulate break time
       totalBreakTime += elapsed;
     }
+    
+    // Clear filters and reset values when user is AWAY
+    rawDetectionDist = 0;
+    filteredDetectionDist = 0.0;
+    sessionDistanceSum = 0;
+    sessionDistanceCount = 0;
+    sessionDistanceAverage = 0.0;
+    detectionDistFilter.clear();
+    motionFilter.clear();
   }
 
   // Update dynamic productivity score
-  if (totalDeskTime > 0) {
-    productivityScore = (totalFocusTime * 100) / totalDeskTime;
+  uint32_t currentEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+  uint32_t workdayElapsed = (firstSitEpoch > 0 && currentEpoch >= firstSitEpoch) ? (currentEpoch - firstSitEpoch) : 0;
+
+  if (firstSitToday || workdayElapsed < 300) {
+    // Default to 100% initially (first 5 minutes of work)
+    productivityScore = 100;
   } else {
-    productivityScore = 0;
+    float hoursElapsed = (float)workdayElapsed / 3600.0f;
+    
+    // 1. Break frequency penalty (target: 1 break/hour = 25% penalty)
+    float penalty_breaks = 25.0f * ((float)breakCount / hoursElapsed);
+    
+    // 2. Break duration penalty (target: 10% of workday in breaks = 25% penalty)
+    float breakTimeRatio = (float)(totalBreakTime / 1000) / (float)workdayElapsed;
+    float penalty_time = 25.0f * (breakTimeRatio / 0.10f);
+    
+    // 3. Focus bonus (Focus counts 1.5x)
+    float bonus_focus = 0.0f;
+    if (totalDeskTime > 0) {
+      bonus_focus = 1.5f * (((float)totalFocusTime * 100.0f) / (float)totalDeskTime);
+    }
+    
+    float raw_score = 100.0f - penalty_breaks - penalty_time + bonus_focus;
+    productivityScore = (int)constrain(raw_score, 0.0f, 100.0f);
   }
 
-  // Handle NTP Time Updates
-  if (WiFi.status() == WL_CONNECTED && now - refreshTime > 3600000) {
+  // Handle NTP Time & Weather Fetch Updates (every 1 hour)
+  if (WiFi.status() == WL_CONNECTED && now - lastHourlyUpdate > 3600000) {
     timeClient.update();
-    refreshTime = now;
-  }
-
-  // Handle Weather Fetch Updates (every 1 hour)
-  if (WiFi.status() == WL_CONNECTED && now - refreshWeather > 3600000) {
     HTTPClient http;
     http.begin(String(OpenWeatherCall) + OpenWeatherKey);
     int httpCode = http.GET();
@@ -1280,27 +2100,53 @@ void loop(void) {
       }
     }
     http.end();
-    refreshWeather = now;
+    lastHourlyUpdate = now;
+  }
+
+  // Periodically save stats to LittleFS (every 60 seconds) if anything has changed
+  static unsigned long lastStatsSave = 0;
+  static bool statsInit = false;
+  static unsigned long lastSavedDeskTime = 0;
+  static unsigned long lastSavedFocusTime = 0;
+  static unsigned long lastSavedBreakTime = 0;
+  static int lastSavedBreakCount = 0;
+  static uint32_t lastSavedFirstSitEpoch = 0;
+  static unsigned long lastSavedLongestStreak = 0;
+  static String lastSavedUserName = "";
+
+  if (!statsInit) {
+    lastSavedDeskTime = totalDeskTime;
+    lastSavedFocusTime = totalFocusTime;
+    lastSavedBreakTime = totalBreakTime;
+    lastSavedBreakCount = breakCount;
+    lastSavedFirstSitEpoch = firstSitEpoch;
+    lastSavedLongestStreak = longestSittingStreak;
+    lastSavedUserName = userName;
+    statsInit = true;
+  }
+
+  if (now - lastStatsSave > 60000) {
+    lastStatsSave = now;
+    if (totalDeskTime != lastSavedDeskTime || 
+        totalFocusTime != lastSavedFocusTime || 
+        totalBreakTime != lastSavedBreakTime || 
+        breakCount != lastSavedBreakCount ||
+        firstSitEpoch != lastSavedFirstSitEpoch ||
+        longestSittingStreak != lastSavedLongestStreak ||
+        userName != lastSavedUserName) {
+      saveDailyStats();
+      lastSavedDeskTime = totalDeskTime;
+      lastSavedFocusTime = totalFocusTime;
+      lastSavedBreakTime = totalBreakTime;
+      lastSavedBreakCount = breakCount;
+      lastSavedFirstSitEpoch = firstSitEpoch;
+      lastSavedLongestStreak = longestSittingStreak;
+      lastSavedUserName = userName;
+    }
   }
 
   // Update TFT Display
   updateTFTDisplay(now);
-
-  // Periodic status printout (disabled for performance)
-  /*
-  static unsigned long lastStatusPrint = 0;
-  if (now - lastStatusPrint > 5000) {
-    lastStatusPrint = now;
-    Serial.printf("Desk Time: %s | Focus Time: %s | Break Time: %s | Breaks: %d | Score: %d%% | State: %s\n",
-      formatTime(totalDeskTime).c_str(),
-      formatTime(totalFocusTime).c_str(),
-      formatTime(totalBreakTime).c_str(),
-      breakCount,
-      productivityScore,
-      getPresenceStateName(currentPresenceState)
-    );
-  }
-  */
 
   delay(10);
 }
