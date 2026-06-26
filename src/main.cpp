@@ -201,7 +201,7 @@ void saveDailyStats() {
   if (!file) {
     return;
   }
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(768);
   doc["firstSitToday"] = firstSitToday;
   doc["firstSitEpoch"] = firstSitEpoch;
   doc["breakCount"] = breakCount;
@@ -214,6 +214,9 @@ void saveDailyStats() {
   doc["lastNtpDay"] = lastNtpDay;
   doc["longestSittingStreak"] = longestSittingStreak;
   doc["userName"] = userName;
+  doc["deskDistanceLimit"] = deskDistanceLimit;
+  doc["focusDistanceLimit"] = focusDistanceLimit;
+  doc["motionRatioLimit"] = motionRatioLimit;
 
   if (serializeJson(doc, file) == 0) {
     file.close();
@@ -236,7 +239,7 @@ void loadDailyStats() {
   if (!file) {
     return;
   }
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(768);
   DeserializationError error = deserializeJson(doc, file);
   if (!error) {
     firstSitToday = doc["firstSitToday"] | true;
@@ -253,6 +256,9 @@ void loadDailyStats() {
     if (doc.containsKey("userName")) {
       userName = doc["userName"].as<String>();
     }
+    deskDistanceLimit = doc["deskDistanceLimit"] | 120;
+    focusDistanceLimit = doc["focusDistanceLimit"] | 50;
+    motionRatioLimit = doc["motionRatioLimit"] | 15;
   }
   file.close();
 }

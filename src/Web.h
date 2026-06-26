@@ -771,7 +771,7 @@ inline void handleSettings() {
 }
 
 inline void handleRadarData() {
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(3072);
   doc["presence"] = (currentPresenceState != STATE_AWAY);
   doc["state"] = getPresenceStateName(currentPresenceState);
   doc["presenceDetected"] = sensorPresenceDetected;
@@ -803,38 +803,21 @@ inline void handleRadarData() {
   doc["distLimit"] = deskDistanceLimit;
   doc["filterWindow"] = filterWindow;
   
-  // Gate sensitivities (only populate if connected, otherwise return 0)
-  if (radar.isConnected()) {
-    doc["g0mSens"] = g0mSens;
-    doc["g0sSens"] = g0sSens;
-    doc["g1mSens"] = g1mSens;
-    doc["g1sSens"] = g1sSens;
-    doc["g2mSens"] = g2mSens;
-    doc["g2sSens"] = g2sSens;
-    doc["g3mSens"] = g3mSens;
-    doc["g3sSens"] = g3sSens;
-    doc["g4mSens"] = g4mSens;
-    doc["g4sSens"] = g4sSens;
-    doc["g5mSens"] = g5mSens;
-    doc["g5sSens"] = g5sSens;
-    doc["g6mSens"] = g6mSens;
-    doc["g6sSens"] = g6sSens;
-  } else {
-    doc["g0mSens"] = 0;
-    doc["g0sSens"] = 0;
-    doc["g1mSens"] = 0;
-    doc["g1sSens"] = 0;
-    doc["g2mSens"] = 0;
-    doc["g2sSens"] = 0;
-    doc["g3mSens"] = 0;
-    doc["g3sSens"] = 0;
-    doc["g4mSens"] = 0;
-    doc["g4sSens"] = 0;
-    doc["g5mSens"] = 0;
-    doc["g5sSens"] = 0;
-    doc["g6mSens"] = 0;
-    doc["g6sSens"] = 0;
-  }
+  // Gate sensitivities (always report current synced variables)
+  doc["g0mSens"] = g0mSens;
+  doc["g0sSens"] = g0sSens;
+  doc["g1mSens"] = g1mSens;
+  doc["g1sSens"] = g1sSens;
+  doc["g2mSens"] = g2mSens;
+  doc["g2sSens"] = g2sSens;
+  doc["g3mSens"] = g3mSens;
+  doc["g3sSens"] = g3sSens;
+  doc["g4mSens"] = g4mSens;
+  doc["g4sSens"] = g4sSens;
+  doc["g5mSens"] = g5mSens;
+  doc["g5sSens"] = g5sSens;
+  doc["g6mSens"] = g6mSens;
+  doc["g6sSens"] = g6sSens;
   
   // Add AI response thread-safely
   xSemaphoreTake(geminiMutex, portMAX_DELAY);

@@ -1,21 +1,23 @@
 import os
+import sys
 import struct
 from PIL import Image
 
-def compress_png_to_rle(png_path, rle_path, resize_dim=None):
-    if not os.path.exists(png_path):
-        print(f"Error: {png_path} not found.")
+def compress_image_to_rle(image_path, rle_path, resize_dim=None):
+    if not os.path.exists(image_path):
+        print(f"Error: {image_path} not found.")
         return False
         
-    print(f"Loading {png_path}...")
-    img = Image.open(png_path)
+    print(f"Loading {image_path}...")
+    img = Image.open(image_path)
     
-    # Convert to RGB
-    img_rgb = Image.new("RGB", img.size, (0, 0, 0))
-    if img.mode == 'RGBA':
-        img_rgb.paste(img, mask=img.split()[3])
+    # Convert to RGB, handling transparency
+    if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+        img_rgba = img.convert('RGBA')
+        img_rgb = Image.new("RGB", img_rgba.size, (0, 0, 0))
+        img_rgb.paste(img_rgba, mask=img_rgba.split()[3])
     else:
-        img_rgb.paste(img)
+        img_rgb = img.convert("RGB")
         
     # Resize if dimension is provided
     if resize_dim:
@@ -74,15 +76,24 @@ def compress_png_to_rle(png_path, rle_path, resize_dim=None):
                 rle_data.extend(struct.pack('<H', pixels_565[i + j]))
             i += raw_len
             
-    os.makedirs(os.path.dirname(rle_path), exist_ok=True)
+    dest_dir = os.path.dirname(rle_path)
+    if dest_dir:
+        os.makedirs(dest_dir, exist_ok=True)
+        
     with open(rle_path, 'wb') as f:
         f.write(rle_data)
         
-    print(f"Compressed image saved to {rle_path} (Size: {len(rle_data)} bytes)")
+    print(f"Compressed image saved to {rle_path} (Size: {len(rle_data)} bytes, Dimensions: {width}x{height})")
     return True
 
 if __name__ == '__main__':
-    compress_png_to_rle('DeskBuddyFace1Small.png', 'data/away.rle', resize_dim=(240, 240))
-    compress_png_to_rle('HiTechFacePlateClean.png', 'data/hitech.rle', resize_dim=(240, 240))
-    compress_png_to_rle('HiTechFacePlateClean_internet.png', 'data/internet.rle')
-    compress_png_to_rle('HiTechFacePlateClean_wifi.png', 'data/wifi.rle')
+    if len(sys.argv) != 2:
+        print("Usage: python compress_image.py <image_path>")
+        sys.exit(1)
+        
+    image_path = sys.argv[1]
+    base, _ = os.path.splitext(image_path)
+    rle_path = base + ".rle"
+    
+    compress_image_to_rle(image_path, rle_path)
+
