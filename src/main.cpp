@@ -13,6 +13,7 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include "Behaviour.h"
+// FuturaFont.h moved to Faceplates.h
 #include "../Credentials.h"
 
 // User States
@@ -110,6 +111,8 @@ unsigned long totalBreakTime = 0;
 int breakCount = 0;
 int productivityScore = 0;
 unsigned long latestBreakDuration = 0;
+unsigned long overnightBreakDuration = 0;
+uint32_t lastAwayEpoch = 0;
 
 int currentPresenceState = STATE_AWAY;
 unsigned long lastStateTransitionTime = 0;
@@ -133,6 +136,7 @@ volatile bool otaInProgress = false;
 Preferences preferences;
 float targetHours = 8.0;
 int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
+int clockFace = 0;
 int dailyAiRequestCount = 0;
 String userName = "human";
 bool firstSitToday = true;
@@ -323,6 +327,9 @@ void drawCenteredWrappedText(String text, uint16_t color, bool isAi = false) {
   }
 }
 
+
+#include "Faceplates.h"
+
 // Dynamic quote personalization helper
 String personalizeQuote(String quote, String name) {
   char formattedQuote[128];
@@ -368,7 +375,7 @@ void queryGeminiTask(void * parameter) {
         
         xSemaphoreTake(geminiMutex, portMAX_DELAY);
         lastResponseIsAi = true;
-        if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
+        if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
           char welcomeMsg[128];
           snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", generatedText.c_str(), lastTriggeredEventDetail.c_str());
           aiResponse = String(welcomeMsg);
@@ -405,7 +412,7 @@ void queryGeminiTask(void * parameter) {
     String personalQuote = personalizeQuote(String(quote), nameCopy);
     
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
+    if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
       char welcomeMsg[128];
       snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), lastTriggeredEventDetail.c_str());
       aiResponse = String(welcomeMsg);
@@ -450,7 +457,7 @@ void triggerBehaviour(int eventType, String detail = "") {
     char formattedPrompt[256];
     switch (eventType) {
       case EVENT_FIRST_SIT:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FIRST_SIT_OF_DAY, userName.c_str());
+        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FIRST_SIT_OF_DAY, userName.c_str(), detail.c_str());
         basePrompt = String(formattedPrompt);
         break;
       case EVENT_WELCOME_BACK:
@@ -519,7 +526,7 @@ void triggerBehaviour(int eventType, String detail = "") {
     // Immediately post fallback quote to display thread-safely
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
     lastResponseIsAi = false;
-    if (eventType == EVENT_WELCOME_BACK || eventType == EVENT_STREAK_BEATEN) {
+    if (eventType == EVENT_WELCOME_BACK || eventType == EVENT_FIRST_SIT || eventType == EVENT_STREAK_BEATEN) {
       char welcomeMsg[128];
       snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), detail.c_str());
       aiResponse = String(welcomeMsg);
@@ -544,6 +551,8 @@ void saveDailyStats() {
   doc["totalDeskTime"] = totalDeskTime;
   doc["totalFocusTime"] = totalFocusTime;
   doc["totalBreakTime"] = totalBreakTime;
+  doc["overnightBreakDuration"] = overnightBreakDuration;
+  doc["lastAwayEpoch"] = lastAwayEpoch;
   doc["dailyAiRequestCount"] = dailyAiRequestCount;
   doc["lastNtpDay"] = lastNtpDay;
   doc["longestSittingStreak"] = longestSittingStreak;
@@ -579,6 +588,8 @@ void loadDailyStats() {
     totalDeskTime = doc["totalDeskTime"] | 0UL;
     totalFocusTime = doc["totalFocusTime"] | 0UL;
     totalBreakTime = doc["totalBreakTime"] | 0UL;
+    overnightBreakDuration = doc["overnightBreakDuration"] | 0UL;
+    lastAwayEpoch = doc["lastAwayEpoch"] | 0;
     dailyAiRequestCount = doc["dailyAiRequestCount"] | 0;
     lastNtpDay = doc["lastNtpDay"] | -1;
     longestSittingStreak = doc["longestSittingStreak"] | 0UL;
@@ -750,6 +761,10 @@ void handleRoot() {
       <span class="value" id="breakTime">-</span>
     </div>
     <div class="metric">
+      <span class="label">Overnight Break Duration</span>
+      <span class="value" id="overnightBreak">-</span>
+    </div>
+    <div class="metric">
       <span class="label">Break Count</span>
       <span class="value" id="breaks">-</span>
     </div>
@@ -808,6 +823,7 @@ void handleRoot() {
           document.getElementById('deskTime').innerText = data.deskTime;
           document.getElementById('focusTime').innerText = data.focusTime;
           document.getElementById('breakTime').innerText = data.breakTime;
+          document.getElementById('overnightBreak').innerText = data.overnightBreak;
           document.getElementById('breaks').innerText = data.breaks;
           document.getElementById('latestBreak').innerText = data.latestBreak;
           document.getElementById('longestStreak').innerText = data.longestStreak;
@@ -966,6 +982,14 @@ void handleSettings() {
           <option value="0">Eco (Off)</option>
           <option value="1">Balanced</option>
           <option value="2">Frequent</option>
+        </select>
+      </div>
+      <div class="metric">
+        <span class="label">Clock Face Style</span>
+        <select name="clockFace" id="clockFaceSelect" class="settings-select">
+          <option value="0">Default Digital</option>
+          <option value="1">Minimalist</option>
+          <option value="2">HiTech</option>
         </select>
       </div>
       <div class="metric">
@@ -1237,6 +1261,7 @@ void handleSettings() {
           
           if (!window.settingsPopulated) {
             document.getElementById('aiModeSelect').value = data.aiMode;
+            document.getElementById('clockFaceSelect').value = data.clockFace;
             document.getElementById('targetHoursInput').value = data.targetHours;
             document.getElementById('userNameInput').value = data.userName;
             
@@ -1342,12 +1367,14 @@ void handleRadarData() {
   doc["deskTime"] = formatTime(totalDeskTime);
   doc["focusTime"] = formatTime(totalFocusTime);
   doc["breakTime"] = formatTime(totalBreakTime);
+  doc["overnightBreak"] = formatTime(overnightBreakDuration * 1000);
   doc["breaks"] = breakCount;
   doc["latestBreak"] = formatTime(latestBreakDuration);
   doc["longestStreak"] = formatTime(longestSittingStreak);
   doc["firstSitTime"] = formatEpochTime(firstSitEpoch);
   doc["score"] = productivityScore;
   doc["aiMode"] = aiMode;
+  doc["clockFace"] = clockFace;
   doc["targetHours"] = targetHours;
   doc["userName"] = userName;
   doc["focusDistLim"] = focusDistanceLimit;
@@ -1406,6 +1433,7 @@ void handleRadarData() {
 void handleSaveSettings() {
   if (server.hasArg("aiMode") && server.hasArg("targetHours")) {
     aiMode = server.arg("aiMode").toInt();
+    if (server.hasArg("clockFace")) clockFace = server.arg("clockFace").toInt();
     targetHours = server.arg("targetHours").toFloat();
     if (server.hasArg("userName")) userName = server.arg("userName");
     
@@ -1433,6 +1461,7 @@ void handleSaveSettings() {
 
     preferences.begin("deskbuddy", false);
     preferences.putInt("aiMode", aiMode);
+    preferences.putInt("clockFace", clockFace);
     preferences.putFloat("targetHours", targetHours);
     preferences.putString("userName", userName);
     preferences.putInt("focusDistLim", focusDistanceLimit);
@@ -1489,6 +1518,8 @@ void handleResetStats() {
   totalDeskTime = 0;
   totalFocusTime = 0;
   totalBreakTime = 0;
+  overnightBreakDuration = 0;
+  lastAwayEpoch = 0;
   dailyAiRequestCount = 0;
   longestSittingStreak = 0;
   latestBreakDuration = 0;
@@ -1538,7 +1569,14 @@ void updateTFTDisplay(unsigned long now) {
 
   static unsigned long lastRingUpdate = 0;
   bool isTransitioning = (currentRingColor != targetRingColor);
-  if (isTransitioning || forceRingRedraw || (now - lastRingUpdate > 50)) {
+  bool ringRedrawn = false;
+
+  // Rework mood ring so it is part of the face plate layout.
+  // clockFace 0 (Default) and 1 (Minimalist) have it. clockFace 2 (HiTech) does not.
+  bool faceplateHasRing = (clockFace == 0 || clockFace == 1);
+  bool shouldDrawRing = faceplateHasRing && (currentPresenceState != STATE_AWAY) && (now >= aiScreenEndTime);
+
+  if (shouldDrawRing && (forceRingRedraw || (isTransitioning && (now - lastRingUpdate > 50)))) {
     if (isTransitioning) {
       unsigned long elapsed = now - ringTransitionStart;
       if (elapsed >= ringTransitionDuration) {
@@ -1552,12 +1590,19 @@ void updateTFTDisplay(unsigned long now) {
       }
     }
     
-    // Draw 3px thick bezel ring
+    // Draw 3px thick bezel ring with smooth subpixel antialiasing using TFT_eSPI's drawSmoothRoundRect
+    // Center: (120, 120), Outer Radius: 118, Inner Radius: 116 (3px solid thickness from 116 to 118)
+    // Outer AA boundary is at radius 119 (pixel coordinates 1 to 239, fully within 240x240 screen boundary)
+    // Inner AA boundary is at radius 115.
     uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
-    tft.drawCircle(120, 120, 118, color565);
-    tft.drawCircle(120, 120, 117, color565);
-    tft.drawCircle(120, 120, 116, color565);
+    tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
     lastRingUpdate = now;
+    forceRingRedraw = false;
+    ringRedrawn = true;
+  } else if (!shouldDrawRing) {
+    if (isTransitioning) {
+      currentRingColor = targetRingColor; // Instantly catch up state in the background
+    }
     forceRingRedraw = false;
   }
 
@@ -1602,8 +1647,23 @@ void updateTFTDisplay(unsigned long now) {
     return;
   }
 
+  // If we are waiting for the AI welcome response, keep showing the away image/splash screen
+  if (isAILoading && (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT)) {
+    return;
+  }
+
   // If user is PRESENT, draw clock face
   lastDisplayedState = currentPresenceState;
+
+  static int lastClockFace = -1;
+  bool forceRedraw = false;
+  if (clockFace != lastClockFace) {
+    tft.fillScreen(TFT_BLACK);
+    lastMetricText = "";
+    forceRingRedraw = true;
+    lastClockFace = clockFace;
+    forceRedraw = true;
+  }
 
   // Clear screen if we just transitioned from Away or AI screen
   if (lastDisplayedPage != 0) {
@@ -1611,65 +1671,20 @@ void updateTFTDisplay(unsigned long now) {
     lastDisplayedPage = 0;
     forceRingRedraw = true;
     lastMetricText = "";
+    forceRedraw = true;
   }
 
-  tft.setTextDatum(MC_DATUM);
-
-  // Weather section (top)
-  tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-  tft.drawString(String(temp) + "C | " + weatherDesc, 120, 50, 4);
-
-  // Time section (center)
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  String timeStr = timeClient.getFormattedTime().substring(0, 5);
-  tft.drawString(timeStr, 120, 105, 7); // Large digital font
-
-  // Date section (below time)
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  tft.drawString(buf, 120, 150, 2);
-
-  // Cycle through metrics at the bottom (Y=190) every 15 seconds
-  static unsigned long lastMetricSwitch = 0;
-  static int metricIndex = 0;
-  
-  if (now - lastMetricSwitch > 15000) {
-    metricIndex = (metricIndex + 1) % 5;
-    lastMetricSwitch = now;
-  }
-
-  String metricText = "";
-  uint16_t metricColor = tft.color565(100, 100, 100);
-
-  switch (metricIndex) {
-    case 0: {
-      int pct = 0;
-      if (targetHours > 0.0f) {
-        pct = (int)((totalDeskTime * 100.0f) / (targetHours * 3600.0f * 1000.0f));
-      }
-      if (pct > 100) pct = 100;
-      metricText = "Day: " + String(pct) + "%";
-      break;
-    }
+  switch (clockFace) {
     case 1:
-      metricText = "Score: " + String(productivityScore) + "%";
+      drawMinimalistClockFace(now, forceRedraw || ringRedrawn);
       break;
     case 2:
-      metricText = "Sitting: " + formatTime(now - continuousPresenceStart);
+      drawHiTechClockFace(now, forceRedraw || ringRedrawn);
       break;
-    case 3:
-      metricText = "Breaks: " + String(breakCount);
+    case 0:
+    default:
+      drawDefaultClockFace(now, lastMetricText, lastMetricColor);
       break;
-    case 4:
-      metricText = "Focus: " + formatTime(totalFocusTime);
-      break;
-  }
-
-  if (metricText != lastMetricText || metricColor != lastMetricColor) {
-    tft.fillRect(42, 176, 156, 28, TFT_BLACK); // Clear text area safely without clipping bezel ring
-    tft.setTextColor(metricColor, TFT_BLACK);
-    tft.drawString(metricText, 120, 190, 4);
-    lastMetricText = metricText;
-    lastMetricColor = metricColor;
   }
 }
 
@@ -1677,6 +1692,7 @@ void setup(void) {
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
   aiMode = preferences.getInt("aiMode", 1);
+  clockFace = preferences.getInt("clockFace", 0);
   targetHours = preferences.getFloat("targetHours", 8.0);
   userName = preferences.getString("userName", "human");
   focusDistanceLimit = preferences.getInt("focusDistLim", 50);
@@ -1827,6 +1843,7 @@ void loop(void) {
       totalDeskTime = 0;
       totalFocusTime = 0;
       totalBreakTime = 0;
+      overnightBreakDuration = 0;
       dailyAiRequestCount = 0;
       longestSittingStreak = 0;
       latestBreakDuration = 0;
@@ -1959,7 +1976,12 @@ void loop(void) {
       if (firstSitToday) {
         firstSitToday = false;
         firstSitEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-        triggerBehaviour(EVENT_FIRST_SIT);
+        if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
+          overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
+        } else {
+          overnightBreakDuration = 0;
+        }
+        triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreakDuration * 1000));
         
         // Reset session metrics on first sit
         sessionDeskTime = 0;
@@ -2036,6 +2058,8 @@ void loop(void) {
       
       currentPresenceState = STATE_AWAY;
       lastStateTransitionTime = now;
+      lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+      saveDailyStats();
     } else {
       // Accumulate break time
       totalBreakTime += elapsed;
@@ -2065,7 +2089,12 @@ void loop(void) {
     float penalty_breaks = 25.0f * ((float)breakCount / hoursElapsed);
     
     // 2. Break duration penalty (target: 10% of workday in breaks = 25% penalty)
-    float breakTimeRatio = (float)(totalBreakTime / 1000) / (float)workdayElapsed;
+    unsigned long activeBreakMs = 0;
+    unsigned long workdayElapsedMs = (unsigned long)workdayElapsed * 1000;
+    if (workdayElapsedMs > totalDeskTime) {
+      activeBreakMs = workdayElapsedMs - totalDeskTime;
+    }
+    float breakTimeRatio = (float)(activeBreakMs / 1000.0f) / (float)workdayElapsed;
     float penalty_time = 25.0f * (breakTimeRatio / 0.10f);
     
     // 3. Focus bonus (Focus counts 1.5x)

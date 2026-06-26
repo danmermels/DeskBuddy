@@ -152,7 +152,7 @@ const char* localStreakBeaten[20] = {
 // --- Gemini AI Prompts (Templates used when AI is active) ---
 
 const char* PROMPT_FIRST_SIT_OF_DAY = 
-  "%s has just sat down at their desk for the first time today. Say hello in a witty, encouraging, or playful way in 1 sentence under 30 characters.";
+  "%s has just sat down at their desk for the first time today after an overnight break of %s. Say hello in a witty, encouraging, or playful way in 1 sentence under 30 characters.";
 
 const char* PROMPT_WELCOME_BACK = 
   "%s has returned to their desk after a break of %s. Welcome them back in a short, witty, or motivational way in 1 sentence under 30 characters.";

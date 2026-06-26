@@ -2,7 +2,7 @@ import os
 import struct
 from PIL import Image
 
-def compress_png_to_rle(png_path, rle_path):
+def compress_png_to_rle(png_path, rle_path, resize_dim=None):
     if not os.path.exists(png_path):
         print(f"Error: {png_path} not found.")
         return False
@@ -17,11 +17,15 @@ def compress_png_to_rle(png_path, rle_path):
     else:
         img_rgb.paste(img)
         
-    # Resize to 240x240
-    print("Resizing to 240x240 (LANCZOS resampling)...")
-    img_resized = img_rgb.resize((240, 240), Image.Resampling.LANCZOS)
+    # Resize if dimension is provided
+    if resize_dim:
+        print(f"Resizing to {resize_dim[0]}x{resize_dim[1]} (LANCZOS resampling)...")
+        img_processed = img_rgb.resize(resize_dim, Image.Resampling.LANCZOS)
+    else:
+        img_processed = img_rgb
+        
     print("Quantizing to 64 colors to optimize compression...")
-    img_quantized = img_resized.quantize(colors=64).convert("RGB")
+    img_quantized = img_processed.quantize(colors=64).convert("RGB")
     width, height = img_quantized.size
     
     pixels_rgb = list(img_quantized.getdata())
@@ -78,4 +82,7 @@ def compress_png_to_rle(png_path, rle_path):
     return True
 
 if __name__ == '__main__':
-    compress_png_to_rle('DeskBuddyFace1Small.png', 'data/away.rle')
+    compress_png_to_rle('DeskBuddyFace1Small.png', 'data/away.rle', resize_dim=(240, 240))
+    compress_png_to_rle('HiTechFacePlateClean.png', 'data/hitech.rle', resize_dim=(240, 240))
+    compress_png_to_rle('HiTechFacePlateClean_internet.png', 'data/internet.rle')
+    compress_png_to_rle('HiTechFacePlateClean_wifi.png', 'data/wifi.rle')
