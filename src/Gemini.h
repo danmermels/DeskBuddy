@@ -68,9 +68,13 @@ inline void queryGeminiTask(void * parameter) {
         xSemaphoreTake(geminiMutex, portMAX_DELAY);
         lastResponseIsAi = true;
         if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
-          char welcomeMsg[128];
-          snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", generatedText.c_str(), lastTriggeredEventDetail.c_str());
-          aiResponse = String(welcomeMsg);
+          if (lastTriggeredEventType == EVENT_FIRST_SIT && lastTriggeredEventDetail == "") {
+            aiResponse = generatedText;
+          } else {
+            char welcomeMsg[128];
+            snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", generatedText.c_str(), lastTriggeredEventDetail.c_str());
+            aiResponse = String(welcomeMsg);
+          }
         } else {
           aiResponse = generatedText;
         }
@@ -105,9 +109,13 @@ inline void queryGeminiTask(void * parameter) {
     
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
     if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
-      char welcomeMsg[128];
-      snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), lastTriggeredEventDetail.c_str());
-      aiResponse = String(welcomeMsg);
+      if (lastTriggeredEventType == EVENT_FIRST_SIT && lastTriggeredEventDetail == "") {
+        aiResponse = personalQuote;
+      } else {
+        char welcomeMsg[128];
+        snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), lastTriggeredEventDetail.c_str());
+        aiResponse = String(welcomeMsg);
+      }
     } else {
       aiResponse = personalQuote;
     }
@@ -219,9 +227,13 @@ inline void triggerBehaviour(int eventType, String detail = "") {
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
     lastResponseIsAi = false;
     if (eventType == EVENT_WELCOME_BACK || eventType == EVENT_FIRST_SIT || eventType == EVENT_STREAK_BEATEN) {
-      char welcomeMsg[128];
-      snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), detail.c_str());
-      aiResponse = String(welcomeMsg);
+      if (eventType == EVENT_FIRST_SIT && detail == "") {
+        aiResponse = personalQuote;
+      } else {
+        char welcomeMsg[128];
+        snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), detail.c_str());
+        aiResponse = String(welcomeMsg);
+      }
     } else {
       aiResponse = personalQuote;
     }

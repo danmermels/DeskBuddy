@@ -29,6 +29,8 @@ struct RGBColor {
 extern TFT_eSPI tft;
 extern int clockFace;
 extern int currentPresenceState;
+extern bool hasMail;
+extern unsigned long lastStateTransitionTime;
 extern unsigned long aiScreenEndTime;
 extern volatile bool hasNewAIResponse;
 extern SemaphoreHandle_t geminiMutex;
@@ -36,6 +38,7 @@ extern String aiResponse;
 extern volatile bool lastResponseIsAi;
 extern volatile bool isAILoading;
 extern int lastTriggeredEventType;
+extern NTPClient timeClient;
 
 extern const RGBColor stateColors[];
 extern RGBColor currentRingColor;
@@ -45,19 +48,19 @@ extern unsigned long ringTransitionStart;
 extern const unsigned long ringTransitionDuration;
 
 // Forward declarations for clock faces (defined in Faceplates.h)
-extern void drawMinimalistClockFace(unsigned long now, bool forceRedraw);
-extern void drawHiTechClockFace(unsigned long now, bool forceRedraw);
-extern void drawDefaultClockFace(unsigned long now, String &lastMetricText, uint16_t &lastMetricColor);
+extern void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
+extern void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
+extern void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 
 // Draw custom PackBits-RLE compressed image from LittleFS to TFT
-inline void drawRLEImage(const char* filename, int16_t x, int16_t y) {
+inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t overrideColor = 0) {
   fs::File file = LittleFS.open(filename, "r");
-  if (!file) return;
+  if (!file) return false;
 
   uint16_t w, h;
   if (file.read((uint8_t*)&w, 2) != 2 || file.read((uint8_t*)&h, 2) != 2) {
     file.close();
-    return;
+    return false;
   }
 
   tft.setAddrWindow(x, y, w, h);
@@ -69,6 +72,25 @@ inline void drawRLEImage(const char* filename, int16_t x, int16_t y) {
       // Repeating run packet
       uint16_t color;
       if (file.read((uint8_t*)&color, 2) == 2) {
+        if (overrideColor != 0) {
+          uint16_t g_5 = (color >> 6) & 0x1F;
+          uint16_t b_5 = color & 0x1F;
+          uint16_t val = (g_5 > b_5) ? g_5 : b_5;
+          
+          uint16_t target_r = (overrideColor >> 11) & 0x1F;
+          uint16_t target_g = (overrideColor >> 5) & 0x3F;
+          uint16_t target_b = overrideColor & 0x1F;
+          
+          uint16_t out_r = (val * target_r) / 21;
+          uint16_t out_g = (val * target_g) / 21;
+          uint16_t out_b = (val * target_b) / 21;
+          
+          if (out_r > target_r) out_r = target_r;
+          if (out_g > target_g) out_g = target_g;
+          if (out_b > target_b) out_b = target_b;
+          
+          color = (out_r << 11) | (out_g << 5) | out_b;
+        }
         tft.pushColor(color, count);
       }
     } else {
@@ -76,18 +98,45 @@ inline void drawRLEImage(const char* filename, int16_t x, int16_t y) {
       for (int i = 0; i < count; i++) {
         uint16_t color;
         if (file.read((uint8_t*)&color, 2) == 2) {
+          if (overrideColor != 0) {
+            uint16_t g_5 = (color >> 6) & 0x1F;
+            uint16_t b_5 = color & 0x1F;
+            uint16_t val = (g_5 > b_5) ? g_5 : b_5;
+            
+            uint16_t target_r = (overrideColor >> 11) & 0x1F;
+            uint16_t target_g = (overrideColor >> 5) & 0x3F;
+            uint16_t target_b = overrideColor & 0x1F;
+            
+            uint16_t out_r = (val * target_r) / 21;
+            uint16_t out_g = (val * target_g) / 21;
+            uint16_t out_b = (val * target_b) / 21;
+            
+            if (out_r > target_r) out_r = target_r;
+            if (out_g > target_g) out_g = target_g;
+            if (out_b > target_b) out_b = target_b;
+            
+            color = (out_r << 11) | (out_g << 5) | out_b;
+          }
           tft.pushColor(color, 1);
         }
       }
     }
   }
   file.close();
+  return true;
 }
 
 // Helper to draw auto-wrapped text in the center of the round TFT
-inline void drawCenteredWrappedText(String text, uint16_t color, bool isAi = false) {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(color, TFT_BLACK);
+inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY) {
+  if (bgImage != nullptr) {
+    if (!drawRLEImage(bgImage, 0, 0)) {
+      tft.fillScreen(TFT_BLACK);
+    }
+  } else {
+    tft.fillScreen(TFT_BLACK);
+  }
+
+  tft.setTextColor(textColor);
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
   
   int y = 70;
@@ -116,97 +165,64 @@ inline void drawCenteredWrappedText(String text, uint16_t color, bool isAi = fal
   }
 
   if (isAi) {
-    tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    tft.setTextColor(aiLabelColor);
     tft.drawString("(AI GENERATED)", 120, 210, 2);
   }
 }
 
 inline void updateTFTDisplay(unsigned long now) {
-  static unsigned long lastTFTUpdate = 0;
-  static int lastDisplayedPage = -1;
+  static int lastDisplayedPage = -1; // -1 = Away, 0 = Clock, -2 = Alert
   static int lastDisplayedState = -1;
-  static bool forceRingRedraw = false;
-  static String lastMetricText = "";
-  static uint16_t lastMetricColor = 0;
+  static int lastClockFace = -1;
+  static String activeAlertMessage = "";
+  static bool activeAlertIsAi = false;
 
-  // Handle bezel ring animation transition
-  RGBColor targetColor = stateColors[currentPresenceState];
-  if (targetColor != targetRingColor) {
-    startRingColor = currentRingColor;
-    targetRingColor = targetColor;
-    ringTransitionStart = now;
-  }
-
-  static unsigned long lastRingUpdate = 0;
-  bool isTransitioning = (currentRingColor != targetRingColor);
-  bool ringRedrawn = false;
-
-  // Bezel ring is only on clockFace 0 (Default) and 1 (Minimalist)
-  bool faceplateHasRing = (clockFace == 0 || clockFace == 1);
-  bool shouldDrawRing = faceplateHasRing && (currentPresenceState != STATE_AWAY) && (now >= aiScreenEndTime);
-
-  if (shouldDrawRing && (forceRingRedraw || (isTransitioning && (now - lastRingUpdate > 50)))) {
-    if (isTransitioning) {
-      unsigned long elapsed = now - ringTransitionStart;
-      if (elapsed >= ringTransitionDuration) {
-        currentRingColor = targetRingColor;
-      } else {
-        float t = (float)elapsed / ringTransitionDuration;
-        t = (1.0f - cosf(t * 3.14159265f)) / 2.0f; // Cosine ease-in-out
-        currentRingColor.r = startRingColor.r + t * (targetRingColor.r - startRingColor.r);
-        currentRingColor.g = startRingColor.g + t * (targetRingColor.g - startRingColor.g);
-        currentRingColor.b = startRingColor.b + t * (targetRingColor.b - startRingColor.b);
-      }
-    }
-    
-    // Draw 3px thick bezel ring with smooth subpixel antialiasing using TFT_eSPI
-    uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
-    tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
-    lastRingUpdate = now;
-    forceRingRedraw = false;
-    ringRedrawn = true;
-  } else if (!shouldDrawRing) {
-    if (isTransitioning) {
-      currentRingColor = targetRingColor; // Instantly catch up state in the background
-    }
-    forceRingRedraw = false;
-  }
-
-  // 1. Manage AI Response alert screen
-  if (now < aiScreenEndTime) {
-    return;
-  }
-
-  // Check if we have a new AI response to display
+  bool newAlert = false;
   if (hasNewAIResponse) {
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    String responseCopy = aiResponse;
-    bool isAiCopy = lastResponseIsAi;
+    activeAlertMessage = aiResponse;
+    activeAlertIsAi = lastResponseIsAi;
     hasNewAIResponse = false;
     xSemaphoreGive(geminiMutex);
 
-    // Enter AI screen mode for 8 seconds
     aiScreenEndTime = now + 8000;
-    drawCenteredWrappedText(responseCopy, TFT_SKYBLUE, isAiCopy);
-    lastDisplayedPage = -2; // Reset page state to force redraw when AI screen finishes
-    forceRingRedraw = true;
-    return;
+    newAlert = true;
   }
 
-  // 2. Refresh control: only update screen every 500ms
-  if (now - lastTFTUpdate < 500) {
-    return;
-  }
-  lastTFTUpdate = now;
-
-  // If user is AWAY
+  bool isAlertActive = (now < aiScreenEndTime);
+  int targetPage = -1;
   if (currentPresenceState == STATE_AWAY) {
-    if (lastDisplayedState != STATE_AWAY) {
-      drawRLEImage("/away.rle", 0, 0);
+    if (now - lastStateTransitionTime < 60000UL) {
+      targetPage = 0; // Show Clock page during the 1-minute grace period
+    } else {
+      targetPage = -1; // Away page
+    }
+  } else if (isAlertActive) {
+    targetPage = -2; // Alert page
+  } else {
+    targetPage = 0;  // Clock page
+  }
 
-      lastDisplayedState = STATE_AWAY;
-      lastDisplayedPage = -1;
-      forceRingRedraw = true;
+  bool forceRedraw = (targetPage != lastDisplayedPage) || 
+                     (clockFace != lastClockFace) || 
+                     newAlert;
+
+  if (clockFace != lastClockFace) {
+    tft.fillScreen(TFT_BLACK);
+    lastClockFace = clockFace;
+  }
+
+  if (targetPage != lastDisplayedPage) {
+    tft.fillScreen(TFT_BLACK);
+    lastDisplayedPage = targetPage;
+  }
+
+  lastDisplayedState = currentPresenceState;
+
+  // 1. If user is AWAY (and grace period has expired)
+  if (currentPresenceState == STATE_AWAY && (now - lastStateTransitionTime >= 60000UL)) {
+    if (forceRedraw) {
+      drawRLEImage("/away.rle", 0, 0);
     }
     return;
   }
@@ -216,38 +232,20 @@ inline void updateTFTDisplay(unsigned long now) {
     return;
   }
 
-  // If user is PRESENT, draw clock face
-  lastDisplayedState = currentPresenceState;
-
-  static int lastClockFace = -1;
-  bool forceRedraw = false;
-  if (clockFace != lastClockFace) {
-    tft.fillScreen(TFT_BLACK);
-    lastMetricText = "";
-    forceRingRedraw = true;
-    lastClockFace = clockFace;
-    forceRedraw = true;
-  }
-
-  // Clear screen if we just transitioned from Away or AI screen
-  if (lastDisplayedPage != 0) {
-    tft.fillScreen(TFT_BLACK);
-    lastDisplayedPage = 0;
-    forceRingRedraw = true;
-    lastMetricText = "";
-    forceRedraw = true;
-  }
+  // 2. Call active faceplate
+  bool wifiAvailable = (WiFi.status() == WL_CONNECTED);
+  bool internetAvailable = wifiAvailable && timeClient.isTimeSet();
 
   switch (clockFace) {
     case 1:
-      drawMinimalistClockFace(now, forceRedraw || ringRedrawn);
+      drawMinimalistClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
       break;
     case 2:
-      drawHiTechClockFace(now, forceRedraw || ringRedrawn);
+      drawHiTechClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
       break;
     case 0:
     default:
-      drawDefaultClockFace(now, lastMetricText, lastMetricColor);
+      drawDefaultClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
       break;
   }
 }

@@ -27,6 +27,7 @@ extern uint32_t firstSitEpoch;
 extern int productivityScore;
 extern int aiMode;
 extern int clockFace;
+extern bool hasMail;
 extern float targetHours;
 extern String userName;
 extern int focusDistanceLimit;
@@ -418,6 +419,13 @@ inline void handleSettings() {
         <span class="label">Daily Target Hours</span>
         <input type="number" step="0.1" min="0.1" max="24.0" name="targetHours" id="targetHoursInput" class="settings-input">
       </div>
+      <div class="metric">
+        <span class="label">Mail Alert Active</span>
+        <select name="hasMail" id="hasMailSelect" class="settings-select">
+          <option value="0">No Mail</option>
+          <option value="1">Mail Active</option>
+        </select>
+      </div>
       <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
         <div style="display: flex; justify-content: space-between;">
           <span class="label">Focus Distance Limit (cm)</span>
@@ -449,14 +457,9 @@ inline void handleSettings() {
       <details style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 10px;">
         <summary style="cursor: pointer; color: #38bdf8; font-weight: bold; padding: 5px 0; outline: none;">Gate Sensitivity Trigger Levels (Gates 0-6)</summary>
         <div style="margin-top: 10px; max-height: 350px; overflow-y: auto; padding-right: 5px;">
-          <!-- Gate 0 -->
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 0 Moving Sensitivity</span>
-              <span class="value" id="g0mSensVal">100</span>
-            </div>
-            <input type="range" name="g0mSens" id="g0mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0mSensVal').innerText = this.value">
-          </div>
+          <div style="font-weight: bold; color: #38bdf8; margin: 5px 0 10px 0; border-bottom: 1px solid #334155; padding-bottom: 5px;">Static Gate Sensitivities</div>
+          
+          <!-- Gate 0 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 0 Static Sensitivity</span>
@@ -464,7 +467,66 @@ inline void handleSettings() {
             </div>
             <input type="range" name="g0sSens" id="g0sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0sSensVal').innerText = this.value">
           </div>
-          <!-- Gate 1 -->
+          <!-- Gate 1 Static -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 1 Static Sensitivity</span>
+              <span class="value" id="g1sSensVal">50</span>
+            </div>
+            <input type="range" name="g1sSens" id="g1sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 2 Static -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 2 Static Sensitivity</span>
+              <span class="value" id="g2sSensVal">50</span>
+            </div>
+            <input type="range" name="g2sSens" id="g2sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 3 Static -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 3 Static Sensitivity</span>
+              <span class="value" id="g3sSensVal">50</span>
+            </div>
+            <input type="range" name="g3sSens" id="g3sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 4 Static -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 4 Static Sensitivity</span>
+              <span class="value" id="g4sSensVal">50</span>
+            </div>
+            <input type="range" name="g4sSens" id="g4sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 5 Static -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 5 Static Sensitivity</span>
+              <span class="value" id="g5sSensVal">50</span>
+            </div>
+            <input type="range" name="g5sSens" id="g5sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5sSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 6 Static -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 6 Static Sensitivity</span>
+              <span class="value" id="g6sSensVal">50</span>
+            </div>
+            <input type="range" name="g6sSens" id="g6sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6sSensVal').innerText = this.value">
+          </div>
+
+          <div style="font-weight: bold; color: #38bdf8; margin: 15px 0 10px 0; border-top: 1px solid #334155; border-bottom: 1px solid #334155; padding: 10px 0 5px 0;">Moving Gate Sensitivities</div>
+
+          <!-- Gate 0 Moving -->
+          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+            <div style="display: flex; justify-content: space-between;">
+              <span class="label">Gate 0 Moving Sensitivity</span>
+              <span class="value" id="g0mSensVal">100</span>
+            </div>
+            <input type="range" name="g0mSens" id="g0mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0mSensVal').innerText = this.value">
+          </div>
+          <!-- Gate 1 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 1 Moving Sensitivity</span>
@@ -472,14 +534,7 @@ inline void handleSettings() {
             </div>
             <input type="range" name="g1mSens" id="g1mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1mSensVal').innerText = this.value">
           </div>
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 1 Static Sensitivity</span>
-              <span class="value" id="g1sSensVal">50</span>
-            </div>
-            <input type="range" name="g1sSens" id="g1sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1sSensVal').innerText = this.value">
-          </div>
-          <!-- Gate 2 -->
+          <!-- Gate 2 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 2 Moving Sensitivity</span>
@@ -487,14 +542,7 @@ inline void handleSettings() {
             </div>
             <input type="range" name="g2mSens" id="g2mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2mSensVal').innerText = this.value">
           </div>
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 2 Static Sensitivity</span>
-              <span class="value" id="g2sSensVal">50</span>
-            </div>
-            <input type="range" name="g2sSens" id="g2sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2sSensVal').innerText = this.value">
-          </div>
-          <!-- Gate 3 -->
+          <!-- Gate 3 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 3 Moving Sensitivity</span>
@@ -502,14 +550,7 @@ inline void handleSettings() {
             </div>
             <input type="range" name="g3mSens" id="g3mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3mSensVal').innerText = this.value">
           </div>
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 3 Static Sensitivity</span>
-              <span class="value" id="g3sSensVal">50</span>
-            </div>
-            <input type="range" name="g3sSens" id="g3sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3sSensVal').innerText = this.value">
-          </div>
-          <!-- Gate 4 -->
+          <!-- Gate 4 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 4 Moving Sensitivity</span>
@@ -517,14 +558,7 @@ inline void handleSettings() {
             </div>
             <input type="range" name="g4mSens" id="g4mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4mSensVal').innerText = this.value">
           </div>
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 4 Static Sensitivity</span>
-              <span class="value" id="g4sSensVal">50</span>
-            </div>
-            <input type="range" name="g4sSens" id="g4sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4sSensVal').innerText = this.value">
-          </div>
-          <!-- Gate 5 -->
+          <!-- Gate 5 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 5 Moving Sensitivity</span>
@@ -532,27 +566,13 @@ inline void handleSettings() {
             </div>
             <input type="range" name="g5mSens" id="g5mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5mSensVal').innerText = this.value">
           </div>
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 5 Static Sensitivity</span>
-              <span class="value" id="g5sSensVal">50</span>
-            </div>
-            <input type="range" name="g5sSens" id="g5sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5sSensVal').innerText = this.value">
-          </div>
-          <!-- Gate 6 -->
+          <!-- Gate 6 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
             <div style="display: flex; justify-content: space-between;">
               <span class="label">Gate 6 Moving Sensitivity</span>
               <span class="value" id="g6mSensVal">100</span>
             </div>
             <input type="range" name="g6mSens" id="g6mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6mSensVal').innerText = this.value">
-          </div>
-          <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
-            <div style="display: flex; justify-content: space-between;">
-              <span class="label">Gate 6 Static Sensitivity</span>
-              <span class="value" id="g6sSensVal">50</span>
-            </div>
-            <input type="range" name="g6sSens" id="g6sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6sSensVal').innerText = this.value">
           </div>
         </div>
       </details>
@@ -682,6 +702,7 @@ inline void handleSettings() {
             document.getElementById('clockFaceSelect').value = data.clockFace;
             document.getElementById('targetHoursInput').value = data.targetHours;
             document.getElementById('userNameInput').value = data.userName;
+            document.getElementById('hasMailSelect').value = data.hasMail ? "1" : "0";
             
             document.getElementById('focusDistLimSlider').value = data.focusDistLim;
             document.getElementById('focusDistLimVal').innerText = data.focusDistLim + ' cm';
@@ -794,6 +815,7 @@ inline void handleRadarData() {
   doc["aiMode"] = aiMode;
   doc["clockFace"] = clockFace;
   doc["targetHours"] = targetHours;
+  doc["hasMail"] = hasMail;
   doc["userName"] = userName;
   doc["focusDistLim"] = focusDistanceLimit;
   doc["motionRatioLim"] = motionRatioLimit;
@@ -836,6 +858,7 @@ inline void handleSaveSettings() {
     aiMode = server.arg("aiMode").toInt();
     if (server.hasArg("clockFace")) clockFace = server.arg("clockFace").toInt();
     targetHours = server.arg("targetHours").toFloat();
+    if (server.hasArg("hasMail")) hasMail = (server.arg("hasMail").toInt() == 1);
     if (server.hasArg("userName")) userName = server.arg("userName");
     
     if (server.hasArg("focusDistLim")) focusDistanceLimit = server.arg("focusDistLim").toInt();
@@ -865,6 +888,7 @@ inline void handleSaveSettings() {
     preferences.putInt("aiMode", aiMode);
     preferences.putInt("clockFace", clockFace);
     preferences.putFloat("targetHours", targetHours);
+    preferences.putBool("hasMail", hasMail);
     preferences.putString("userName", userName);
     preferences.putInt("focusDistLim", focusDistanceLimit);
     preferences.putInt("motionRatioLim", motionRatioLimit);

@@ -85,6 +85,7 @@ bool streakAlertTriggered = false;
 int lastNtpDay = -1;
 int lastTriggeredEventType = EVENT_FIRST_SIT;
 float filterWindow = 2.0;
+bool hasMail = false;
 
 // Radar Gate Sensitivity Thresholds (0-100)
 int g0mSens = 100;
@@ -217,6 +218,7 @@ void saveDailyStats() {
   doc["deskDistanceLimit"] = deskDistanceLimit;
   doc["focusDistanceLimit"] = focusDistanceLimit;
   doc["motionRatioLimit"] = motionRatioLimit;
+  doc["hasMail"] = hasMail;
 
   if (serializeJson(doc, file) == 0) {
     file.close();
@@ -259,6 +261,7 @@ void loadDailyStats() {
     deskDistanceLimit = doc["deskDistanceLimit"] | 120;
     focusDistanceLimit = doc["focusDistanceLimit"] | 50;
     motionRatioLimit = doc["motionRatioLimit"] | 15;
+    hasMail = doc["hasMail"] | false;
   }
   file.close();
 }
@@ -292,6 +295,7 @@ void setup(void) {
   motionRatioLimit = preferences.getInt("motionRatioLim", 15);
   deskDistanceLimit = preferences.getInt("distLimit", 120);
   filterWindow = preferences.getFloat("filterWindow", 2.0);
+  hasMail = preferences.getBool("hasMail", false);
   g0mSens = preferences.getInt("g0mSens", 90);
   g0sSens = preferences.getInt("g0sSens", 90);
   g1mSens = preferences.getInt("g1mSens", 60);
@@ -532,7 +536,15 @@ void loop(void) {
         } else {
           overnightBreakDuration = 0;
         }
-        triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreakDuration * 1000));
+        
+        // Save immediately before behavior logic to prevent data loss
+        saveDailyStats();
+        
+        if (overnightBreakDuration >= 4 * 3600UL) {
+          triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreakDuration * 1000));
+        } else {
+          triggerBehaviour(EVENT_FIRST_SIT, "");
+        }
         
         // Reset session metrics on first sit
         sessionDeskTime = 0;
@@ -543,6 +555,10 @@ void loop(void) {
       } else if (breakDuration >= 180000UL) { // Only count break if away > 3 minutes
         breakCount++;
         latestBreakDuration = breakDuration;
+        
+        // Save immediately before behavior logic to prevent data loss
+        saveDailyStats();
+        
         triggerBehaviour(EVENT_WELCOME_BACK, formatTime(breakDuration));
         
         // Reset session metrics on true break return

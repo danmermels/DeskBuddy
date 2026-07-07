@@ -5,3 +5,5 @@
 .vscode/ipch
 Credentials.h
 .agents/
+__pycache__/
+*.pyc

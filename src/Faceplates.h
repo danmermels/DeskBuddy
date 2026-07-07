@@ -7,6 +7,30 @@
 #include <LittleFS.h>
 #include <TFT_eSPI.h>
 #include "FuturaFont.h"
+#include "GoodTimingFont.h"
+#include "Display.h"
+
+// Extern references for global state variables from main.cpp
+extern const RGBColor stateColors[];
+extern int currentPresenceState;
+extern bool hasMail;
+extern RGBColor currentRingColor;
+extern RGBColor startRingColor;
+extern RGBColor targetRingColor;
+extern unsigned long ringTransitionStart;
+extern const unsigned long ringTransitionDuration;
+extern int temp;
+extern String weatherDesc;
+extern int productivityScore;
+extern float targetHours;
+extern unsigned long totalDeskTime;
+extern unsigned long totalFocusTime;
+extern unsigned long totalBreakTime;
+extern int breakCount;
+extern unsigned long continuousPresenceStart;
+extern char buf[];
+extern NTPClient timeClient;
+extern String formatTime(unsigned long ms);
 
 // ============================================================================
 // SECTION 1: COMMON CLIPPING & DRAWING HELPERS
@@ -140,7 +164,59 @@ void drawClippedSmoothRoundRect(int32_t x, int32_t y, int32_t r, int32_t ir, int
 // ============================================================================
 
 // Helper function to draw default digital clock face
-void drawDefaultClockFace(unsigned long now, String &lastMetricText, uint16_t &lastMetricColor) {
+void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  // 1. Mood Ring Animation & Drawing
+  RGBColor targetColor = stateColors[currentPresenceState];
+  if (targetColor != targetRingColor) {
+    startRingColor = currentRingColor;
+    targetRingColor = targetColor;
+    ringTransitionStart = now;
+  }
+
+  static unsigned long lastRingUpdate = 0;
+  bool isTransitioning = (currentRingColor != targetRingColor);
+  bool ringRedrawn = false;
+
+  if (forceRedraw || (isTransitioning && (now - lastRingUpdate > 50))) {
+    if (isTransitioning) {
+      unsigned long elapsed = now - ringTransitionStart;
+      if (elapsed >= ringTransitionDuration) {
+        currentRingColor = targetRingColor;
+      } else {
+        float t = (float)elapsed / ringTransitionDuration;
+        t = (1.0f - cosf(t * 3.14159265f)) / 2.0f; // Cosine ease-in-out
+        currentRingColor.r = startRingColor.r + t * (targetRingColor.r - startRingColor.r);
+        currentRingColor.g = startRingColor.g + t * (targetRingColor.g - startRingColor.g);
+        currentRingColor.b = startRingColor.b + t * (targetRingColor.b - startRingColor.b);
+      }
+    }
+    uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
+    tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
+    lastRingUpdate = now;
+    ringRedrawn = true;
+  }
+
+  // 2. Alert/Event Message Mode
+  if (showEvent) {
+    if (forceRedraw || ringRedrawn) {
+      drawFaceplateMessage("/msg_default.rle", message, TFT_SKYBLUE, isAi, TFT_LIGHTGREY);
+      // Redraw bezel ring on top of the alert background
+      uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
+      tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
+    }
+    return;
+  }
+
+  // 3. Normal Clock Drawing (Throttled to 500ms unless redraw or ring updated)
+  static unsigned long lastDefaultFaceUpdate = 0;
+  if (!forceRedraw && !ringRedrawn && (now - lastDefaultFaceUpdate < 500)) {
+    return;
+  }
+  lastDefaultFaceUpdate = now;
+
+  static String lastMetricText = "";
+  static uint16_t lastMetricColor = 0;
+
   static unsigned long lastMetricSwitch = 0;
   static int metricIndex = 0;
 
@@ -149,6 +225,20 @@ void drawDefaultClockFace(unsigned long now, String &lastMetricText, uint16_t &l
   // Weather section (top)
   tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
   tft.drawString(String(temp) + "C | " + weatherDesc, 120, 50, 4);
+
+  // Draw Mail Indicator on Default Clock Face
+  static bool lastHasMailDefault = false;
+  if (forceRedraw || (hasMail != lastHasMailDefault)) {
+    if (hasMail) {
+      tft.fillRect(200, 46, 17, 12, TFT_BLACK); // Clear first
+      tft.drawRect(200, 46, 17, 12, TFT_YELLOW);
+      tft.drawLine(200, 46, 208, 52, TFT_YELLOW);
+      tft.drawLine(208, 52, 216, 46, TFT_YELLOW);
+    } else {
+      tft.fillRect(200, 46, 17, 12, TFT_BLACK);
+    }
+    lastHasMailDefault = hasMail;
+  }
 
   // Time section (center)
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -192,7 +282,7 @@ void drawDefaultClockFace(unsigned long now, String &lastMetricText, uint16_t &l
       break;
   }
 
-  if (metricText != lastMetricText || metricColor != lastMetricColor) {
+  if (metricText != lastMetricText || metricColor != lastMetricColor || forceRedraw || ringRedrawn) {
     tft.fillRect(42, 176, 156, 28, TFT_BLACK); // Clear text area safely without clipping bezel ring
     tft.setTextColor(metricColor, TFT_BLACK);
     tft.drawString(metricText, 120, 190, 4);
@@ -212,15 +302,27 @@ bool inMinuteWindow(int x, int y) {
 }
 
 // Helper function to draw minimalist clock face
-void drawMinimalistClockFace(unsigned long now, bool forceRedraw) {
+void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   tft.setTextDatum(MC_DATUM); // Ensure all text draws and erases with the same coordinate system
+
+  if (showEvent) {
+    if (forceRedraw) {
+      drawFaceplateMessage("/msg_minimalist.rle", message, TFT_WHITE, isAi, TFT_LIGHTGREY);
+    }
+    return;
+  }
+
+  static unsigned long lastMinimalistFaceUpdate = 0;
+  if (!forceRedraw && (now - lastMinimalistFaceUpdate < 500)) {
+    return;
+  }
+  lastMinimalistFaceUpdate = now;
 
   static int last_m = -1;
   static int last_h = -1;
   static String last_date = "";
   static int last_wifi_status = -1;
   static int last_internet_online = -1;
-  static int last_radar_connected = -1;
 
   int m = timeClient.getMinutes();
   int h = timeClient.getHours();
@@ -236,7 +338,6 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw) {
     last_date = "";
     last_wifi_status = -1;
     last_internet_online = -1;
-    last_radar_connected = -1;
     minuteChanged = true;
     hourChanged = true;
     dateChanged = true;
@@ -339,7 +440,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw) {
   // Draw Hour (only when changed)
   if (hourChanged) {
     if (last_h != -1) {
-      tft.fillRect(75, 93, 90, 55, TFT_BLACK); // Clear Hour area safely
+      tft.fillRect(66, 86, 108, 62, TFT_BLACK); // Clear Hour area safely
     }
     tft.loadFont(Futura64);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -372,45 +473,46 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw) {
     tft.unloadFont();
   }
 
-  // Draw Status Icons at Y=60 (Wifi, Internet, Radar/System checkmark)
-  bool wifi_connected = (WiFi.status() == WL_CONNECTED);
-  bool internet_online = wifi_connected && timeClient.isTimeSet();
-  bool radar_connected = radar.isConnected();
+  // Draw Status Icons at Y=60 (Wifi, Internet)
+  bool wifi_connected = wifiAvailable;
+  bool internet_online = internetAvailable;
+  static int last_mail_status = -1;
 
   if (forceRedraw || 
       (wifi_connected != (last_wifi_status == 1)) || 
-      (internet_online != (last_internet_online == 1)) || 
-      (radar_connected != (last_radar_connected == 1))) {
+      (internet_online != (last_internet_online == 1)) ||
+      (hasMail != (last_mail_status == 1))) {
     
-    // Draw WiFi icon centered at (90, 60)
-    int wifiX = 90;
-    int wifiY = 60;
-    uint16_t wifiColor = wifi_connected ? TFT_GREEN : TFT_RED;
-    tft.fillRect(wifiX - 13, wifiY - 8, 27, 16, TFT_BLACK); // Clear WiFi icon area safely
-    tft.fillCircle(wifiX, wifiY + 6, 2, wifiColor);
-    tft.drawCircleHelper(wifiX, wifiY + 6, 7, 3, wifiColor);
-    tft.drawCircleHelper(wifiX, wifiY + 6, 12, 3, wifiColor);
+    // Clear old checkmark icon area if it was drawn (starts at X=142, width 16, Y=52 to 68)
+    tft.fillRect(142, 52, 30, 16, TFT_BLACK); // Expanded clear area for mail icon too
 
-    // Draw Internet (Globe) icon centered at (120, 60)
-    int netX = 120;
-    int netY = 60;
-    uint16_t netColor = internet_online ? TFT_SKYBLUE : TFT_RED;
-    tft.fillRect(netX - 8, netY - 8, 16, 16, TFT_BLACK); // Clear Globe icon area safely
-    tft.drawCircle(netX, netY, 7, netColor);
-    tft.drawEllipse(netX, netY, 3, 7, netColor);
-    tft.drawFastHLine(netX - 7, netY, 15, netColor);
+    // Draw WiFi icon centered at X=105 -> drawn at X=97, Y=53 (width 17)
+    int wifiX = 97;
+    int wifiY = 53;
+    uint16_t wifiCol = wifi_connected ? TFT_WHITE : tft.color565(80, 80, 80);
+    tft.fillRect(wifiX, wifiY, 17, 15, TFT_BLACK); // Clear area safely
+    drawRLEImage("/wifi.rle", wifiX, wifiY, wifiCol);
 
-    // Draw Checkmark icon centered at (150, 60)
-    int chkX = 150;
-    int chkY = 60;
-    uint16_t chkColor = radar_connected ? TFT_GREEN : TFT_RED;
-    tft.fillRect(chkX - 8, chkY - 8, 16, 16, TFT_BLACK); // Clear Checkmark icon area safely
-    tft.drawWideLine(chkX - 5, chkY, chkX - 1, chkY + 4, 2.0f, chkColor, TFT_BLACK);
-    tft.drawWideLine(chkX - 1, chkY + 4, chkX + 6, chkY - 3, 2.0f, chkColor, TFT_BLACK);
+    // Draw Internet (Globe) icon centered at X=135 -> drawn at X=128, Y=53 (width 14)
+    int netX = 128;
+    int netY = 53;
+    uint16_t netCol = internet_online ? TFT_WHITE : tft.color565(80, 80, 80);
+    tft.fillRect(netX, netY, 14, 15, TFT_BLACK); // Clear area safely
+    drawRLEImage("/internet.rle", netX, netY, netCol);
+
+    // Draw Mail envelope icon at X=152, Y=53 (width 15)
+    if (hasMail) {
+      tft.fillRect(152, 53, 15, 11, TFT_BLACK);
+      tft.drawRect(152, 55, 15, 11, TFT_WHITE);
+      tft.drawLine(152, 55, 159, 61, TFT_WHITE);
+      tft.drawLine(159, 61, 166, 55, TFT_WHITE);
+    } else {
+      tft.fillRect(152, 53, 16, 13, TFT_BLACK);
+    }
 
     last_wifi_status = wifi_connected ? 1 : 0;
     last_internet_online = internet_online ? 1 : 0;
-    last_radar_connected = radar_connected ? 1 : 0;
+    last_mail_status = hasMail ? 1 : 0;
   }
 
   // Update statics at the end
@@ -456,7 +558,19 @@ void drawClippedLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t co
 }
 
 // Helper function to draw hitech cyberpunk style clock face using background bitmap
-void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
+void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  if (showEvent) {
+    if (forceRedraw) {
+      drawFaceplateMessage("/msg_hitech.rle", message, HITECH_CYAN, isAi, HITECH_MUTED);
+    }
+    return;
+  }
+
+  static unsigned long lastHiTechFaceUpdate = 0;
+  if (!forceRedraw && (now - lastHiTechFaceUpdate < 500)) {
+    return;
+  }
+  lastHiTechFaceUpdate = now;
   static int last_wifi = -1;
   static int last_internet = -1;
   static int last_hour = -1;
@@ -464,6 +578,9 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
   static int last_temp = -999;
   static int last_mday = -1;
   static int last_mon = -1;
+  static int last_mail = -1;
+  static int last_desk_hours = -1;
+  static int last_break_hours = -1;
 
   if (forceRedraw) {
     drawRLEImage("/hitech.rle", 0, 0);
@@ -474,13 +591,17 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
     last_temp = -999;
     last_mday = -1;
     last_mon = -1;
+    last_mail = -1;
+    last_desk_hours = -1;
+    last_break_hours = -1;
   }
 
-  bool wifi_connected = (WiFi.status() == WL_CONNECTED);
-  bool internet_online = wifi_connected && timeClient.isTimeSet();
+  bool wifi_connected = wifiAvailable;
+  bool internet_online = internetAvailable;
 
   int wifi_status = wifi_connected ? 1 : 0;
   int internet_status = internet_online ? 1 : 0;
+  int mail_status = hasMail ? 1 : 0;
 
   if (wifi_status != last_wifi) {
     if (wifi_connected) {
@@ -502,6 +623,18 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
     last_internet = internet_status;
   }
 
+  if (mail_status != last_mail || forceRedraw) {
+    if (hasMail) {
+      tft.fillRect(112, 18, 16, 15, HITECH_BG_STATUS); // Clear area safely
+      tft.drawRect(112, 20, 15, 11, HITECH_CYAN);
+      tft.drawLine(112, 20, 119, 26, HITECH_CYAN);
+      tft.drawLine(119, 26, 126, 20, HITECH_CYAN);
+    } else {
+      tft.fillRect(112, 18, 16, 15, HITECH_BG_STATUS);
+    }
+    last_mail = mail_status;
+  }
+
   // Draw time in HH:MM format using Futura36 font
   // Window: lower-left (60, 142) -> standard (60, 97); top-right (180, 181) -> standard (180, 58)
   // Box: x = 60, y = 58, width = 120, height = 39. Center: X = 120, Y = 77
@@ -509,17 +642,19 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
   int m = timeClient.getMinutes();
 
   if (h != last_hour || m != last_min) {
-    // Clear time window with HITECH_BG_TIME
-    tft.fillRect(60, 58, 120, 39, HITECH_BG_TIME);
+    // Clear time window (aligned to time box Y=38 to Y=76, widened to 128px)
+    tft.fillRect(45, 69, 146, 30, HITECH_BG_TIME);
+    
 
     // Draw centered time
-    tft.loadFont(Futura36);
+    tft.loadFont(GoodTiming46);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     
     char timeStr[6];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", h, m);
-    tft.drawString(String(timeStr), 120, 77);
+    tft.drawString(String(timeStr), 117, 56);
+    //tft.drawString("22:22", 120, 56);
     tft.unloadFont();
 
     last_hour = h;
@@ -530,24 +665,26 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
   // Window: lower-left (147, 208) -> standard (147, 31); top-right (174, 220) -> standard (174, 19)
   // Box: x = 147, y = 19, width = 28, height = 13. Center: X = 160.5, Y = 25
   if (temp != last_temp) {
-    // Clear box area with HITECH_BG_STATUS
-    tft.fillRect(147, 19, 28, 13, HITECH_BG_STATUS);
+    // Clear box area (aligned to Y=19 center with 13px height)
+    tft.fillRect(138, 21, 40, 13, HITECH_BG_STATUS);
 
+    tft.loadFont(GoodTiming15);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
 
     char tempValStr[3];
     snprintf(tempValStr, sizeof(tempValStr), "%02d", temp);
 
-    // Draw 2-digit temperature centered at X=153
-    tft.drawString(String(tempValStr), 153, 25, 1);
+    // Draw 2-digit temperature centered at X=153, Y=19
+    tft.drawString(String(tempValStr), 150, 19);
 
-    // Draw degree circle (radius 1) centered at X=163, Y=21
-    tft.drawCircle(163, 21, 1, HITECH_CYAN);
+    // Draw degree circle (radius 1) centered at X=163, Y=15
+    tft.drawCircle(163, 24, 1, HITECH_CYAN);
 
-    // Draw letter C centered at X=169
-    tft.drawString("C", 169, 25, 1);
+    // Draw letter C centered at X=169, Y=19
+    tft.drawString("C", 170, 19);
 
+    tft.unloadFont();
     last_temp = temp;
   }
 
@@ -557,24 +694,53 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw) {
   // Date Window: lower-left (116, 118) -> standard (116, 121); top-right (170, 133) -> standard (170, 106)
   // Date Box: x = 116, y = 106, width = 54, height = 15. Center: X = 143, Y = 113
   if (ts.tm_mday != last_mday || ts.tm_mon != last_mon) {
-    // 1. Day of the Week Box
-    tft.fillRect(69, 106, 31, 15, HITECH_BG_TIME);
+    // 1. Day of the Week Box (restored to original y=106, height=15)
+    tft.fillRect(65, 109, 38, 13, HITECH_BG_TIME);
+    tft.loadFont(GoodTiming15);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
-    
     const char* daysOfWeek[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
     int wday = ts.tm_wday;
     if (wday < 0 || wday > 6) wday = 0;
-    tft.drawString(daysOfWeek[wday], 84, 113, 1);
+    tft.drawString(daysOfWeek[wday], 84, 106);
+    tft.unloadFont();
 
-    // 2. Date Box
-    tft.fillRect(116, 106, 54, 15, HITECH_BG_TIME);
+    // 2. Date Box (restored to original y=106, height=15)
+    tft.fillRect(113, 109, 54, 13, HITECH_BG_TIME);
+    tft.loadFont(GoodTiming15);
+    tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
+    tft.setTextDatum(MC_DATUM);
     char dateStr[6];
     snprintf(dateStr, sizeof(dateStr), "%02d %02d", ts.tm_mday, ts.tm_mon + 1);
-    tft.drawString(dateStr, 143, 113, 1);
+    tft.drawString(dateStr, 138, 106);
+    tft.unloadFont();
 
     last_mday = ts.tm_mday;
     last_mon = ts.tm_mon;
+  }
+
+  // Draw sitting and away hours (updated dynamically when values change or forceRedraw)
+  int current_desk_hours = totalDeskTime / 3600000UL;
+  int current_break_hours = totalBreakTime / 3600000UL;
+
+  if (current_desk_hours != last_desk_hours || current_break_hours != last_break_hours || forceRedraw) {
+    // Clear boxes with HITECH_BG_STATUS (aligned to Y=134 to Y=150 inside slot borders)
+    tft.fillRect(61, 147, 28, 15, HITECH_BOX_BG);
+    tft.fillRect(126, 147, 28, 16, HITECH_BOX_BG);
+
+    tft.loadFont(GoodTiming20);
+    tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
+    tft.setTextDatum(MC_DATUM);
+    char deskHoursStr[8];
+    char breakHoursStr[8];
+    snprintf(deskHoursStr, sizeof(deskHoursStr), "%dH", current_desk_hours);
+    snprintf(breakHoursStr, sizeof(breakHoursStr), "%dH", current_break_hours);
+    tft.drawString(String(deskHoursStr), 89, 142);
+    tft.drawString(String(breakHoursStr), 154, 142);
+    tft.unloadFont();
+
+    last_desk_hours = current_desk_hours;
+    last_break_hours = current_break_hours;
   }
 }
 
