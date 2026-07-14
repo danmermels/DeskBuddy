@@ -25,14 +25,90 @@ extern unsigned long totalBreakTime;
 extern int breakCount;
 extern int productivityScore;
 extern volatile bool isAILoading;
+extern unsigned long longestSittingStreak;
+extern int historyDaysCount;
+extern int currentPresenceState;
+extern volatile uint32_t currentSitDownSessionId;
+extern uint32_t geminiQuerySessionId;
 
 extern String formatTime(unsigned long ms);
-extern String personalizeQuote(String quote, String name);
+inline String resolveLocalPlaceholders(String temp, String detail) {
+  temp.replace("{name}", userName);
+  if (detail == "") {
+    temp.replace("{detail}", "a while");
+  } else {
+    temp.replace("{detail}", detail);
+  }
+  if (lastTriggeredEventType == EVENT_FIRST_SIT) {
+    temp.replace("{score}", "100");
+    temp.replace("{deskTime}", "0m");
+    temp.replace("{focusTime}", "0m");
+    temp.replace("{breakTime}", "0m");
+    temp.replace("{breakCount}", "0");
+  } else {
+    temp.replace("{score}", String(productivityScore));
+    temp.replace("{deskTime}", formatTime(totalDeskTime));
+    temp.replace("{focusTime}", formatTime(totalFocusTime));
+    temp.replace("{breakTime}", formatTime(totalBreakTime));
+    temp.replace("{breakCount}", String(breakCount));
+  }
+  temp.replace("{longestStreak}", formatTime(longestSittingStreak));
+  temp.replace("{historyDays}", String(historyDaysCount));
+  return temp;
+}
+
+inline String resolvePromptPlaceholders(String temp, String detail) {
+  extern const char* PROMPT_PREAMBLE_COACH;
+  extern const char* PROMPT_PREAMBLE_CRITIC;
+  extern const char* PROMPT_PREAMBLE_NERD;
+  extern const char* PROMPT_PREAMBLE_ZEN;
+  extern int aiPersona;
+  extern int getLearnedWorkdayStart();
+  extern int getLearnedWorkdayEnd();
+  extern int getLearnedLunchHour();
+
+  const char* activePreamble = PROMPT_PREAMBLE_COACH;
+  if (aiPersona == 1) activePreamble = PROMPT_PREAMBLE_CRITIC;
+  else if (aiPersona == 2) activePreamble = PROMPT_PREAMBLE_NERD;
+  else if (aiPersona == 3) activePreamble = PROMPT_PREAMBLE_ZEN;
+
+  String fullPrompt = String(activePreamble) + "\n\n" + temp;
+
+  fullPrompt.replace("{name}", userName);
+  fullPrompt.replace("{detail}", detail);
+  if (lastTriggeredEventType == EVENT_FIRST_SIT) {
+    fullPrompt.replace("{score}", "100");
+    fullPrompt.replace("{deskTime}", "0m");
+    fullPrompt.replace("{focusTime}", "0m");
+    fullPrompt.replace("{breakTime}", "0m");
+    fullPrompt.replace("{breakCount}", "0");
+  } else {
+    fullPrompt.replace("{score}", String(productivityScore));
+    fullPrompt.replace("{deskTime}", formatTime(totalDeskTime));
+    fullPrompt.replace("{focusTime}", formatTime(totalFocusTime));
+    fullPrompt.replace("{breakTime}", formatTime(totalBreakTime));
+    fullPrompt.replace("{breakCount}", String(breakCount));
+  }
+  fullPrompt.replace("{longestStreak}", formatTime(longestSittingStreak));
+  fullPrompt.replace("{historyDays}", String(historyDaysCount));
+  
+  char startBuf[10], endBuf[10], lunchBuf[10];
+  snprintf(startBuf, sizeof(startBuf), "%02d:00", getLearnedWorkdayStart());
+  snprintf(endBuf, sizeof(endBuf), "%02d:00", getLearnedWorkdayEnd());
+  snprintf(lunchBuf, sizeof(lunchBuf), "%02d:00", getLearnedLunchHour());
+  
+  fullPrompt.replace("{learnedStart}", String(startBuf));
+  fullPrompt.replace("{learnedEnd}", String(endBuf));
+  fullPrompt.replace("{learnedLunch}", String(lunchBuf));
+
+  return fullPrompt;
+}
 
 // Asynchronous FreeRTOS Task for Gemini HTTPS Queries
 inline void queryGeminiTask(void * parameter) {
   xSemaphoreTake(geminiMutex, portMAX_DELAY);
   String prompt = currentPrompt;
+  uint32_t querySessionId = geminiQuerySessionId;
   xSemaphoreGive(geminiMutex);
 
   bool success = false;
@@ -65,20 +141,19 @@ inline void queryGeminiTask(void * parameter) {
           generatedText = generatedText.substring(1, generatedText.length() - 1);
         }
         
-        xSemaphoreTake(geminiMutex, portMAX_DELAY);
-        lastResponseIsAi = true;
-        if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
-          if (lastTriggeredEventType == EVENT_FIRST_SIT && lastTriggeredEventDetail == "") {
-            aiResponse = generatedText;
-          } else {
-            char welcomeMsg[128];
-            snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", generatedText.c_str(), lastTriggeredEventDetail.c_str());
-            aiResponse = String(welcomeMsg);
+        bool discard = false;
+        if (lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_WELCOME_BACK) {
+          if (querySessionId != currentSitDownSessionId || currentPresenceState == STATE_AWAY) {
+            discard = true;
           }
-        } else {
-          aiResponse = generatedText;
         }
-        hasNewAIResponse = true;
+        
+        xSemaphoreTake(geminiMutex, portMAX_DELAY);
+        if (!discard) {
+          lastResponseIsAi = true;
+          aiResponse = generatedText;
+          hasNewAIResponse = true;
+        }
         xSemaphoreGive(geminiMutex);
         success = true;
       }
@@ -97,6 +172,7 @@ inline void queryGeminiTask(void * parameter) {
       case EVENT_FOCUS_END:     quote = localFocus[randIdx]; break;
       case EVENT_SLACKER:       quote = localSlacker[randIdx]; break;
       case EVENT_STREAK_BEATEN: quote = localStreakBeaten[randIdx]; break;
+      case EVENT_LUNCH_REMINDER: quote = localLunchReminder[randIdx]; break;
       default:                  quote = localWelcomeBack[randIdx]; break;
     }
     
@@ -105,21 +181,20 @@ inline void queryGeminiTask(void * parameter) {
     String nameCopy = currentUserName;
     xSemaphoreGive(geminiMutex);
 
-    String personalQuote = personalizeQuote(String(quote), nameCopy);
+    String personalQuote = resolveLocalPlaceholders(String(quote), lastTriggeredEventDetail);
+    
+    bool discard = false;
+    if (lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_WELCOME_BACK) {
+      if (querySessionId != currentSitDownSessionId || currentPresenceState == STATE_AWAY) {
+        discard = true;
+      }
+    }
     
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_STREAK_BEATEN) {
-      if (lastTriggeredEventType == EVENT_FIRST_SIT && lastTriggeredEventDetail == "") {
-        aiResponse = personalQuote;
-      } else {
-        char welcomeMsg[128];
-        snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), lastTriggeredEventDetail.c_str());
-        aiResponse = String(welcomeMsg);
-      }
-    } else {
+    if (!discard) {
       aiResponse = personalQuote;
+      hasNewAIResponse = true;
     }
-    hasNewAIResponse = true;
     xSemaphoreGive(geminiMutex);
   }
   
@@ -128,7 +203,7 @@ inline void queryGeminiTask(void * parameter) {
 }
 
 // Coordinated behaviour trigger: runs background Gemini task or picks local fallback
-inline void triggerBehaviour(int eventType, String detail = "") {
+inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 0) {
   lastTriggeredEventType = eventType;
 
   xSemaphoreTake(geminiMutex, portMAX_DELAY);
@@ -137,65 +212,45 @@ inline void triggerBehaviour(int eventType, String detail = "") {
   xSemaphoreGive(geminiMutex);
 
   bool useAI = false;
-  if (aiMode == 2) {
-    // Frequent mode: all events can trigger AI
+  if (forceMode == 1) {
     useAI = true;
-  } else if (aiMode == 1) {
-    // Balanced mode: AI triggers for FIRST_SIT, STRETCH, and WELCOME_BACK
-    if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK) {
-      useAI = true;
-    }
-  }
-
-  // Enforce daily cap (max 15 requests per day)
-  if (useAI && dailyAiRequestCount >= 15) {
+  } else if (forceMode == 2) {
     useAI = false;
+  } else {
+    if (aiMode == 2) {
+      // Frequent mode: all events can trigger AI
+      useAI = true;
+    } else if (aiMode == 1) {
+      // Balanced mode: AI triggers for FIRST_SIT, STRETCH, WELCOME_BACK, and LUNCH_REMINDER
+      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LUNCH_REMINDER) {
+        useAI = true;
+      }
+    }
+    // Enforce daily cap (max 15 requests per day) for normal triggers
+    if (useAI && dailyAiRequestCount >= 15) {
+      useAI = false;
+    }
   }
 
   if (useAI) {
     String basePrompt = "";
-    char formattedPrompt[256];
     switch (eventType) {
-      case EVENT_FIRST_SIT:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FIRST_SIT_OF_DAY, userName.c_str(), detail.c_str());
-        basePrompt = String(formattedPrompt);
-        break;
-      case EVENT_WELCOME_BACK:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_WELCOME_BACK, userName.c_str(), detail.c_str());
-        basePrompt = String(formattedPrompt);
-        break;
-      case EVENT_STRETCH:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_STRETCH_REMINDER, userName.c_str());
-        basePrompt = String(formattedPrompt);
-        break;
-      case EVENT_FOCUS_END:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_FOCUS_CONGRATS, userName.c_str(), detail.c_str());
-        basePrompt = String(formattedPrompt);
-        break;
-      case EVENT_SLACKER:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_SLACKER_ROAST, userName.c_str());
-        basePrompt = String(formattedPrompt);
-        break;
-      case EVENT_STREAK_BEATEN:
-        snprintf(formattedPrompt, sizeof(formattedPrompt), PROMPT_STREAK_BEATEN, userName.c_str(), detail.c_str());
-        basePrompt = String(formattedPrompt);
-        break;
+      case EVENT_FIRST_SIT:     basePrompt = resolvePromptPlaceholders(PROMPT_FIRST_SIT_OF_DAY, detail); break;
+      case EVENT_WELCOME_BACK:  basePrompt = resolvePromptPlaceholders(PROMPT_WELCOME_BACK, detail); break;
+      case EVENT_STRETCH:       basePrompt = resolvePromptPlaceholders(PROMPT_STRETCH_REMINDER, detail); break;
+      case EVENT_FOCUS_END:     basePrompt = resolvePromptPlaceholders(PROMPT_FOCUS_CONGRATS, detail); break;
+      case EVENT_SLACKER:       basePrompt = resolvePromptPlaceholders(PROMPT_SLACKER_ROAST, detail); break;
+      case EVENT_STREAK_BEATEN: basePrompt = resolvePromptPlaceholders(PROMPT_STREAK_BEATEN, detail); break;
+      case EVENT_LUNCH_REMINDER: basePrompt = resolvePromptPlaceholders(PROMPT_LUNCH_REMINDER, detail); break;
     }
 
     if (!isAILoading) {
-      dailyAiRequestCount++;
-      // Format details including Productivity Score & history
-      String fullPrompt = basePrompt + "\nContext details:\n";
-      fullPrompt += "User's Name: " + userName + "\n";
-      fullPrompt += "At Desk Time: " + formatTime(totalDeskTime) + "\n";
-      fullPrompt += "Focus Time: " + formatTime(totalFocusTime) + "\n";
-      fullPrompt += "Break Time: " + formatTime(totalBreakTime) + "\n";
-      fullPrompt += "Breaks taken: " + String(breakCount) + "\n";
-      fullPrompt += "Productivity Score: " + String(productivityScore) + "%\n";
-      fullPrompt += "Instruction: Address the user as " + userName + ". Respond with one short, witty sentence in English or Portuguese under 30 characters.";
-
+      if (forceMode != 1) {
+        dailyAiRequestCount++;
+      }
       xSemaphoreTake(geminiMutex, portMAX_DELAY);
-      currentPrompt = fullPrompt;
+      currentPrompt = basePrompt;
+      geminiQuerySessionId = currentSitDownSessionId;
       xSemaphoreGive(geminiMutex);
       
       isAILoading = true;
@@ -219,24 +274,15 @@ inline void triggerBehaviour(int eventType, String detail = "") {
       case EVENT_FOCUS_END:     quote = localFocus[randIdx]; break;
       case EVENT_SLACKER:       quote = localSlacker[randIdx]; break;
       case EVENT_STREAK_BEATEN: quote = localStreakBeaten[randIdx]; break;
+      case EVENT_LUNCH_REMINDER: quote = localLunchReminder[randIdx]; break;
     }
 
-    String personalQuote = personalizeQuote(String(quote), userName);
+    String personalQuote = resolveLocalPlaceholders(String(quote), detail);
 
     // Immediately post fallback quote to display thread-safely
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
     lastResponseIsAi = false;
-    if (eventType == EVENT_WELCOME_BACK || eventType == EVENT_FIRST_SIT || eventType == EVENT_STREAK_BEATEN) {
-      if (eventType == EVENT_FIRST_SIT && detail == "") {
-        aiResponse = personalQuote;
-      } else {
-        char welcomeMsg[128];
-        snprintf(welcomeMsg, sizeof(welcomeMsg), "%s (%s)", personalQuote.c_str(), detail.c_str());
-        aiResponse = String(welcomeMsg);
-      }
-    } else {
-      aiResponse = personalQuote;
-    }
+    aiResponse = personalQuote;
     hasNewAIResponse = true;
     xSemaphoreGive(geminiMutex);
   }

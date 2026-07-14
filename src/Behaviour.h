@@ -8,165 +8,227 @@
 #define EVENT_FOCUS_END     3
 #define EVENT_SLACKER       4
 #define EVENT_STREAK_BEATEN 5
+#define EVENT_LUNCH_REMINDER 6
 
 // --- Local Fallback/Eco Quotes (20 per category) ---
 
 const char* localFirstSit[20] = {
-  "Morning, %s. Ready to crush some goals?",
-  "Rise and shine, %s! The desk is waiting.",
-  "Welcome, %s! Let's build something epic.",
-  "Ah, %s, you're back. Let's make it count!",
-  "Coffee ready, %s? Time to focus!",
-  "Good morning, %s! Let's make today count.",
-  "Hello, %s! Ready to tackle the day?",
-  "Another day, another opportunity, %s.",
-  "Wake up, %s! The day is calling.",
-  "Starting fresh, %s! Let's do this.",
-  "Welcome, %s, to your focus arena.",
-  "System online, %s. Let's write history.",
-  "New day, %s. New projects to conquer.",
-  "Ready to show who's boss today, %s?",
-  "Hello, %s! Make sure to take breaks.",
-  "Welcome, %s! Let's create success.",
-  "A fresh start, %s. Work with passion.",
-  "Morning, %s! May your tasks be smooth.",
-  "Welcome back, %s. Time to perform magic.",
-  "Good morning, %s! Let's start strong."
+  "Morning, {name}! Slept for {detail}?",
+  "Rise and shine, {name}! You slept for {detail}.",
+  "Welcome, {name}! Ready to focus?",
+  "Ah, {name}, you're back. {detail} offline.",
+  "Coffee ready, {name}? Time to focus!",
+  "Good morning, {name}! Hope your {detail} sleep was good.",
+  "Hello, {name}! Ready to tackle the day?",
+  "Another day after {detail} rest, {name}.",
+  "Wake up, {name}! {detail} offline.",
+  "Starting fresh, {name}! Let's do this.",
+  "Welcome, {name}, to your focus arena.",
+  "System online, {name}. {detail} sleep.",
+  "New day, {name}. Ready to conquer?",
+  "Ready to show who's boss today, {name}?",
+  "Hello, {name}! Make sure to take breaks.",
+  "Welcome, {name}! Let's create success.",
+  "A fresh start, {name}! Offline for {detail}.",
+  "Morning, {name}! May your tasks be smooth.",
+  "Welcome back, {name}. Time to perform magic.",
+  "Good morning, {name}! Slept {detail}."
 };
 
 const char* localWelcomeBack[20] = {
-  "Welcome back, %s! Missed me?",
-  "Break's over, %s! Back to the desk.",
-  "Did you stretch, %s? Good. Now work.",
-  "Ready to continue the masterpiece, %s?",
-  "Recharged, %s? Let's focus!",
-  "Ah, %s, you returned. Let's focus.",
-  "Back to work, %s!",
-  "Hope that break was refreshing, %s.",
-  "Where were we, %s? Ah yes, working.",
-  "Back in the saddle, %s. Focus time!",
-  "Welcome back, %s. Let's write history.",
-  "The desk missed your presence, %s.",
-  "Break done, %s. Let's make progress!",
-  "Welcome back, %s. Zero in!",
-  "Welcome back, %s! Let's keep going.",
-  "Did you get coffee, %s? Start focus.",
-  "Back to reality, %s. Let's focus.",
-  "Welcome back, %s! Everything is ready.",
-  "Let's pick up where we left off, %s.",
-  "No more slacking, %s. Welcome back!"
+  "Welcome back, {name}! Away for {detail}.",
+  "Break's over, {name}! You were away for {detail}.",
+  "Did you stretch, {name} during those {detail}?",
+  "Ready to work after {detail} off, {name}?",
+  "Recharged after {detail}, {name}?",
+  "Ah, {name}, you returned after {detail}.",
+  "Back to work, {name}! That break lasted for {detail}.",
+  "Hope that {detail} break was good, {name}.",
+  "Where were we, {name}? Away for {detail}.",
+  "Back in the saddle, {name}! Recharged for {detail}.",
+  "Welcome back, {name}! Away for {detail}.",
+  "The desk missed you for {detail}, {name}.",
+  "Break done, {name}! Recharged for {detail}.",
+  "Welcome back, {name}! Hope you enjoyed the {detail} break.",
+  "Welcome back, {name}! Away for {detail}.",
+  "Did you get coffee, {name} in those {detail}?",
+  "Back to reality, {name}! Ready after your {detail} break?",
+  "Welcome back, {name}! Away for {detail}.",
+  "Let's pick up after {detail} off, {name}.",
+  "Ready to work after a {detail} break, {name}?"
 };
 
 const char* localStretch[20] = {
-  "Stand up, %s! Your spine is crying.",
-  "Time to stretch, %s! Move those legs.",
-  "Hey %s, look at something far away!",
-  "Roll your shoulders, %s. Breathe in.",
-  "Hydrate, %s! Go get some water.",
-  "Your posture is like a banana, %s. Fix!",
-  "Time out, %s! Stand up for a minute.",
-  "Blink, %s! Your eyes need a rest.",
-  "Step away from the screen, %s!",
-  "Walk around, %s. Your body will thank you.",
-  "Roll your wrists, %s. Take a breath.",
-  "Stand up, %s, and reach for the sky!",
-  "Sitting is the new smoking, %s. Move!",
-  "Time for a 1-minute stretch, %s.",
-  "Are you slouching, %s? Sit up straight!",
-  "Get some water, %s, stay fresh.",
-  "Give your eyes a 20-second break, %s.",
-  "Breathe deeply and stretch, %s.",
-  "Stand up, %s! Shake it out.",
-  "Walk, stretch, breathe, %s. Do it now."
+  "Stand up, {name}! Your spine is crying.",
+  "Time to stretch, {name}! Move those legs.",
+  "Hey {name}, look at something far away!",
+  "Roll your shoulders, {name}. Breathe in.",
+  "Hydrate, {name}! Go get some water.",
+  "Your posture is like a banana, {name}. Fix!",
+  "Time out, {name}! Stand up for a minute.",
+  "Blink, {name}! Your eyes need a rest.",
+  "Step away from the screen, {name}!",
+  "Walk around, {name}. Your body will thank you.",
+  "Roll your wrists, {name}. Take a breath.",
+  "Stand up, {name}, and reach for the sky!",
+  "Sitting is the new smoking, {name}. Move!",
+  "Time for a 1-minute stretch, {name}.",
+  "Are you slouching, {name}? Sit up straight!",
+  "Get some water, {name}, stay fresh.",
+  "Give your eyes a 20-second break, {name}.",
+  "Breathe deeply and stretch, {name}.",
+  "Stand up, {name}! Shake it out.",
+  "Walk, stretch, breathe, {name}. Do it now."
 };
 
 const char* localFocus[20] = {
-  "Focus session complete! Great work, %s.",
-  "Deep focus achieved, %s! You're a beast!",
-  "Nice work focusing there, %s!",
-  "Productivity boss! Take a bow, %s.",
-  "Stellar focus session, %s! Take a break.",
-  "You concentrated well, %s. Awesome!",
-  "Solid focus session, %s. Proud of you!",
-  "Deep work complete, %s. High five!",
-  "You crushed that focus block, %s!",
-  "Great focus, %s. Enjoy your break!",
-  "Focus champion, %s! Time to stretch.",
-  "Excellent focus session, %s. Keep it up!",
-  "You stayed locked in, %s. Great job!",
-  "Focus achieved, %s. You earned a rest.",
-  "Brilliant work staying focused, %s!",
-  "Focus session ended, %s. Take a walk.",
-  "You ruled that focus block, %s!",
-  "Incredible focus today, %s!",
-  "Focus target hit, %s. Rest your mind.",
-  "Superb concentration, %s. Time to relax."
+  "Focus session complete! Great work, {name}.",
+  "Deep focus achieved, {name}! You're a beast!",
+  "Nice work focusing there, {name}!",
+  "Productivity boss! Take a bow, {name}.",
+  "Stellar focus session, {name}! Take a break.",
+  "You concentrated well, {name}. Awesome!",
+  "Solid focus session, {name}. Proud of you!",
+  "Deep work complete, {name}. High five!",
+  "You crushed that focus block, {name}!",
+  "Great focus, {name}. Enjoy your break!",
+  "Focus champion, {name}! Time to stretch.",
+  "Excellent focus session, {name}. Keep it up!",
+  "You stayed locked in, {name}. Great job!",
+  "Focus achieved, {name}. You earned a rest.",
+  "Brilliant work staying focused, {name}!",
+  "Focus session ended, {name}. Take a walk.",
+  "You ruled that focus block, {name}!",
+  "Incredible focus today, {name}!",
+  "Focus target hit, {name}. Rest your mind.",
+  "Superb concentration, {name}. Time to relax."
 };
 
 const char* localSlacker[20] = {
-  "Procrastinator alert! Focus, %s!",
-  "Are you actually working, %s?",
-  "Your productivity score is crying, %s.",
-  "Focus score is low, %s. Stop slacking!",
-  "Wake up, %s! Less browsing, more working.",
-  "Is this your maximum speed, %s?",
-  "Focus, please, %s! Time is ticking.",
-  "You're getting distracted, %s. Lock in!",
-  "Your keyboard is feeling lonely, %s.",
-  "Let's turn this score around, %s!",
-  "Slack off less, %s, focus more.",
-  "You're drifting, %s. Focus up!",
-  "Is that social media I see, %s?",
-  "Don't let procrastination win, %s.",
-  "Your focus score is bottoming out, %s.",
-  "Less scrolling, %s, more working.",
-  "Get back to work, %s!",
-  "Stop dreaming, %s! Let's work!",
-  "Zero focus, %s. Let's change that.",
-  "Attention span of a goldfish today, %s?"
+  "Procrastinator alert! Focus, {name}!",
+  "Are you actually working, {name}?",
+  "Your productivity score is crying, {name}.",
+  "Focus score is low, {name}. Stop slacking!",
+  "Wake up, {name}! Less browsing, more working.",
+  "Is this your maximum speed, {name}?",
+  "Focus, please, {name}! Time is ticking.",
+  "You're getting distracted, {name}. Lock in!",
+  "Your keyboard is feeling lonely, {name}.",
+  "Let's turn this score around, {name}!",
+  "Slack off less, {name}, focus more.",
+  "You're drifting, {name}. Focus up!",
+  "Is that social media I see, {name}?",
+  "Don't let procrastination win, {name}.",
+  "Your focus score is bottoming out, {name}.",
+  "Less scrolling, {name}, more working.",
+  "Get back to work, {name}!",
+  "Stop dreaming, {name}! Let's work!",
+  "Zero focus, {name}. Let's change that.",
+  "Attention span of a goldfish today, {name}?"
 };
 
 const char* localStreakBeaten[20] = {
-  "New sitting record, %s! Keep it up!",
-  "Streak beaten, %s! You are on fire!",
-  "Sitting champion, %s! A new record!",
-  "Unstoppable, %s! New sitting streak!",
-  "New record, %s! Marathon sitting!",
-  "Streak record broken, %s! Outstanding!",
-  "Sitting boss, %s! You beat your record!",
-  "New personal best sitting streak, %s!",
-  "Sitting record smashed, %s! Elite focus!",
-  "Incredible, %s! New longest sit today!",
-  "Record sitting session, %s! Keep going!",
-  "New streak, %s! Sitting like a statue!",
-  "Record broken, %s! Focus level maximum!",
-  "Sitting legend, %s! New longest streak!",
-  "You beat your previous sitting record, %s!",
-  "Marathon sit, %s! Previous record beaten!",
-  "New record, %s! The chair is your throne!",
-  "Sitting milestone reached, %s! Great job!",
-  "New streak record, %s! Absolute focus!",
-  "Amazing, %s! Longest sit of the day!"
+  "New sitting record, {name}! Keep it up!",
+  "Streak beaten, {name}! You are on fire!",
+  "Sitting champion, {name}! A new record!",
+  "Unstoppable, {name}! New sitting streak!",
+  "New record, {name}! Marathon sitting!",
+  "Streak record broken, {name}! Outstanding!",
+  "Sitting boss, {name}! You beat your record!",
+  "New personal best sitting streak, {name}!",
+  "Sitting record smashed, {name}! Elite focus!",
+  "Incredible, {name}! New longest sit today!",
+  "Record sitting session, {name}! Keep going!",
+  "New streak, {name}! Sitting like a statue!",
+  "Record broken, {name}! Focus level maximum!",
+  "Sitting legend, {name}! New longest streak!",
+  "You beat your previous sitting record, {name}!",
+  "Marathon sit, {name}! Previous record beaten!",
+  "New record, {name}! The chair is your throne!",
+  "Sitting milestone reached, {name}! Great job!",
+  "New streak record, {name}! Absolute focus!",
+  "Amazing, {name}! Longest sit of the day!"
+};
+
+const char* localLunchReminder[20] = {
+  "Time for lunch, {name}! Go refuel.",
+  "Hungry, {name}? Grab a bite to eat!",
+  "Lunch time! Step away from the desk, {name}.",
+  "Your stomach is growling, {name}. Go eat!",
+  "Take a real lunch break, {name}.",
+  "Food time, {name}! Don't skip lunch.",
+  "Feed your brain, {name}! Time for lunch.",
+  "Step away from the screen and eat, {name}.",
+  "Lunch is calling, {name}! Don't ignore it.",
+  "Time to recharge with some food, {name}.",
+  "Nutrition break, {name}! Go grab lunch.",
+  "Don't work on an empty stomach, {name}!",
+  "Lunch break, {name}! Your keyboard will wait.",
+  "A hungry developer is a cranky developer, {name}.",
+  "Time to eat, {name}! Healthy body, healthy mind.",
+  "Fuel up, {name}! Lunch hour is here.",
+  "Step away from the desk and eat, {name}.",
+  "Break for food, {name}! You've earned it.",
+  "Go get some lunch, {name}! Bon appetit!",
+  "Time to shut the laptop and eat, {name}."
 };
 
 // --- Gemini AI Prompts (Templates used when AI is active) ---
 
+const char* PROMPT_PREAMBLE_COACH = 
+  "You are DeskBuddy, a supportive, warm, and highly motivational wellness coach sitting on the user's desk. "
+  "You comment on the user's focus, presence, and work habits with encouragement and support. "
+  "CRITICAL CONSTRAINT: Respond with exactly ONE short sentence in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
+
+const char* PROMPT_PREAMBLE_CRITIC = 
+  "You are DeskBuddy, a highly sarcastic, sassy, and sassy desk companion who roasts the user. "
+  "You comment on the user's focus, presence, and work habits with sharp wit, playfulness, and mild sarcasm. "
+  "CRITICAL CONSTRAINT: Respond with exactly ONE short, witty roast in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
+
+const char* PROMPT_PREAMBLE_NERD = 
+  "You are DeskBuddy, a geeky, dev-obsessed programmer assistant sitting on the user's desk. "
+  "You comment on focus, presence, and work habits using programming terminology, geeky slang, and logic. "
+  "CRITICAL CONSTRAINT: Respond with exactly ONE short developer reference in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
+
+const char* PROMPT_PREAMBLE_ZEN = 
+  "You are DeskBuddy, a peaceful, calm, and mindful Zen master sitting on the user's desk. "
+  "You comment on focus, presence, and work habits with calmness, peaceful reminder, and mindfulness. "
+  "CRITICAL CONSTRAINT: Respond with exactly ONE short, quiet sentence in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
+
 const char* PROMPT_FIRST_SIT_OF_DAY = 
-  "%s has just sat down at their desk for the first time today after an overnight break of %s. Say hello in a witty, encouraging, or playful way in 1 sentence under 30 characters.";
+  "Address {name} who just sat down for the first time today after an overnight break of {detail}. "
+  "Daily Stats: desk time: {deskTime}, focus time: {focusTime}, productivity: {score}%. "
+  "Learned workday start: {learnedStart}, end: {learnedEnd}. "
+  "Greet them in a witty, encouraging, or playful way, including the latest break length and partially other info above.";
 
 const char* PROMPT_WELCOME_BACK = 
-  "%s has returned to their desk after a break of %s. Welcome them back in a short, witty, or motivational way in 1 sentence under 30 characters.";
+  "Address {name} who returned to their desk after a break of {detail}. "
+  "Daily Stats: desk time: {deskTime}, focus: {focusTime}, breaks taken: {breakCount}, productivity: {score}%. "
+  "Welcome them back in a short, witty, or motivational way, including the latest break length and other relevant info above.";
 
 const char* PROMPT_STRETCH_REMINDER = 
-  "%s has been sitting continuously for 45 minutes. Tell them to stretch or walk in a sassy, playful way in 1 sentence under 30 characters.";
+  "Address {name} who has been sitting continuously for 45 minutes (longest streak: {longestStreak}). "
+  "Daily Stats: desk time: {deskTime}, productivity: {score}%. "
+  "Tell them to stretch or walk in a sassy, playful way, including current sitting duration and partially other relevant info above.";
 
 const char* PROMPT_FOCUS_CONGRATS = 
-  "%s just completed a deep focus session of %s. Congratulate them on their hard work or joke about their dedication in 1 sentence under 30 characters.";
+  "Address {name} who just completed a deep focus session of {detail}. "
+  "Daily Stats: desk time: {deskTime}, focus: {focusTime}, productivity: {score}%. "
+  "Congratulate them on their focus and deep work, including current focus duration and partially other relevant info above.";
 
 const char* PROMPT_SLACKER_ROAST = 
-  "%s has been present for 1 hour but has focused for less than 20% of that time. Playfully roast them for slacking or procrastinating in 1 sentence under 30 characters.";
+  "Address {name} who has focused for less than 20% of their workday. "
+  "Daily Stats: desk time: {deskTime}, focus: {focusTime}, productivity: {score}%. "
+  "Playfully roast them for slacking or procrastinating, including the slacking mode duration and partially other relevant info above.";
 
 const char* PROMPT_STREAK_BEATEN = 
-  "%s has just beaten their previous longest sitting streak of the day, which was %s. Congratulate them or joke about their sitting endurance in 1 sentence under 30 characters.";
+  "Address {name} who just beat their previous longest sitting streak of the day, which was {detail}. "
+  "Daily Stats: desk time: {deskTime}, productivity: {score}%. "
+  "Congratulate them or joke about their sitting endurance, including current sitting duration and partially other relevant info above.";
+
+const char* PROMPT_LUNCH_REMINDER = 
+  "Address {name} who is still working at their desk during their usual lunch hour {learnedLunch}. "
+  "Daily Stats: desk time: {deskTime}, focus: {focusTime}, productivity: {score}%. "
+  "Remind them to eat lunch in a witty, appetizing, or playful way, including current desk time and partially other relevant info above.";
 
 #endif // BEHAVIOUR_H

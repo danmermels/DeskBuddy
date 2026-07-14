@@ -5,6 +5,7 @@
 #include <TFT_eSPI.h>
 #include <LittleFS.h>
 #include "Behaviour.h"
+#include "MqttService.h"
 
 // State definitions if not already declared
 #ifndef STATE_AWAY
@@ -31,6 +32,7 @@ extern int clockFace;
 extern int currentPresenceState;
 extern bool hasMail;
 extern unsigned long lastStateTransitionTime;
+extern unsigned long sitDownTime;
 extern unsigned long aiScreenEndTime;
 extern volatile bool hasNewAIResponse;
 extern SemaphoreHandle_t geminiMutex;
@@ -39,6 +41,9 @@ extern volatile bool lastResponseIsAi;
 extern volatile bool isAILoading;
 extern int lastTriggeredEventType;
 extern NTPClient timeClient;
+extern bool time24h;
+extern uint32_t fsReadCount;
+extern uint32_t fsWriteCount;
 
 extern const RGBColor stateColors[];
 extern RGBColor currentRingColor;
@@ -51,9 +56,11 @@ extern const unsigned long ringTransitionDuration;
 extern void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 extern void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 extern void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
+extern void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 
 // Draw custom PackBits-RLE compressed image from LittleFS to TFT
 inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t overrideColor = 0) {
+  fsReadCount++;
   fs::File file = LittleFS.open(filename, "r");
   if (!file) return false;
 
@@ -177,21 +184,50 @@ inline void updateTFTDisplay(unsigned long now) {
   static String activeAlertMessage = "";
   static bool activeAlertIsAi = false;
 
+  static bool pendingWelcomeAlert = false;
+  static String welcomeAlertMessage = "";
+  static bool welcomeAlertIsAi = false;
+
   bool newAlert = false;
   if (hasNewAIResponse) {
     xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    activeAlertMessage = aiResponse;
-    activeAlertIsAi = lastResponseIsAi;
+    String msg = aiResponse;
+    bool isAi = lastResponseIsAi;
     hasNewAIResponse = false;
     xSemaphoreGive(geminiMutex);
 
+    if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT) {
+      pendingWelcomeAlert = true;
+      welcomeAlertMessage = msg;
+      welcomeAlertIsAi = isAi;
+    } else {
+      activeAlertMessage = msg;
+      activeAlertIsAi = isAi;
+      aiScreenEndTime = now + 8000;
+      newAlert = true;
+      publishMqttMessage(msg);
+    }
+  }
+
+  if (pendingWelcomeAlert && (now - sitDownTime >= 15000UL)) {
+    pendingWelcomeAlert = false;
+    activeAlertMessage = welcomeAlertMessage;
+    activeAlertIsAi = welcomeAlertIsAi;
     aiScreenEndTime = now + 8000;
     newAlert = true;
+    publishMqttMessage(welcomeAlertMessage);
   }
 
   bool isAlertActive = (now < aiScreenEndTime);
   int targetPage = -1;
   if (currentPresenceState == STATE_AWAY) {
+    pendingWelcomeAlert = false;
+    welcomeAlertMessage = "";
+    if (hasNewAIResponse) {
+      if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT) {
+        hasNewAIResponse = false;
+      }
+    }
     if (now - lastStateTransitionTime < 60000UL) {
       targetPage = 0; // Show Clock page during the 1-minute grace period
     } else {
@@ -203,13 +239,21 @@ inline void updateTFTDisplay(unsigned long now) {
     targetPage = 0;  // Clock page
   }
 
+  static bool lastTime24h = true;
+
   bool forceRedraw = (targetPage != lastDisplayedPage) || 
                      (clockFace != lastClockFace) || 
+                     (time24h != lastTime24h) ||
                      newAlert;
 
   if (clockFace != lastClockFace) {
     tft.fillScreen(TFT_BLACK);
     lastClockFace = clockFace;
+  }
+
+  if (time24h != lastTime24h) {
+    lastTime24h = time24h;
+    tft.fillScreen(TFT_BLACK);
   }
 
   if (targetPage != lastDisplayedPage) {
@@ -227,10 +271,7 @@ inline void updateTFTDisplay(unsigned long now) {
     return;
   }
 
-  // If we are waiting for the AI welcome response, keep showing away screen
-  if (isAILoading && (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT)) {
-    return;
-  }
+
 
   // 2. Call active faceplate
   bool wifiAvailable = (WiFi.status() == WL_CONNECTED);
@@ -242,6 +283,9 @@ inline void updateTFTDisplay(unsigned long now) {
       break;
     case 2:
       drawHiTechClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
+      break;
+    case 3:
+      drawDevClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
       break;
     case 0:
     default:

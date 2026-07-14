@@ -92,8 +92,14 @@ if __name__ == '__main__':
         sys.exit(1)
         
     image_path = sys.argv[1]
-    base, _ = os.path.splitext(image_path)
-    rle_path = base + ".rle"
+    
+    # Save the output directly to the project's data/ directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(script_dir, "data")
+    
+    filename = os.path.basename(image_path)
+    base, _ = os.path.splitext(filename)
+    rle_path = os.path.join(data_dir, base + ".rle")
     
     compress_image_to_rle(image_path, rle_path)
 

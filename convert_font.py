@@ -100,17 +100,9 @@ def generate_vlw_bytes(font_path, font_size, allowed_chars, font_class_name):
     
     return vlw
 
-def write_header(font_path, output_header_path, allowed_chars, sizes, font_class_name):
-    header_guard = f"{font_class_name.upper()}_FONT_H"
+def write_vlw_files(font_path, output_dir, allowed_chars, sizes, font_class_name):
+    os.makedirs(output_dir, exist_ok=True)
     
-    header_content = []
-    header_content.append(f"// This file is auto-generated from convert_font.py using {os.path.basename(font_path)}")
-    header_content.append(f"#ifndef {header_guard}")
-    header_content.append(f"#define {header_guard}")
-    header_content.append("")
-    header_content.append("#include <pgmspace.h>")
-    header_content.append("")
-
     for size in sizes:
         print(f"Generating VLW font data for size {size}...")
         vlw_bytes = generate_vlw_bytes(font_path, size, allowed_chars, font_class_name)
@@ -118,26 +110,10 @@ def write_header(font_path, output_header_path, allowed_chars, sizes, font_class
             print(f"Failed to generate size {size}")
             continue
             
-        var_name = f"{font_class_name}{size}"
-        header_content.append(f"// Size: {size}pt, Glyphs: {len(allowed_chars)}, Total size: {len(vlw_bytes)} bytes")
-        header_content.append(f"const uint8_t {var_name}[] PROGMEM = {{")
-        
-        # Format bytes as hex array
-        hex_lines = []
-        for i in range(0, len(vlw_bytes), 16):
-            chunk = vlw_bytes[i:i+16]
-            hex_str = ", ".join(f"0x{b:02X}" for b in chunk)
-            hex_lines.append("  " + hex_str + ",")
-        header_content.extend(hex_lines)
-        header_content.append("};")
-        header_content.append("")
-        
-    header_content.append(f"#endif // {header_guard}")
-    
-    with open(output_header_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(header_content))
-        
-    print(f"Successfully generated font header at {output_header_path}")
+        output_file = os.path.join(output_dir, f"{font_class_name}{size}.vlw")
+        with open(output_file, "wb") as f:
+            f.write(vlw_bytes)
+        print(f"Successfully generated VLW font at {output_file} ({len(vlw_bytes)} bytes)")
 
 if __name__ == "__main__":
     if len(sys.argv) < 5 or len(sys.argv) > 6:
@@ -163,7 +139,7 @@ if __name__ == "__main__":
         char_set = sys.argv[5]
         print(f"Using custom character limiter: '{char_set}'")
     else:
-        char_set = " 0123456789:ACDEFHIMNORSTUW"
+        char_set = " 0123456789:ACDEFHIMNORSTUW/h"
         print(f"Using default character limiter: '{char_set}'")
         
     # Generate a clean font class name from base name
@@ -173,8 +149,9 @@ if __name__ == "__main__":
     words = [w.capitalize() for w in base_clean.replace('-', ' ').replace('_', ' ').split()]
     font_class_name = "".join(words)
     
-    # Save inside the src directory
-    output_header = f"src/{font_class_name}Font.h"
+    # Save directly to data directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_dir = os.path.join(script_dir, "data")
     font_sizes = [size1, size2, size3]
     
-    write_header(font_file, output_header, char_set, font_sizes, font_class_name)
+    write_vlw_files(font_file, output_dir, char_set, font_sizes, font_class_name)

@@ -6,8 +6,6 @@
 #include <NTPClient.h>
 #include <LittleFS.h>
 #include <TFT_eSPI.h>
-#include "FuturaFont.h"
-#include "GoodTimingFont.h"
 #include "Display.h"
 
 // Extern references for global state variables from main.cpp
@@ -29,141 +27,38 @@ extern unsigned long totalBreakTime;
 extern int breakCount;
 extern unsigned long continuousPresenceStart;
 extern char buf[];
+extern bool time24h;
+extern uint32_t fsReadCount;
+extern uint32_t fsWriteCount;
 extern NTPClient timeClient;
 extern String formatTime(unsigned long ms);
+extern float filteredDetectionDist;
+extern int rawDetectionDist;
+extern unsigned long sessionDeskTime;
+extern unsigned long sessionMotionTime;
+extern unsigned long lastStateTransitionTime;
+extern unsigned long latestBreakDuration;
 
 // ============================================================================
-// SECTION 1: COMMON CLIPPING & DRAWING HELPERS
+// SECTION 1: GRAPHICS & ASSETS INTERFACE
 // ============================================================================
 
-// Helper function to draw a single pixel with circular clipping (only within radius < 115)
-void drawClippedPixel(int32_t x, int32_t y, uint16_t color) {
-  if (x >= 0 && x < 240 && y >= 0 && y < 240) {
-    int32_t dx = x - 120;
-    int32_t dy = y - 120;
-    if (dx * dx + dy * dy < 115 * 115) {
-      tft.drawPixel(x, y, color);
-    }
-  }
-}
-
-// Helper to draw a horizontal line with circular clipping
-void drawClippedHLine(int32_t x, int32_t y, int32_t w, uint16_t color) {
-  for (int32_t i = 0; i < w; i++) {
-    drawClippedPixel(x + i, y, color);
-  }
-}
-
-// Helper to draw a filled rectangle with circular clipping
-void drawClippedFillRect(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t color) {
-  for (int32_t i = 0; i < h; i++) {
-    drawClippedHLine(x, y + i, w, color);
-  }
-}
-
-// Compute the fixed point square root of an integer and return the 8 MS bits of fractional part
-static inline uint8_t local_sqrt_fraction(uint32_t num) {
-  if (num > (0x40000000)) return 0;
-  uint32_t bsh = 0x00004000;
-  uint32_t fpr = 0;
-  uint32_t osh = 0;
-  while (num > bsh) { bsh <<= 2; osh++; }
-  do {
-    uint32_t bod = bsh + fpr;
-    if (num >= bod) {
-      num -= bod;
-      fpr = bsh + bod;
-    }
-    num <<= 1;
-  } while (bsh >>= 1);
-  return fpr >> osh;
-}
-
-// Draw a smooth rounded corner rectangle with circular clipping (radius < 115)
-void drawClippedSmoothRoundRect(int32_t x, int32_t y, int32_t r, int32_t ir, int32_t w, int32_t h, uint32_t fg_color, uint32_t bg_color, uint8_t quadrants = 0xF) {
-  if (r < ir) {
-    int32_t temp = r;
-    r = ir;
-    ir = temp;
-  }
-  if (r <= 0 || ir < 0) return;
-
-  w -= 2 * r;
-  h -= 2 * r;
-
-  if (w < 0) w = 0;
-  if (h < 0) h = 0;
-
-  x += r;
-  y += r;
-
-  uint16_t t = r - ir + 1;
-  int32_t xs = 0;
-  int32_t cx = 0;
-
-  int32_t r2 = r * r;   // Outer arc radius^2
-  r++;
-  int32_t r1 = r * r;   // Outer AA zone radius^2
-
-  int32_t r3 = ir * ir; // Inner arc radius^2
-  ir--;
-  int32_t r4 = ir * ir; // Inner AA zone radius^2
-
-  uint8_t alpha = 0;
-
-  // Scan top left quadrant
-  for (int32_t cy = r - 1; cy > 0; cy--) {
-    int32_t len = 0;  // Pixel run length
-    int32_t lxst = 0; // Left side run x start
-    int32_t rxst = 0; // Right side run x start
-    int32_t dy2 = (r - cy) * (r - cy);
-
-    // Find and track arc zone start point
-    while ((r - xs) * (r - xs) + dy2 >= r1) xs++;
-
-    for (cx = xs; cx < r; cx++) {
-      int32_t hyp = (r - cx) * (r - cx) + dy2;
-
-      if (hyp > r2) {
-        alpha = ~local_sqrt_fraction(hyp); // Outer AA zone
-      } else if (hyp >= r3) {
-        rxst = cx;
-        len++;
-        continue;
-      } else {
-        if (hyp <= r4) break;
-        alpha = local_sqrt_fraction(hyp); // Inner AA zone
-      }
-
-      if (alpha < 16) continue;
-
-      uint16_t pcol = fastBlend(alpha, fg_color, bg_color);
-      if (quadrants & 0x8) drawClippedPixel(x + cx - r, y - cy + r + h, pcol);     // BL
-      if (quadrants & 0x1) drawClippedPixel(x + cx - r, y + cy - r, pcol);         // TL
-      if (quadrants & 0x2) drawClippedPixel(x - cx + r + w, y + cy - r, pcol);     // TR
-      if (quadrants & 0x4) drawClippedPixel(x - cx + r + w, y - cy + r + h, pcol); // BR
-    }
-    
-    lxst = rxst - len + 1;
-    if (quadrants & 0x8) drawClippedHLine(x + lxst - r, y - cy + r + h, len, fg_color);
-    if (quadrants & 0x1) drawClippedHLine(x + lxst - r, y + cy - r, len, fg_color);
-    if (quadrants & 0x2) drawClippedHLine(x - rxst + r + w, y + cy - r, len, fg_color);
-    if (quadrants & 0x4) drawClippedHLine(x - rxst + r + w, y - cy + r + h, len, fg_color);
-  }
-
-  // Draw sides
-  if ((quadrants & 0xC) == 0xC) drawClippedFillRect(x, y + r - t + h, w + 1, t, fg_color); // Bottom
-  if ((quadrants & 0x9) == 0x9) drawClippedFillRect(x - r + 1, y, t, h + 1, fg_color);     // Left
-  if ((quadrants & 0x3) == 0x3) drawClippedFillRect(x, y - r + 1, w + 1, t, fg_color);     // Top
-  if ((quadrants & 0x6) == 0x6) drawClippedFillRect(x + r - t + w, y, t, h + 1, fg_color); // Right
-}
 
 
 // ============================================================================
 // SECTION 2: DEFAULT FACEPLATE
 // ============================================================================
 
-// Helper function to draw default digital clock face
+/**
+ * SECTION 2: DEFAULT FACEPLATE
+ * Draws the default digital clock face.
+ * Layout:
+ * - Top: Temperature and weather description.
+ * - Center: Large digital clock (using built-in 7-segment Font 7).
+ * - Below Center: Date string.
+ * - Bottom: Rotational statistics (productivity score, desk time, focus duration, etc.).
+ * - Outermost Bezel: Smooth round color ring matching the active presence state.
+ */
 void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   // 1. Mood Ring Animation & Drawing
   RGBColor targetColor = stateColors[currentPresenceState];
@@ -242,8 +137,16 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
   // Time section (center)
   tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  String timeStr = timeClient.getFormattedTime().substring(0, 5);
-  tft.drawString(timeStr, 120, 105, 7); // Large digital font
+  int h = timeClient.getHours();
+  int m = timeClient.getMinutes();
+  int display_h = h;
+  if (!time24h) {
+    display_h = h % 12;
+    if (display_h == 0) display_h = 12;
+  }
+  char timeStrBuf[6];
+  snprintf(timeStrBuf, sizeof(timeStrBuf), "%02d:%02d", display_h, m);
+  tft.drawString(String(timeStrBuf), 120, 105, 7); // Large digital font
 
   // Date section (below time)
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
@@ -298,10 +201,19 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
 // Helper to determine if coordinates are inside the offset minute box
 bool inMinuteWindow(int x, int y) {
-  return (x >= 170 && y >= 81 && y <= 141);
+  return (x >= 160 && y >= 72 && y <= 150);
 }
 
-// Helper function to draw minimalist clock face
+/**
+ * SECTION 3: MINIMALIST FACEPLATE
+ * Draws a clean, dial-based minimalist clock face.
+ * Layout:
+ * - Outer Circle: Custom minute dial (ticks and numbers rotated counter-clockwise).
+ * - Center: Very large hour digit (loaded dynamically from LittleFS RamisArabic64).
+ * - Center-Right: Antialiased capsule enclosing two-digit minute numbers (loaded dynamically from RamisArabic36).
+ * - Below Center: Date string (loaded dynamically from RamisArabic18).
+ * - Top-Center: Status icons (WiFi, Internet connection, Mail envelope indicator).
+ */
 void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   tft.setTextDatum(MC_DATUM); // Ensure all text draws and erases with the same coordinate system
 
@@ -345,7 +257,8 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
   // Draw / transition minutes ring
   if (minuteChanged) {
-    tft.loadFont(Futura18); // Load smooth font for dial numbers
+    fsReadCount++;
+    tft.loadFont("RamisArabic18", LittleFS); // Load smooth font for dial numbers
     
     if (last_m != -1) {
       // 1. Erase all old ticks and labels first (instant) using wide black lines
@@ -354,18 +267,18 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
         float c_old = cosf(rad_old);
         float s_old = sinf(rad_old);
         
-        int x_out_old = 120 + (int)(110 * c_old);
-        int y_out_old = 120 + (int)(110 * s_old);
-        int x_in_old = 120 + (int)(102 * c_old);
-        int y_in_old = 120 + (int)(102 * s_old);
+        int x_out_old = 120 + (int)(120 * c_old);
+        int y_out_old = 120 + (int)(120 * s_old);
+        int x_in_old = 120 + (int)(112 * c_old);
+        int y_in_old = 120 + (int)(112 * s_old);
         
         if (!inMinuteWindow(x_in_old, y_in_old) && !inMinuteWindow(x_out_old, y_out_old)) {
           tft.drawWideLine((float)x_in_old, (float)y_in_old, (float)x_out_old, (float)y_out_old, 2.0f, TFT_BLACK, TFT_BLACK);
         }
         
         if (i % 5 == 0) {
-          int x_text_old = 120 + (int)(92 * c_old);
-          int y_text_old = 120 + (int)(92 * s_old);
+          int x_text_old = 120 + (int)(100 * c_old)+1;
+          int y_text_old = 120 + (int)(100 * s_old) - 11;
           if (!inMinuteWindow(x_text_old, y_text_old)) {
             tft.setTextColor(TFT_BLACK, TFT_BLACK);
             tft.drawString(String(i), x_text_old, y_text_old);
@@ -379,10 +292,10 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
         float c_new = cosf(rad_new);
         float s_new = sinf(rad_new);
         
-        int x_out_new = 120 + (int)(110 * c_new);
-        int y_out_new = 120 + (int)(110 * s_new);
-        int x_in_new = 120 + (int)(102 * c_new);
-        int y_in_new = 120 + (int)(102 * s_new);
+        int x_out_new = 120 + (int)(120 * c_new);
+        int y_out_new = 120 + (int)(120 * s_new);
+        int x_in_new = 120 + (int)(112 * c_new);
+        int y_in_new = 120 + (int)(112 * s_new);
         
         if (!inMinuteWindow(x_in_new, y_in_new) && !inMinuteWindow(x_out_new, y_out_new)) {
           uint16_t color = (i % 5 == 0) ? TFT_WHITE : tft.color565(100, 100, 100);
@@ -391,8 +304,8 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
         }
         
         if (i % 5 == 0) {
-          int x_text_new = 120 + (int)(92 * c_new);
-          int y_text_new = 120 + (int)(92 * s_new);
+          int x_text_new = 120 + (int)(100 * c_new)+1;
+          int y_text_new = 120 + (int)(100 * s_new) - 11;
           if (!inMinuteWindow(x_text_new, y_text_new)) {
             tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
             tft.drawString(String(i), x_text_new, y_text_new);
@@ -408,10 +321,10 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
         float c_new = cosf(rad_new);
         float s_new = sinf(rad_new);
         
-        int x_out_new = 120 + (int)(110 * c_new);
-        int y_out_new = 120 + (int)(110 * s_new);
-        int x_in_new = 120 + (int)(102 * c_new);
-        int y_in_new = 120 + (int)(102 * s_new);
+        int x_out_new = 120 + (int)(120 * c_new);
+        int y_out_new = 120 + (int)(120 * s_new);
+        int x_in_new = 120 + (int)(112 * c_new);
+        int y_in_new = 120 + (int)(112 * s_new);
         
         if (!inMinuteWindow(x_in_new, y_in_new) && !inMinuteWindow(x_out_new, y_out_new)) {
           uint16_t color = (i % 5 == 0) ? TFT_WHITE : tft.color565(100, 100, 100);
@@ -420,8 +333,8 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
         }
         
         if (i % 5 == 0) {
-          int x_text_new = 120 + (int)(92 * c_new);
-          int y_text_new = 120 + (int)(92 * s_new);
+          int x_text_new = 120 + (int)(100 * c_new)+1;
+          int y_text_new = 120 + (int)(100 * s_new) - 11;
           if (!inMinuteWindow(x_text_new, y_text_new)) {
             tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
             tft.drawString(String(i), x_text_new, y_text_new);
@@ -434,26 +347,35 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
   // Draw capsule outline if forced redraw or if minutes changed (repairs ticks erase)
   if (forceRedraw || minuteChanged) {
-    drawClippedSmoothRoundRect(175, 86, 25, 24, 105, 50, TFT_WHITE, TFT_BLACK);
+    tft.drawSmoothRoundRect(175, 86, 25, 24, 105, 50, TFT_WHITE, TFT_BLACK);
   }
 
   // Draw Hour (only when changed)
   if (hourChanged) {
     if (last_h != -1) {
-      tft.fillRect(66, 86, 108, 62, TFT_BLACK); // Clear Hour area safely
+      tft.fillRect(66, 85, 108, 62, TFT_BLACK); // Clear Hour area safely
     }
-    tft.loadFont(Futura64);
+    int display_h = h;
+    if (!time24h) {
+      display_h = h % 12;
+      if (display_h == 0) display_h = 12;
+    }
+    char hourStrBuf[3];
+    snprintf(hourStrBuf, sizeof(hourStrBuf), "%02d", display_h);
+    fsReadCount++;
+    tft.loadFont("RamisArabic64", LittleFS);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString(String(h), 120, 121); // Moved 10px down (from 111 to 121)
+    tft.drawString(String(hourStrBuf), 120, 70); // Moved 10px down (from 111 to 121)
     tft.unloadFont();
   }
 
   // Draw Date (only when changed)
   if (dateChanged) {
     if (last_date != "") {
-      tft.fillRect(40, 149, 160, 18, TFT_BLACK); // Clear Date area safely (doesn't overlap Hour)
+      tft.fillRect(40, 149, 160, 18, TFT_RED); // Clear Date area safely (doesn't overlap Hour)
     }
-    tft.loadFont(Futura18);
+    fsReadCount++;
+    tft.loadFont("RamisArabic18", LittleFS);
     tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
     tft.drawString(buf, 120, 158); // Moved 10px down (from 148 to 158)
     tft.unloadFont();
@@ -463,13 +385,14 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
   // Draw Minute (only when changed)
   if (minuteChanged) {
     if (last_m != -1) {
-      tft.fillRect(185, 96, 45, 34, TFT_BLACK); // Clear only the large minute digits area inside the capsule
+      tft.fillRect(185, 94, 45, 34, TFT_BLACK); // Clear only the large minute digits area inside the capsule
     }
-    tft.loadFont(Futura36);
+    fsReadCount++;
+    tft.loadFont("RamisArabic36", LittleFS);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     char minStr[3];
     snprintf(minStr, sizeof(minStr), "%02d", m);
-    tft.drawString(String(minStr), 208, 113); // Centered at X=208, Y=113 (lowered 2px)
+    tft.drawString(String(minStr), 208, 87); // Centered at X=208, Y=113 (lowered 2px)
     tft.unloadFont();
   }
 
@@ -534,30 +457,19 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 #define HITECH_BOX_BG    tft.color565(36, 54, 59)     // Color under Left and Right Box metrics
 #define HITECH_BG_STATUS tft.color565(24, 35, 37)     // Color under Status icons and weather
 
-// Draw a line with circular clipping (radius < 115)
-void drawClippedLine(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t color) {
-  int32_t dx = abs(x1 - x0);
-  int32_t dy = abs(y1 - y0);
-  int32_t sx = (x0 < x1) ? 1 : -1;
-  int32_t sy = (y0 < y1) ? 1 : -1;
-  int32_t err = dx - dy;
 
-  while (true) {
-    drawClippedPixel(x0, y0, color);
-    if (x0 == x1 && y0 == y1) break;
-    int32_t e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      x0 += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      y0 += sy;
-    }
-  }
-}
 
-// Helper function to draw hitech cyberpunk style clock face using background bitmap
+/**
+ * SECTION 4: HITECH FACEPLATE
+ * Draws a futuristic cyberpunk HUD style clock face using a custom background bitmap.
+ * Layout:
+ * - Background: Pre-compiled RLE bitmap image ("/hitech.rle") loaded from LittleFS.
+ * - Center-Left: Time display in HH:MM format (loaded dynamically from GoodTiming46).
+ * - Center-Right: Day of week and date in DD MM format (loaded dynamically from GoodTiming15).
+ * - Top-Right: Weather temperature display (loaded dynamically from GoodTiming15).
+ * - Top-Left: Cyberpunk style WiFi, Internet, and Mail status indicators.
+ * - Bottom slots: Daily accumulated desk and break hours (loaded dynamically from GoodTiming20).
+ */
 void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   if (showEvent) {
     if (forceRedraw) {
@@ -635,24 +547,29 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     last_mail = mail_status;
   }
 
-  // Draw time in HH:MM format using Futura36 font
-  // Window: lower-left (60, 142) -> standard (60, 97); top-right (180, 181) -> standard (180, 58)
+  // Draw time in HH:MM format using GoodTiming46 font
   // Box: x = 60, y = 58, width = 120, height = 39. Center: X = 120, Y = 77
   int h = timeClient.getHours();
   int m = timeClient.getMinutes();
 
   if (h != last_hour || m != last_min) {
     // Clear time window (aligned to time box Y=38 to Y=76, widened to 128px)
-    tft.fillRect(45, 69, 146, 30, HITECH_BG_TIME);
+    tft.fillRect(45, 67, 146, 32, HITECH_BG_TIME);
     
 
     // Draw centered time
-    tft.loadFont(GoodTiming46);
+    fsReadCount++;
+    tft.loadFont("GoodTiming46", LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     
+    int display_h = h;
+    if (!time24h) {
+      display_h = h % 12;
+      if (display_h == 0) display_h = 12;
+    }
     char timeStr[6];
-    snprintf(timeStr, sizeof(timeStr), "%02d:%02d", h, m);
+    snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
     tft.drawString(String(timeStr), 117, 56);
     //tft.drawString("22:22", 120, 56);
     tft.unloadFont();
@@ -668,7 +585,8 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     // Clear box area (aligned to Y=19 center with 13px height)
     tft.fillRect(138, 21, 40, 13, HITECH_BG_STATUS);
 
-    tft.loadFont(GoodTiming15);
+    fsReadCount++;
+    tft.loadFont("GoodTiming15", LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
 
@@ -696,7 +614,8 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
   if (ts.tm_mday != last_mday || ts.tm_mon != last_mon) {
     // 1. Day of the Week Box (restored to original y=106, height=15)
     tft.fillRect(65, 109, 38, 13, HITECH_BG_TIME);
-    tft.loadFont(GoodTiming15);
+    fsReadCount++;
+    tft.loadFont("GoodTiming15", LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     const char* daysOfWeek[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
@@ -707,7 +626,8 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
 
     // 2. Date Box (restored to original y=106, height=15)
     tft.fillRect(113, 109, 54, 13, HITECH_BG_TIME);
-    tft.loadFont(GoodTiming15);
+    fsReadCount++;
+    tft.loadFont("GoodTiming15", LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     char dateStr[6];
@@ -728,7 +648,8 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.fillRect(61, 147, 28, 15, HITECH_BOX_BG);
     tft.fillRect(126, 147, 28, 16, HITECH_BOX_BG);
 
-    tft.loadFont(GoodTiming20);
+    fsReadCount++;
+    tft.loadFont("GoodTiming20", LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
     char deskHoursStr[8];
@@ -742,6 +663,136 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     last_desk_hours = current_desk_hours;
     last_break_hours = current_break_hours;
   }
+}
+
+// Helper function to format duration as H:mm:ss
+void formatHMS(unsigned long ms, char* outStr, size_t maxLen) {
+  unsigned long seconds = ms / 1000UL;
+  unsigned long h = seconds / 3600UL;
+  unsigned long m = (seconds % 3600UL) / 60UL;
+  unsigned long s = seconds % 60UL;
+  snprintf(outStr, maxLen, "%lu:%02lu:%02lu", h, m, s);
+}
+
+// ============================================================================
+// SECTION 5: DEV FACEPLATE
+// ============================================================================
+
+/**
+ * SECTION 5: DEV FACEPLATE
+ * Draws a high-density, real-time developer debug screen.
+ * Uses cheap, fast, built-in non-antialiased fonts to optimize rendering speed and prevent flicker.
+ * Telemetry elements:
+ * - NTP Clock (shows seconds)
+ * - Network Details (IP address and WiFi signal RSSI)
+ * - Device Presence States (Away, Focus, Busy, etc.)
+ * - Radar Telemetry (Raw vs Filtered target distance, target motion/static status)
+ * - Session Metrics (Sitting time H:mm:ss)
+ * - Daily Statistics (Total desk/break hours H:mm:ss, breaks count)
+ * - RAM Health (Free heap memory vs historical min free heap since boot)
+ */
+void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  if (showEvent) {
+    if (forceRedraw) {
+      drawFaceplateMessage(nullptr, message, TFT_GREEN, isAi, TFT_DARKGREY);
+    }
+    return;
+  }
+
+  // Fast 100ms refresh rate for real-time responsiveness
+  static unsigned long lastDevUpdate = 0;
+  if (!forceRedraw && (now - lastDevUpdate < 100)) {
+    return;
+  }
+  lastDevUpdate = now;
+
+  static char prevLines[12][32];
+  if (forceRedraw) {
+    memset(prevLines, 0, sizeof(prevLines));
+    tft.fillScreen(TFT_BLACK);
+  }
+
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+
+  auto drawDevLine = [&](int lineIndex, const char* newStr, int y) {
+    if (strcmp(prevLines[lineIndex], newStr) != 0) {
+      tft.fillRect(20, y - 8, 200, 16, TFT_BLACK);
+      tft.drawString(newStr, 120, y, 2);
+      strncpy(prevLines[lineIndex], newStr, sizeof(prevLines[lineIndex]) - 1);
+    }
+  };
+
+  char line[32];
+
+  // Line 1: Header
+  drawDevLine(0, "--- DEV MODE ---", 22);
+
+  // Line 2: NTP Time
+  int hours = timeClient.getHours();
+  int minutes = timeClient.getMinutes();
+  int seconds = timeClient.getSeconds();
+  snprintf(line, sizeof(line), "TIME: %02d:%02d:%02d", hours, minutes, seconds);
+  drawDevLine(1, line, 38);
+
+  // Line 3: IP Address
+  snprintf(line, sizeof(line), "IP: %s", wifiAvailable ? WiFi.localIP().toString().c_str() : "DISCONNECTED");
+  drawDevLine(2, line, 54);
+
+  // Line 4: RSSI
+  int rssi = wifiAvailable ? WiFi.RSSI() : 0;
+  snprintf(line, sizeof(line), "RSSI: %d dBm", rssi);
+  drawDevLine(3, line, 70);
+
+  // Line 5: Presence State
+  const char* stateNames[] = {"AWAY", "FOCUS", "BUSY", "DISTRACTED", "REGULAR"};
+  const char* stateStr = (currentPresenceState >= 0 && currentPresenceState < 5) ? stateNames[currentPresenceState] : "UNKNOWN";
+  snprintf(line, sizeof(line), "STATE: %s", stateStr);
+  drawDevLine(4, line, 86);
+
+  // Line 6: Radar targets (Motion and Static)
+  int isPresent = radar.presenceDetected() ? 1 : 0;
+  int isMoving = radar.movingTargetDetected() ? 1 : 0;
+  int isStatic = radar.stationaryTargetDetected() ? 1 : 0;
+  snprintf(line, sizeof(line), "RADAR: P:%d M:%d S:%d", isPresent, isMoving, isStatic);
+  drawDevLine(5, line, 102);
+
+  // Line 7: Raw & Filtered distance
+  snprintf(line, sizeof(line), "DIST: R:%d F:%d", rawDetectionDist, (int)filteredDetectionDist);
+  drawDevLine(6, line, 118);
+
+  // Line 8: Session Sitting Timer
+  unsigned long sessSitMs = 0;
+  if (currentPresenceState != STATE_AWAY) {
+    sessSitMs = now - continuousPresenceStart;
+  }
+  char sitStr[12];
+  formatHMS(sessSitMs, sitStr, sizeof(sitStr));
+  snprintf(line, sizeof(line), "SESS: %s", sitStr);
+  drawDevLine(7, line, 134);
+
+  // Line 9: Workday stats
+  char dailyDeskStr[12];
+  char dailyBreakStr[12];
+  formatHMS(totalDeskTime, dailyDeskStr, sizeof(dailyDeskStr));
+  formatHMS(totalBreakTime, dailyBreakStr, sizeof(dailyBreakStr));
+  snprintf(line, sizeof(line), "DAY: S:%s B:%s", dailyDeskStr, dailyBreakStr);
+  drawDevLine(8, line, 150);
+
+  // Line 10: Break Count & Latest Break Duration
+  unsigned long latestBreakMins = latestBreakDuration / 60000UL;
+  snprintf(line, sizeof(line), "BREAKS: %d L:%lum", breakCount, latestBreakMins);
+  drawDevLine(9, line, 166);
+
+  // Line 11: File System Reads & Writes
+  snprintf(line, sizeof(line), "FS: R:%u W:%u", fsReadCount, fsWriteCount);
+  drawDevLine(10, line, 182);
+
+  // Line 12: Heap & AI Requests Count
+  extern int dailyAiRequestCount;
+  uint32_t freeHeapK = ESP.getFreeHeap() / 1024;
+  snprintf(line, sizeof(line), "HEAP:%uK AI:%d/15", freeHeapK, dailyAiRequestCount);
+  drawDevLine(11, line, 198);
 }
 
 #endif // FACEPLATES_H

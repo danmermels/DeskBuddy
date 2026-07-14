@@ -12,8 +12,11 @@
 #include <ld2410.h>
 #include <Preferences.h>
 #include <LittleFS.h>
+#include <PubSubClient.h>
 #include "Behaviour.h"
+#include "Learning.h"
 #include "../Credentials.h"
+#include "MqttService.h"
 
 // Include Display Subsystem (defines RGBColor structure, image loading, and updateTFTDisplay)
 #include "Display.h"
@@ -52,6 +55,14 @@ int productivityScore = 0;
 unsigned long latestBreakDuration = 0;
 unsigned long overnightBreakDuration = 0;
 uint32_t lastAwayEpoch = 0;
+unsigned long currentBreakDurationMs = 0;
+bool isStopByTracking = false;
+uint32_t originalLastAwayEpoch = 0;
+unsigned long totalStopByTimeMs = 0;
+unsigned long previousLatestBreakDuration = 0;
+int lastMidnightCheckDay = -1;
+volatile uint32_t currentSitDownSessionId = 0;
+uint32_t geminiQuerySessionId = 0;
 
 int currentPresenceState = STATE_AWAY;
 unsigned long lastStateTransitionTime = 0;
@@ -71,10 +82,15 @@ String currentUserName = "human";
 SemaphoreHandle_t geminiMutex = NULL;
 volatile bool otaInProgress = false;
 
+// MQTT Globals
+WiFiClient wifiClient;
+PubSubClient mqttClient;
+
 // Persistent Preferences & Settings
 Preferences preferences;
 float targetHours = 8.0;
 int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
+int aiPersona = 0; // 0 = Coach, 1 = Critic, 2 = Nerd, 3 = Zen
 int clockFace = 0;
 int dailyAiRequestCount = 0;
 String userName = "human";
@@ -86,6 +102,23 @@ int lastNtpDay = -1;
 int lastTriggeredEventType = EVENT_FIRST_SIT;
 float filterWindow = 2.0;
 bool hasMail = false;
+bool time24h = true;
+
+// Learning and Workday Session variables
+uint8_t hourlyPresenceHistory[24] = {0};
+uint32_t presenceMsCurrentDay[24] = {0};
+int historyDaysCount = 0;
+bool lunchReminderTriggered = false;
+
+// Active session rollover variables
+unsigned long sitDownTime = 0;
+uint32_t sitDownEpoch = 0;
+bool rolloverPending = false;
+unsigned long requiredValidationBufferMs = 180000UL;
+
+// File system access counters (to estimate flash lifecycles)
+uint32_t fsWriteCount = 0;
+uint32_t fsReadCount = 0;
 
 // Radar Gate Sensitivity Thresholds (0-100)
 int g0mSens = 100;
@@ -202,7 +235,7 @@ void saveDailyStats() {
   if (!file) {
     return;
   }
-  DynamicJsonDocument doc(768);
+  DynamicJsonDocument doc(4096);
   doc["firstSitToday"] = firstSitToday;
   doc["firstSitEpoch"] = firstSitEpoch;
   doc["breakCount"] = breakCount;
@@ -214,11 +247,32 @@ void saveDailyStats() {
   doc["dailyAiRequestCount"] = dailyAiRequestCount;
   doc["lastNtpDay"] = lastNtpDay;
   doc["longestSittingStreak"] = longestSittingStreak;
+  doc["latestBreakDuration"] = latestBreakDuration;
+  doc["isStopByTracking"] = isStopByTracking;
+  doc["originalLastAwayEpoch"] = originalLastAwayEpoch;
+  doc["totalStopByTimeMs"] = totalStopByTimeMs;
+  doc["previousLatestBreakDuration"] = previousLatestBreakDuration;
+  doc["lastMidnightCheckDay"] = lastMidnightCheckDay;
   doc["userName"] = userName;
   doc["deskDistanceLimit"] = deskDistanceLimit;
   doc["focusDistanceLimit"] = focusDistanceLimit;
   doc["motionRatioLimit"] = motionRatioLimit;
   doc["hasMail"] = hasMail;
+  doc["time24h"] = time24h;
+  doc["targetHours"] = targetHours;
+  doc["historyDaysCount"] = historyDaysCount;
+  doc["lunchReminderTriggered"] = lunchReminderTriggered;
+  doc["fsWriteCount"] = fsWriteCount + 1; // Anticipate this successful save
+  doc["fsReadCount"] = fsReadCount;
+
+  JsonArray historyArray = doc.createNestedArray("hourlyPresenceHistory");
+  for (int h = 0; h < 24; h++) {
+    historyArray.add(hourlyPresenceHistory[h]);
+  }
+  JsonArray msArray = doc.createNestedArray("presenceMsCurrentDay");
+  for (int h = 0; h < 24; h++) {
+    msArray.add(presenceMsCurrentDay[h]);
+  }
 
   if (serializeJson(doc, file) == 0) {
     file.close();
@@ -229,11 +283,14 @@ void saveDailyStats() {
   if (LittleFS.exists("/stats.json")) {
     LittleFS.remove("/stats.json");
   }
-  LittleFS.rename("/stats.json.tmp", "/stats.json");
+  if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
+    fsWriteCount++;
+  }
 }
 
 // Load daily statistics from LittleFS
 void loadDailyStats() {
+  fsReadCount++;
   if (!LittleFS.exists("/stats.json")) {
     return;
   }
@@ -241,7 +298,7 @@ void loadDailyStats() {
   if (!file) {
     return;
   }
-  DynamicJsonDocument doc(768);
+  DynamicJsonDocument doc(4096);
   DeserializationError error = deserializeJson(doc, file);
   if (!error) {
     firstSitToday = doc["firstSitToday"] | true;
@@ -255,18 +312,36 @@ void loadDailyStats() {
     dailyAiRequestCount = doc["dailyAiRequestCount"] | 0;
     lastNtpDay = doc["lastNtpDay"] | -1;
     longestSittingStreak = doc["longestSittingStreak"] | 0UL;
-    if (doc.containsKey("userName")) {
-      userName = doc["userName"].as<String>();
+    latestBreakDuration = doc["latestBreakDuration"] | 0UL;
+    isStopByTracking = doc["isStopByTracking"] | false;
+    originalLastAwayEpoch = doc["originalLastAwayEpoch"] | 0;
+    totalStopByTimeMs = doc["totalStopByTimeMs"] | 0UL;
+    previousLatestBreakDuration = doc["previousLatestBreakDuration"] | 0UL;
+    lastMidnightCheckDay = doc["lastMidnightCheckDay"] | -1;
+    // Configuration parameters are loaded on boot from Preferences, not stats.json
+    historyDaysCount = doc["historyDaysCount"] | 0;
+    lunchReminderTriggered = doc["lunchReminderTriggered"] | false;
+    fsWriteCount = doc["fsWriteCount"] | 0;
+    fsReadCount = doc["fsReadCount"] | fsReadCount;
+
+    if (doc.containsKey("hourlyPresenceHistory")) {
+      JsonArray historyArray = doc["hourlyPresenceHistory"].as<JsonArray>();
+      for (int h = 0; h < 24 && h < historyArray.size(); h++) {
+        hourlyPresenceHistory[h] = historyArray[h];
+      }
     }
-    deskDistanceLimit = doc["deskDistanceLimit"] | 120;
-    focusDistanceLimit = doc["focusDistanceLimit"] | 50;
-    motionRatioLimit = doc["motionRatioLimit"] | 15;
-    hasMail = doc["hasMail"] | false;
+    if (doc.containsKey("presenceMsCurrentDay")) {
+      JsonArray msArray = doc["presenceMsCurrentDay"].as<JsonArray>();
+      for (int h = 0; h < 24 && h < msArray.size(); h++) {
+        presenceMsCurrentDay[h] = msArray[h];
+      }
+    }
   }
   file.close();
 }
 
 // Include all helper subsystems
+#include "Stats.h"
 #include "Gemini.h"
 #include "Web.h"
 #include "Faceplates.h"
@@ -285,9 +360,22 @@ void checkWiFiConnection() {
 }
 
 void setup(void) {
+  Serial.begin(115200);
+  delay(1000); // Give serial monitor time to connect
+  Serial.println("\n[DIAGNOSTICS] setup() started");
+
+  // Bind WiFiClient to PubSubClient dynamically
+  mqttClient.setClient(wifiClient);
+  Serial.println("[DIAGNOSTICS] mqttClient bound");
+
+  // Setup Mutex for Gemini Thread Safety
+  geminiMutex = xSemaphoreCreateMutex();
+  Serial.println("[DIAGNOSTICS] Mutex created");
+
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
   aiMode = preferences.getInt("aiMode", 1);
+  aiPersona = preferences.getInt("aiPersona", 0);
   clockFace = preferences.getInt("clockFace", 0);
   targetHours = preferences.getFloat("targetHours", 8.0);
   userName = preferences.getString("userName", "human");
@@ -296,6 +384,7 @@ void setup(void) {
   deskDistanceLimit = preferences.getInt("distLimit", 120);
   filterWindow = preferences.getFloat("filterWindow", 2.0);
   hasMail = preferences.getBool("hasMail", false);
+  time24h = preferences.getBool("time24h", true);
   g0mSens = preferences.getInt("g0mSens", 90);
   g0sSens = preferences.getInt("g0sSens", 90);
   g1mSens = preferences.getInt("g1mSens", 60);
@@ -311,42 +400,63 @@ void setup(void) {
   g6mSens = preferences.getInt("g6mSens", 50);
   g6sSens = preferences.getInt("g6sSens", 40);
   preferences.end();
+  Serial.println("[DIAGNOSTICS] Preferences loaded");
 
   // Initialize LittleFS & load daily stats
+  Serial.println("[DIAGNOSTICS] Starting LittleFS.begin(true)...");
   if (LittleFS.begin(true)) {
+    Serial.println("[DIAGNOSTICS] LittleFS.begin(true) succeeded, loading stats...");
     loadDailyStats();
+    Serial.println("[DIAGNOSTICS] Stats loaded");
+  } else {
+    Serial.println("[DIAGNOSTICS] LittleFS.begin(true) failed");
   }
 
   // Initialize TFT Display & show splash screen
+  Serial.println("[DIAGNOSTICS] Initializing TFT...");
   tft.init();
   tft.setRotation(0);
+  Serial.println("[DIAGNOSTICS] TFT initialized, drawing splash image...");
   drawRLEImage("/away.rle", 0, 0);
+  Serial.println("[DIAGNOSTICS] Splash image drawn");
   
   unsigned long bootStartTime = millis();
 
   // Initialize Radar Sensor Subsystem
+  Serial.println("[DIAGNOSTICS] Initializing Radar...");
   setupRadar();
+  Serial.println("[DIAGNOSTICS] Radar initialized");
 
   // Set Hostname & Configure static IP
+  Serial.println("[DIAGNOSTICS] Initializing WiFi...");
   WiFi.setHostname("DeskBuddy");
   WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
   WiFi.begin(SSID, PASS);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  unsigned long wifiStart = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 5000) {
+    delay(100);
   }
+  Serial.println("[DIAGNOSTICS] WiFi setup complete");
+
+  // Setup MQTT client
+  Serial.println("[DIAGNOSTICS] Setting up MQTT...");
+  setupMqtt();
+  Serial.println("[DIAGNOSTICS] MQTT setup complete");
 
   // Setup NTP Client
+  Serial.println("[DIAGNOSTICS] Setting up NTP...");
   timeClient.begin();
   timeClient.setTimeOffset(-10800);
+  Serial.println("[DIAGNOSTICS] NTP setup complete");
 
   // Setup Web Server Subsystem
+  Serial.println("[DIAGNOSTICS] Setting up WebServer...");
   setupWebServer();
-
-  // Setup Mutex for Gemini Thread Safety
-  geminiMutex = xSemaphoreCreateMutex();
+  Serial.println("[DIAGNOSTICS] WebServer setup complete");
 
   // Setup OTA Updates
+  Serial.println("[DIAGNOSTICS] Setting up OTA...");
   ArduinoOTA
     .onStart([]() {
       otaInProgress = true;
@@ -358,6 +468,7 @@ void setup(void) {
     .onError([](ota_error_t error) {
     });
   ArduinoOTA.begin();
+  Serial.println("[DIAGNOSTICS] OTA setup complete");
 
   lastLoopTime = millis();
   lastStateTransitionTime = millis();
@@ -370,6 +481,7 @@ void setup(void) {
   if (elapsedBoot < 4000) {
     delay(4000 - elapsedBoot);
   }
+  Serial.println("[DIAGNOSTICS] setup() finished successfully!");
 }
 
 void loop(void) {
@@ -386,31 +498,34 @@ void loop(void) {
   unsigned long elapsed = now - lastLoopTime;
   lastLoopTime = now;
 
-  // Midnight Reset Check
+  // Keep local time struct and date string updated from NTP
+  if (timeClient.isTimeSet()) {
+    if (sitDownEpoch == 0) {
+      sitDownEpoch = timeClient.getEpochTime();
+    }
+    time_t epochTime = timeClient.getEpochTime();
+    struct tm *ptm = localtime(&epochTime);
+    if (ptm != nullptr) {
+      ts = *ptm;
+      strftime(buf, sizeof(buf), "%a %d/%m", ptm);
+    }
+  }
+
+  // Initialize lastNtpDay if not set yet
+  if (lastNtpDay == -1 && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    lastNtpDay = timeClient.getDay();
+    saveDailyStats();
+  }
+
+  // Midnight diagnostics reset
   if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     int currentDay = timeClient.getDay();
-    if (lastNtpDay == -1) {
-      lastNtpDay = currentDay;
-    } else if (currentDay != lastNtpDay) {
-      lastNtpDay = currentDay;
-      firstSitToday = true;
-      firstSitEpoch = 0;
-      breakCount = 0;
-      totalDeskTime = 0;
-      totalFocusTime = 0;
-      totalBreakTime = 0;
-      overnightBreakDuration = 0;
-      lastAwayEpoch = 0;
-      dailyAiRequestCount = 0;
-      longestSittingStreak = 0;
-      latestBreakDuration = 0;
-      totalMotionTime = 0;
-      motionCount = 0;
-      sessionDeskTime = 0;
-      sessionMotionTime = 0;
-      sessionDistanceSum = 0;
-      sessionDistanceCount = 0;
-      sessionDistanceAverage = 0.0;
+    if (lastMidnightCheckDay == -1) {
+      lastMidnightCheckDay = currentDay;
+    } else if (currentDay != lastMidnightCheckDay) {
+      fsReadCount = 0;
+      fsWriteCount = 0;
+      lastMidnightCheckDay = currentDay;
       saveDailyStats();
     }
   }
@@ -496,6 +611,9 @@ void loop(void) {
 
   // Handle Presence State Machine Transitions
   if (targetPresent) {
+    if (!rolloverPending) {
+      accumulatePresence(ts.tm_hour, elapsed);
+    }
     // Accumulate desk time if static presence is detected
     if (sensorStaticPresenceDetected) {
       totalDeskTime += elapsed;
@@ -526,49 +644,37 @@ void loop(void) {
 
     if (currentPresenceState == STATE_AWAY) {
       // Transition: Away -> Present
-      unsigned long breakDuration = now - lastStateTransitionTime;
+      sitDownTime = now;
+      sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+      rolloverPending = true;
+      requiredValidationBufferMs = getDynamicValidationBufferMs(ts.tm_hour);
+      currentSitDownSessionId++;
       
-      if (firstSitToday) {
-        firstSitToday = false;
-        firstSitEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-        if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
-          overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
-        } else {
-          overnightBreakDuration = 0;
+      // Calculate currentBreakDurationMs immediately at the transition using transition timestamps
+      currentBreakDurationMs = 0;
+      uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
+      if (referenceAwayEpoch > 0 && sitDownEpoch >= referenceAwayEpoch) {
+        unsigned long grossSec = sitDownEpoch - referenceAwayEpoch;
+        unsigned long grossMs = grossSec * 1000UL;
+        if (grossMs >= totalStopByTimeMs) {
+          currentBreakDurationMs = grossMs - totalStopByTimeMs;
         }
-        
-        // Save immediately before behavior logic to prevent data loss
-        saveDailyStats();
-        
-        if (overnightBreakDuration >= 4 * 3600UL) {
-          triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreakDuration * 1000));
-        } else {
-          triggerBehaviour(EVENT_FIRST_SIT, "");
+      } else if (lastStateTransitionTime > 0 && now >= lastStateTransitionTime) {
+        unsigned long grossMs = now - lastStateTransitionTime;
+        if (grossMs >= totalStopByTimeMs) {
+          currentBreakDurationMs = grossMs - totalStopByTimeMs;
         }
-        
-        // Reset session metrics on first sit
-        sessionDeskTime = 0;
-        sessionMotionTime = 0;
-        sessionDistanceSum = 0;
-        sessionDistanceCount = 0;
-        sessionDistanceAverage = 0.0;
-      } else if (breakDuration >= 180000UL) { // Only count break if away > 3 minutes
-        breakCount++;
-        latestBreakDuration = breakDuration;
-        
-        // Save immediately before behavior logic to prevent data loss
-        saveDailyStats();
-        
-        triggerBehaviour(EVENT_WELCOME_BACK, formatTime(breakDuration));
-        
-        // Reset session metrics on true break return
-        sessionDeskTime = 0;
-        sessionMotionTime = 0;
-        sessionDistanceSum = 0;
-        sessionDistanceCount = 0;
-        sessionDistanceAverage = 0.0;
       }
-      
+
+      // Check if this sit-down will trigger a day session rollover
+      bool willRollover = false;
+      if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+        int currentDay = timeClient.getDay();
+        if (shouldResetDaySession(sitDownEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
+          willRollover = true;
+        }
+      }
+
       currentPresenceState = targetState;
       lastStateTransitionTime = now;
       continuousPresenceStart = now;
@@ -576,12 +682,92 @@ void loop(void) {
       if (targetState == STATE_FOCUS) {
         continuousStillStart = now;
       }
-    } else {
-      // If we just entered focus state, record start time
-      if (targetState == STATE_FOCUS && currentPresenceState != STATE_FOCUS) {
-        continuousStillStart = now;
+
+      // Smooth transition: immediately trigger API welcome/fallback query on sit-down
+      // (The display will render the clock faceplate, and the welcome message will show 15s later)
+      if (firstSitToday || willRollover) {
+        unsigned long overnightBreak = currentBreakDurationMs / 1000UL;
+        if (overnightBreak >= 4 * 3600UL) {
+          triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreak * 1000));
+        } else {
+          triggerBehaviour(EVENT_FIRST_SIT, "");
+        }
+      } else {
+        if (currentBreakDurationMs >= 180000UL) { // Only greet if away > 3 minutes
+          triggerBehaviour(EVENT_WELCOME_BACK, formatTime(currentBreakDurationMs));
+        }
       }
-      currentPresenceState = targetState;
+    } else {
+      // User is present, and was already present
+      if (rolloverPending && now - sitDownTime >= requiredValidationBufferMs) {
+        rolloverPending = false;
+        
+        // Retroactively accumulate the validated presence time
+        accumulatePresence(ts.tm_hour, requiredValidationBufferMs);
+        
+        bool isRollover = false;
+        if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+          int currentDay = timeClient.getDay();
+          uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
+          if (shouldResetDaySession(sitDownEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
+            isRollover = true;
+            uint32_t tempLastAway = lastAwayEpoch;
+            mergeCurrentDayPresence();
+            resetDailyStats(tempLastAway, currentDay);
+          }
+        }
+        
+        if (firstSitToday) {
+          firstSitToday = false;
+          firstSitEpoch = sitDownEpoch;
+          if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
+            overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
+            latestBreakDuration = overnightBreakDuration * 1000UL;
+          } else {
+            overnightBreakDuration = currentBreakDurationMs / 1000UL;
+            latestBreakDuration = currentBreakDurationMs;
+          }
+          
+          totalBreakTime = 0;
+          isStopByTracking = false;
+          originalLastAwayEpoch = 0;
+          totalStopByTimeMs = 0;
+          previousLatestBreakDuration = 0;
+          saveDailyStats();
+          resetSessionStats();
+        } else {
+          // Standard break return check using pre-calculated duration from transition
+          if (currentBreakDurationMs >= 180000UL) { // Only count break if away > 3 minutes
+            breakCount++;
+            previousLatestBreakDuration = latestBreakDuration;
+            latestBreakDuration = currentBreakDurationMs;
+            isStopByTracking = true;
+            saveDailyStats();
+            resetSessionStats();
+          }
+        }
+      }
+      
+      // Sticky state transition check (only checked if rollover is confirmed)
+      if (!rolloverPending) {
+        static int candidateState = -1;
+        static unsigned long stateConfirmationTime = 0;
+        
+        if (targetState != currentPresenceState && targetState != STATE_AWAY) {
+          if (targetState != candidateState) {
+            candidateState = targetState;
+            stateConfirmationTime = now;
+          } else if (now - stateConfirmationTime >= 180000UL) { // 3 minutes
+            if (candidateState == STATE_FOCUS) {
+              continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
+            }
+            currentPresenceState = candidateState;
+            candidateState = -1;
+          }
+        } else {
+          candidateState = -1;
+        }
+      }
     }
       
     // Trigger Stretch alert after 45 minutes of continuous presence
@@ -600,33 +786,66 @@ void loop(void) {
       }
     }
 
-    // Evaluate and update longest sitting streak
+    // Evaluate and update longest sitting streak (minimum 15 minutes / 900,000ms)
     unsigned long currentStreak = now - continuousPresenceStart;
-    if (longestSittingStreak >= 60000UL && currentStreak > longestSittingStreak && !streakAlertTriggered) {
+    if (longestSittingStreak >= 900000UL && currentStreak > longestSittingStreak && !streakAlertTriggered) {
       streakAlertTriggered = true;
       triggerBehaviour(EVENT_STREAK_BEATEN, formatTime(longestSittingStreak));
     }
-    if (currentStreak > longestSittingStreak && currentStreak >= 60000UL) {
+    if (currentStreak > longestSittingStreak && currentStreak >= 900000UL) {
       longestSittingStreak = currentStreak;
     }
   } else {
     if (currentPresenceState != STATE_AWAY) {
       // Transition: Present -> Away
       streakAlertTriggered = false;
-      unsigned long focusSessionDuration = 0;
-      if (currentPresenceState == STATE_FOCUS) {
-        focusSessionDuration = now - continuousStillStart;
-      }
       
-      // Trigger Focus session congrats if user focused for > 15s
-      if (focusSessionDuration > 15000) {
-        triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
+      if (rolloverPending) {
+        rolloverPending = false;
+        // Quick sit under validation buffer: ignore presence metrics updates, keep old lastAwayEpoch
+        currentPresenceState = STATE_AWAY;
+        lastStateTransitionTime = now;
+      } else {
+        unsigned long focusSessionDuration = 0;
+        if (currentPresenceState == STATE_FOCUS) {
+          focusSessionDuration = now - continuousStillStart;
+        }
+        
+        // Trigger Focus session congrats if user focused for > 15s
+        if (focusSessionDuration > 15000) {
+          triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
+        }
+        
+        unsigned long presenceDurationMs = now - sitDownTime;
+        if (isStopByTracking && presenceDurationMs < 480000UL) { // 8 minutes threshold
+          // This was a STOP-BY!
+          if (breakCount > 0) breakCount--;
+          latestBreakDuration = previousLatestBreakDuration;
+          
+          if (totalDeskTime >= presenceDurationMs) {
+            totalDeskTime -= presenceDurationMs;
+          }
+          if (sessionDeskTime >= presenceDurationMs) {
+            sessionDeskTime -= presenceDurationMs;
+          }
+          
+          totalStopByTimeMs += presenceDurationMs;
+          lastAwayEpoch = originalLastAwayEpoch;
+          
+          currentPresenceState = STATE_AWAY;
+          lastStateTransitionTime = now;
+          saveDailyStats();
+        } else {
+          // This was a REAL presence session (>= 8 minutes) or we weren't tracking stop-bys
+          currentPresenceState = STATE_AWAY;
+          lastStateTransitionTime = now;
+          lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+          isStopByTracking = false;
+          totalStopByTimeMs = 0;
+          originalLastAwayEpoch = lastAwayEpoch; // Save start of this new break session
+          saveDailyStats();
+        }
       }
-      
-      currentPresenceState = STATE_AWAY;
-      lastStateTransitionTime = now;
-      lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-      saveDailyStats();
     } else {
       // Accumulate break time
       totalBreakTime += elapsed;
@@ -674,8 +893,9 @@ void loop(void) {
     productivityScore = (int)constrain(raw_score, 0.0f, 100.0f);
   }
 
-  // Handle NTP Time & Weather Fetch Updates (every 1 hour)
-  if (WiFi.status() == WL_CONNECTED && now - lastHourlyUpdate > 3600000) {
+  // Handle NTP Time & Weather Fetch Updates (every 1 hour or until initial NTP sync succeeds)
+  unsigned long ntpUpdateInterval = timeClient.isTimeSet() ? 3600000 : 15000;
+  if (WiFi.status() == WL_CONNECTED && now - lastHourlyUpdate > ntpUpdateInterval) {
     timeClient.update();
     HTTPClient http;
     http.begin(String(OpenWeatherCall) + OpenWeatherKey);
@@ -692,11 +912,18 @@ void loop(void) {
         time_t rawtime = jsonBuffer["dt"];
         rawtime = rawtime - 10800;
         ts = *localtime(&rawtime);
-        strftime(buf, sizeof(buf), "%a %d-%m", &ts);
+        strftime(buf, sizeof(buf), "%a %d/%m", &ts);
       }
     }
     http.end();
-    lastHourlyUpdate = now;
+    
+    // Only register update success if time is verified set
+    if (timeClient.isTimeSet()) {
+      lastHourlyUpdate = now;
+    } else {
+      // Retry in 15 seconds
+      lastHourlyUpdate = now - ntpUpdateInterval + 15000;
+    }
   }
 
   // Periodically save stats to LittleFS (every 60 seconds) if anything has changed
@@ -721,7 +948,7 @@ void loop(void) {
     statsInit = true;
   }
 
-  if (now - lastStatsSave > 60000) {
+  if (now - lastStatsSave > 600000) { // Periodically save stats to LittleFS (every 10 minutes)
     lastStatsSave = now;
     if (totalDeskTime != lastSavedDeskTime || 
         totalFocusTime != lastSavedFocusTime || 
@@ -740,6 +967,29 @@ void loop(void) {
       lastSavedUserName = userName;
     }
   }
+
+  // Lunch Reminder check
+  if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    int currentHour = ts.tm_hour;
+    int currentMin = ts.tm_min;
+    int learnedLunch = getLearnedLunchHour();
+    if (currentHour == learnedLunch && currentMin >= 15) {
+      if (currentPresenceState != STATE_AWAY && !lunchReminderTriggered && totalDeskTime > 1800000UL) {
+        lunchReminderTriggered = true;
+        saveDailyStats();
+        triggerBehaviour(EVENT_LUNCH_REMINDER);
+      }
+    }
+  }
+
+  // Process MQTT service loop
+  loopMqtt();
+
+  // Handle Web Server requests
+  server.handleClient();
+
+  // Handle OTA updates in the background
+  ArduinoOTA.handle();
 
   // Update TFT Display
   updateTFTDisplay(now);

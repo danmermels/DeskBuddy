@@ -17,7 +17,7 @@ graph TD
     CheckOTA -- Yes --> DelayOTA[Delay 50ms & Return] --> Start
     CheckOTA -- No --> PollWeb[2. Handle Web Server Clients]
     PollWeb --> CheckWiFi[3. Check WiFi Connection status]
-    CheckWiFi --> ResetCheck[4. Midnight Reset Check]
+    CheckWiFi --> ResetCheck[4. Dynamic Day Rollover Check]
     ResetCheck --> PollRadar[5. Poll LD2410 Radar Sensor]
     PollRadar --> StateMachine[6. Presence State Machine & Debouncing]
     StateMachine --> Metrics[7. Update Productivity Score]
@@ -31,11 +31,7 @@ graph TD
 1. **Handle OTA Updates**: Calls `ArduinoOTA.handle()`. The global volatile boolean `otaInProgress` is toggled by OTA start/end callbacks. If true, the loop delays 50ms and returns immediately, pausing standard loop execution to ensure a safe, flash-write operation without display interruptions.
 2. **Handle Web Server Clients**: Calls `server.handleClient()`. This is non-blocking. It processes client TCP connections, executes registered endpoint callbacks (e.g. settings updates, data fetches), and keeps the web page dashboard alive.
 3. **Check WiFi Connection**: Runs every 10 seconds. If `WiFi.status()` is not `WL_CONNECTED`, it disconnects, re-initializes static IP parameters (`local_IP`, `gateway`, `subnet`, `primaryDNS`, `secondaryDNS`), and calls `WiFi.begin(SSID, PASS)`. This guarantees reconnection with static configuration instead of reverting to DHCP.
-4. **Midnight Reset Check**: Polls standard local time via the NTP Client. Compares the current day (`timeClient.getDay()`) with `lastNtpDay`. If they differ (and WiFi is connected/time is successfully synchronized):
-   - Resets all daily accumulators (desk time, breaks, streaks, request counters).
-   - Resets session metrics.
-   - Sets `firstSitToday = true`.
-   - Forces a call to `saveDailyStats()` to persist the reset state to LittleFS.
+4. **Dynamic Day Rollover Check**: Verifies if `lastNtpDay` is initialized at boot. Unlike a fixed midnight reset, statistics do not reset automatically at 12:00 AM. Instead, the day session rollover check is performed dynamically when the user sits down after a break (Transition: Away -> Present), allowing active workdays to naturally span past midnight.
 5. **Poll LD2410 Radar Sensor**: Calls `radar.read()` to query the physical sensor's buffer. Every 100ms (10Hz frequency check):
    - Feeds the current moving target status (0 or 1) into `motionFilter` (size 10 rolling median). If the median is $> 0.5$, sets `sensorMovingTargetDetected = true`.
    - If raw distance is $> 0$, feeds it into `detectionDistFilter` (size 100 rolling median) and computes `filteredDetectionDist` using a window size of `filterWindow * 10` (clamped between 1 and 100).
@@ -93,16 +89,33 @@ stateDiagram-v2
     - `STATE_AWAY`: No presence detected.
 * **Debouncing & Grace Periods**:
   - **Presence Jitter Debounce**: Transition from `STATE_AWAY` to present takes **2 seconds** of continuous raw detection. Transition to `STATE_AWAY` takes **10 seconds** of continuous raw absence.
+  - **Attention Mode Stickiness**: Transitions between active presence states (`STATE_FOCUS`, `STATE_BUSY`, `STATE_DISTRACTED`, and `STATE_REGULAR`) are stabilized. A new state must remain prevalent and unchanged for at least **3 minutes (180,000ms)** before it is committed. Transitioning into or out of `STATE_AWAY` bypasses this delay to keep the system reactive.
   - **Display Away Grace Period**: When a transition to `STATE_AWAY` is confirmed, the state machine immediately updates backend metrics (such as beginning to accumulate break time), but **delays updating the display to the Away splash screen for 1 minute (60,000ms)**. During this minute, the active clock face continues to display normally.
 * **Absence Transition Rules (Away -> Present)**:
-  - When raw presence is confirmed after an away period, the duration of the absence is calculated: `breakDuration = now - lastStateTransitionTime`.
-  - **First Sit of the Day**: If `firstSitToday` is true, sets `firstSitToday = false`, sets `firstSitEpoch` to NTP epoch time, calculates `overnightBreakDuration = firstSitEpoch - lastAwayEpoch` (if `lastAwayEpoch > 0`), and triggers `EVENT_FIRST_SIT`.
+  - When raw presence is confirmed after an away period, the system initiates an **adaptive session validation buffer** (`rolloverPending = true`).
+    - **Adaptive Buffer Duration**:
+      - If there are $< 3$ days of logged presence history, a fallback **3-minute (180s) buffer** is used.
+      - If there are $\ge 3$ days of history:
+        - If the sit-down occurs during typical work hours (occupancy $\ge 15\%$), a responsive **45-second buffer** is used to confirm and clear greetings quickly.
+        - If the sit-down occurs during typical sleep/off-work hours (occupancy $< 15\%$), a **3-minute (180s) buffer** is used to ensure brief midnight checks do not trigger a false day start.
+  - **Quick Visits (Under Buffer Limit)**: If the user leaves before the dynamic buffer expires, the validation is cancelled, telemetry resets are bypassed, and the previous bedtime departure timestamp (`lastAwayEpoch`) is preserved.
+  - **Workday/Session Confirmation**: If the user remains present for the duration of the dynamic buffer, the session is officially confirmed:
+    - **Inferred Work/Sleep Rollover Check**: Compares the calendar day against `lastNtpDay`. If the day has changed:
+      - If there are $< 3$ days of logged presence history, a fallback **4-hour absence threshold** is used.
+      - If there are $\ge 3$ days of presence history, a dynamic threshold is calculated: **3 hours** if the departure hour `lastAwayEpoch` falls in typical sleep hours (inferred as an hour with $< 15\%$ historical presence probability), or **7 hours** if departure occurred during typical work hours (occupancy $\ge 15\%$) to prevent midday breaks from resetting telemetry.
+    - **Rollover Reset Execution**: If the absence exceeds the computed threshold:
+      - Integrates the current day's presence accumulator `presenceMsCurrentDay[24]` into the history profile `hourlyPresenceHistory[24]` via an exponential moving average.
+      - Resets daily telemetry accumulators (break counts, desk/focus time, streak counts).
+      - Resets daily flags (`lunchReminderTriggered = false`) and saves stats to LittleFS.
+      - Sets `firstSitToday = true` (and temporarily restores `lastAwayEpoch` so the first sit greeting can compute overnight break length).
+  - **First Sit of the Day**: If `firstSitToday` is true, sets `firstSitToday = false`, sets `firstSitEpoch` to the sit-down time, calculates `overnightBreakDuration = firstSitEpoch - lastAwayEpoch` (if `lastAwayEpoch > 0`), and triggers `EVENT_FIRST_SIT`.
   - **Absences $\ge$ 3 Minutes (180,000ms)**: Counted as a real break. Increments `breakCount`, sets `latestBreakDuration = breakDuration`, triggers `EVENT_WELCOME_BACK`, and resets all session-specific distance/motion accumulators.
-  - **Absences $<$ 3 Minutes (Lieu Time Check)**: Treated as a minor grace absence. The transition does NOT increment `breakCount`, does NOT trigger any welcome back alert, and does NOT reset session metrics. However, because `totalDeskTime` was not accumulating during the absence, this away time naturally counts against desk sitting time and remains in `totalBreakTime`, allowing multiple brief absences to correctly lower the productivity score.
+  - **Absences $<$ 3 Minutes (Lieu Time Check)**: Treated as a minor grace absence. The transition does NOT increment `breakCount`, does NOT trigger any welcome back alert, and does NOT reset session metrics.
 * **Absence Transition Rules (Present -> Away)**:
   - If previous state was `STATE_FOCUS`, calculates `focusSessionDuration = now - continuousStillStart`.
   - If `focusSessionDuration > 15000ms` (15 seconds), triggers `EVENT_FOCUS_END`.
   - Sets `currentPresenceState = STATE_AWAY`, records `lastAwayEpoch` to current NTP epoch, and saves daily stats to LittleFS.
+  - **Sitting Streak Record**: A new sitting streak record is only evaluated and saved if the current continuous presence duration is at least **15 minutes (900,000ms)**, helping prevent short segments from corrupting records.
 
 ---
 
@@ -135,8 +148,11 @@ graph TD
 ### Behavioural & AI Triggers Deep Dive:
 * **AI Configuration Levels**:
   - If `aiMode == 2` (Frequent): All triggered events query the Gemini model.
-  - If `aiMode == 1` (Balanced): Only `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, and `EVENT_STRETCH` query Gemini; other events use local fallbacks.
+  - If `aiMode == 1` (Balanced): `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_STRETCH`, and `EVENT_LUNCH_REMINDER` query Gemini; other events use local fallbacks.
   - Daily Request Cap: If `dailyAiRequestCount >= 15` is reached, all event triggers bypass the AI logic and use local fallbacks immediately to save API token costs.
+* **Lunch Time Reminder**:
+  - The system analyzes the 24-hour occupancy profile to identify the user's usual lunch window (scanning 11:00 AM to 2:00 PM for the lowest presence value).
+  - If the user works through this learned hour (and has been active at their desk for at least 30 minutes), the system triggers `EVENT_LUNCH_REMINDER` to wittily remind them to eat lunch.
 * **Asynchronous FreeRTOS Task Execution**:
   - Copies prompt templates from `Behaviour.h` and formats them with contextual metrics (userName, totalDeskTime, totalFocusTime, breakCount, productivityScore).
   - Sets `isAILoading = true` and spawns a FreeRTOS task `queryGeminiTask` with a stack size of 8192 bytes and priority 1.
@@ -268,6 +284,11 @@ These values are synchronized through the REST API `/api/stats` and form POST `/
 | `detectionDist` | `int` | Live filtered distance measurement (cm) |
 | `deskTime` / `focusTime` | `String` | Formatted daily accumulators for sitting and focusing durations |
 | `g0mSens` to `g6sSens` | `int` | Motion/static gate sensitivity thresholds (0-100) on the LD2410 sensor |
+| `historyDays` | `int` | Count of days of recorded history profile data |
+| `lunchHour` | `int` | Learned lunch hour index (0-23) |
+| `workdayStart` | `int` | Learned typical workday start hour index (0-23) |
+| `workdayEnd` | `int` | Learned typical workday end hour index (0-23) |
+| `occupancyHistory` | `array` | 24-element JSON array of presence probabilities (0-100%) per hour |
 
 ---
 
@@ -292,6 +313,10 @@ Committed to `/stats.json` in flash memory every 60 seconds (or immediately upon
 | `focusDistanceLimit` | `int` | `focusDistanceLimit` |
 | `motionRatioLimit` | `int` | `motionRatioLimit` |
 | `hasMail` | `bool` | `hasMail` |
+| `historyDaysCount` | `int` | `historyDaysCount` |
+| `lunchReminderTriggered` | `bool` | `lunchReminderTriggered` |
+| `hourlyPresenceHistory` | `array` | `hourlyPresenceHistory[24]` |
+| `presenceMsCurrentDay` | `array` | `presenceMsCurrentDay[24]` |
 
 ---
 
@@ -311,7 +336,16 @@ Persistent configurations saved to the ESP32 Preferences namespace `"deskbuddy"`
 
 ---
 
-### D. Display Payload Parameters
+### D. Web-Exposed Actions
+The following administrative endpoints are triggered via the dashboard UI:
+
+* **Reset Daily Stats** (`/reset-stats`): Resets current session metrics (times, counts, averages) to initial states and writes them to LittleFS.
+* **Reboot DeskBuddy** (`/reset-esp`): Triggers a safe software reboot of the ESP32 controller.
+* **Factory Reset** (`/factory-reset`): Clears the entire `"deskbuddy"` Preferences namespace, deletes the daily statistics file (`/stats.json`) from LittleFS, and reboots the device to load all default calibrations, username, and gate sensitivities.
+
+---
+
+### E. Display Payload Parameters
 Parameters passed from `updateTFTDisplay(now)` in [Display.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Display.h) to the modular drawing functions in [Faceplates.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Faceplates.h):
 
 ```cpp
@@ -327,3 +361,62 @@ void drawXClockFace(
 );
 ```
 These parameters abstract display logic away from direct hardware libraries (`WiFi` or `NTPClient`), making the individual faceplates cleanly modularized.
+
+---
+
+### F. LittleFS Storage File Structure (`/stats.json`)
+The system preserves session statistics, learned occupancy logs, and runtime parameters across reboots in `/stats.json` on LittleFS. The schema of this file is structured as follows:
+
+```json
+{
+  "firstSitToday": true,                 // Flag representing if first sit greeting is pending
+  "firstSitEpoch": 0,                    // Epoch time of first sit of the day
+  "breakCount": 0,                       // Total breaks taken today
+  "totalDeskTime": 0,                    // Total active time at desk in milliseconds
+  "totalFocusTime": 0,                   // Total focus time in milliseconds
+  "totalBreakTime": 0,                   // Total break time in milliseconds
+  "overnightBreakDuration": 0,           // Duration of last night's sleep in seconds
+  "lastAwayEpoch": 0,                    // Epoch time when user left the desk
+  "dailyAiRequestCount": 0,              // Gemini API request counter for the current day
+  "lastNtpDay": -1,                      // Calendar day index of last NTP sync (0-6)
+  "longestSittingStreak": 0,             // Record longest sitting streak of the day in ms
+  "userName": "human",                   // Configured user name string
+  "deskDistanceLimit": 120,              // Distance threshold (cm) for active presence
+  "focusDistanceLimit": 50,              // Distance threshold (cm) for focus mode
+  "motionRatioLimit": 15,                // Motion threshold percentage for busy/distracted
+  "hasMail": false,                      // Mail indicator state
+  "time24h": true,                       // Display 24-hour clock face format
+  "targetHours": 8.0,                    // Daily target goal desk time hours
+  "historyDaysCount": 0,                 // Days of historical occupancy logs recorded
+  "lunchReminderTriggered": false,       // Flag representing if lunch alert has run today
+  "hourlyPresenceHistory": [             // 24 integer bins (0-100) presence probability
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ],
+  "presenceMsCurrentDay": [              // 24 integer bins of active ms accumulated today
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ]
+}
+```
+
+---
+
+### G. Timing Constants & Hardcoded Configs
+Here is a reference index of all timing thresholds, debounce configurations, and alert limits hardcoded in the codebase, which can be modified directly in the source files:
+
+| Description | Constant Value | File Path | Line | Variable / Logic Rule |
+| :--- | :--- | :--- | :--- | :--- |
+| **Presence Debounce (Away &rarr; Present)** | `2000` ms (2s) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L530) | 530 | `debounceLimit` (when `rawPresent` is true) |
+| **Presence Debounce (Present &rarr; Away)** | `10000` ms (10s) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L530) | 530 | `debounceLimit` (when `rawPresent` is false) |
+| **Pee Break Buffer (Early Phase)** | `180000UL` ms (3m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L102) | 102 | `requiredValidationBufferMs` (default fallback) |
+| **Welcome / Break Duration Limit** | `180000UL` ms (3m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L605) | 605, 674 | `breakDurMs >= 180000UL` (minimum away duration) |
+| **Attention State Debounce (Stickiness)** | `180000UL` ms (3m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L698) | 698 | `now - stateConfirmationTime >= 180000UL` |
+| **Streak Beaten Sitting Record Limit** | `900000UL` ms (15m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L729) | 729, 733 | `longestSittingStreak >= 900000UL` |
+| **Stretch Reminder Interval** | `2700000UL` ms (45m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L712) | 712 | `now - lastStretchReminderTime > 2700000UL` |
+| **Slacker Roast Sitting Threshold** | `3600000UL` ms (1h) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L720) | 720 | `continuousSittingTime > 3600000UL` |
+| **Slacker Roast Repeat Interval** | `3600000UL` ms (1h) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L721) | 721 | `now - lastSlackerRoastTime > 3600000UL` |
+| **Away Screen Grace Period** | `60000UL` ms (1m) | [Display.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Display.h#L197) | 197, 233 | `now - lastStateTransitionTime < 60000UL` |
+| **Alert Display Settling-In Deferral** | `15000UL` ms (15s) | [Display.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Display.h#L207) | 207 | `now - sitDownTime >= 15000UL` |
+| **Alert Screen Speech Bubble Duration** | `8000` ms (8s) | [Display.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Display.h#L202) | 202, 211 | `aiScreenEndTime = now + 8000` |
+```
