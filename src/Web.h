@@ -7,8 +7,14 @@
 #include <ld2410.h>
 #include <Preferences.h>
 #include <LittleFS.h>
+#include "MqttService.h"
 
 // Extern references for global state in main.cpp
+extern MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
+extern int mqttHistoryHead;
+extern int mqttHistoryCount;
+extern SemaphoreHandle_t mqttHistoryMutex;
+extern PubSubClient mqttClient;
 extern WebServer server;
 extern Preferences preferences;
 extern int currentPresenceState;
@@ -264,12 +270,24 @@ inline void handleRoot() {
         <!-- dynamically generated bars -->
       </div>
     </div>
-    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748b; padding: 0 4px;">
-      <span>12am</span>
-      <span>6am</span>
-      <span>12pm</span>
-      <span>6pm</span>
-      <span>11pm</span>
+    <div style="position: relative; height: 15px; font-size: 0.7rem; color: #64748b; padding: 0 5px; margin-top: 4px;">
+      <span style="position: absolute; left: 0%;">12am</span>
+      <span style="position: absolute; left: 25%; transform: translateX(-50%);">6am</span>
+      <span style="position: absolute; left: 50%; transform: translateX(-50%);">12pm</span>
+      <span style="position: absolute; left: 75%; transform: translateX(-50%);">6pm</span>
+      <span style="position: absolute; right: 0%;">11pm</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1>MQTT Terminal</h1>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+      <input type="text" id="mqttTopic" placeholder="topic" class="settings-input" style="flex: 1; min-width: 140px; text-align: left; box-sizing: border-box;" value="deskbuddy/message">
+      <input type="text" id="mqttPayload" placeholder="Type message..." class="settings-input" style="flex: 2; min-width: 180px; text-align: left; box-sizing: border-box;" onkeydown="if(event.key === 'Enter') sendMqttMessage()">
+      <button class="btn" onclick="sendMqttMessage()" style="padding: 6px 15px;">Send</button>
+    </div>
+    <div id="mqttConsole" style="background: #0f172a; border-radius: 8px; border: 1px solid #334155; height: 180px; overflow-y: auto; padding: 10px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
+      <div style="color: #64748b; font-style: italic;">Console initialized. Awaiting MQTT updates...</div>
     </div>
   </div>
 
@@ -353,6 +371,67 @@ inline void handleRoot() {
         });
     }
     updateMetrics();
+
+    let lastMqttCount = -1;
+    function updateMqttHistory() {
+      fetch('/mqtt-history')
+        .then(response => response.json())
+        .then(data => {
+          let consoleDiv = document.getElementById('mqttConsole');
+          if (data.messages && data.messages.length !== lastMqttCount) {
+            consoleDiv.innerHTML = '';
+            if (data.messages.length === 0) {
+              consoleDiv.innerHTML = '<div style="color: #64748b; font-style: italic;">No messages in history.</div>';
+            } else {
+              data.messages.forEach(msg => {
+                let log = document.createElement('div');
+                let elapsedSec = Math.floor(msg.timestamp / 1000);
+                let h = Math.floor(elapsedSec / 3600);
+                let m = Math.floor((elapsedSec % 3600) / 60);
+                let s = elapsedSec % 60;
+                let timeFormatted = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                
+                log.innerHTML = `<span style="color: #64748b;">[${timeFormatted}]</span> <span style="color: #fbbf24; font-weight: bold;">${msg.topic}:</span> <span style="color: #f8fafc;">${msg.payload}</span>`;
+                consoleDiv.appendChild(log);
+              });
+            }
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            lastMqttCount = data.messages.length;
+          }
+          setTimeout(updateMqttHistory, 1000);
+        })
+        .catch(err => {
+          console.error("Error fetching MQTT history:", err);
+          setTimeout(updateMqttHistory, 2000);
+        });
+    }
+    updateMqttHistory();
+
+    function sendMqttMessage() {
+      let topic = document.getElementById('mqttTopic').value;
+      let payload = document.getElementById('mqttPayload').value;
+      if (!payload) return;
+      
+      let formData = new FormData();
+      formData.append('topic', topic);
+      formData.append('payload', payload);
+      
+      fetch('/mqtt-publish', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => {
+        if (response.ok) {
+          document.getElementById('mqttPayload').value = '';
+          lastMqttCount = -1; // trigger immediate poll refresh
+        } else {
+          alert('Failed to publish. Is MQTT broker connected?');
+        }
+      })
+      .catch(err => {
+        alert('Error publishing: ' + err);
+      });
+    }
   </script>
 </body>
 </html>
@@ -1022,9 +1101,9 @@ inline void handleSettings() {
       
       fetch('/trigger-event?type=' + type + '&detail=' + encodeURIComponent(detail) + '&mode=' + mode)
         .then(response => {
-          alert("Event " + type + " (" + mode + ") triggered on screen!");
+          console.log("Event " + type + " (" + mode + ") triggered on screen!");
         })
-        .catch(err => alert("Failed to trigger event."));
+        .catch(err => console.error("Failed to trigger event.", err));
     }
   </script>
 </body>
@@ -1280,6 +1359,47 @@ inline void handleResetStats() {
   saveDailyStats();
 
   server.send(200, "text/plain", "Daily Stats Reset");
+}
+
+inline void handleMqttHistory() {
+  DynamicJsonDocument doc(4096);
+  JsonArray arr = doc.createNestedArray("messages");
+  
+  if (mqttHistoryMutex != NULL) {
+    xSemaphoreTake(mqttHistoryMutex, portMAX_DELAY);
+    int idx = mqttHistoryHead;
+    int count = mqttHistoryCount;
+
+    // Return in chronological order (oldest to newest)
+    for (int i = 0; i < count; i++) {
+      int curIdx = (idx - count + i + MQTT_HISTORY_SIZE) % MQTT_HISTORY_SIZE;
+      JsonObject obj = arr.createNestedObject();
+      obj["topic"] = mqttHistory[curIdx].topic;
+      obj["payload"] = mqttHistory[curIdx].payload;
+      obj["timestamp"] = (double)mqttHistory[curIdx].timestamp;
+    }
+    xSemaphoreGive(mqttHistoryMutex);
+  }
+
+  String response;
+  serializeJson(doc, response);
+  server.send(200, "application/json", response);
+}
+
+inline void handleMqttPublish() {
+  if (server.hasArg("payload")) {
+    String topic = server.hasArg("topic") ? server.arg("topic") : "deskbuddy/message";
+    String payload = server.arg("payload");
+    
+    if (mqttClient.connected()) {
+      mqttClient.publish(topic.c_str(), payload.c_str());
+      server.send(200, "text/plain", "Published");
+    } else {
+      server.send(503, "text/plain", "MQTT client disconnected");
+    }
+  } else {
+    server.send(400, "text/plain", "Missing payload");
+  }
 }
 
 inline void handleTriggerEvent() {
@@ -1799,6 +1919,8 @@ inline void setupWebServer() {
   server.on("/reset-stats", handleResetStats);
   server.on("/factory-reset", handleFactoryReset);
   server.on("/trigger-event", handleTriggerEvent);
+  server.on("/mqtt-history", handleMqttHistory);
+  server.on("/mqtt-publish", handleMqttPublish);
   server.on("/reset-esp", []() {
     server.send(200, "text/plain", "Rebooting");
     delay(500);

@@ -86,6 +86,12 @@ volatile bool otaInProgress = false;
 WiFiClient wifiClient;
 PubSubClient mqttClient;
 
+// MQTT History Buffer
+MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
+int mqttHistoryHead = 0;
+int mqttHistoryCount = 0;
+SemaphoreHandle_t mqttHistoryMutex = NULL;
+
 // Persistent Preferences & Settings
 Preferences preferences;
 float targetHours = 8.0;
@@ -372,6 +378,9 @@ void setup(void) {
   geminiMutex = xSemaphoreCreateMutex();
   Serial.println("[DIAGNOSTICS] Mutex created");
 
+  // Setup Mutex for MQTT History Thread Safety
+  mqttHistoryMutex = xSemaphoreCreateMutex();
+
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
   aiMode = preferences.getInt("aiMode", 1);
@@ -400,35 +409,23 @@ void setup(void) {
   g6mSens = preferences.getInt("g6mSens", 50);
   g6sSens = preferences.getInt("g6sSens", 40);
   preferences.end();
-  Serial.println("[DIAGNOSTICS] Preferences loaded");
 
   // Initialize LittleFS & load daily stats
-  Serial.println("[DIAGNOSTICS] Starting LittleFS.begin(true)...");
   if (LittleFS.begin(true)) {
-    Serial.println("[DIAGNOSTICS] LittleFS.begin(true) succeeded, loading stats...");
     loadDailyStats();
-    Serial.println("[DIAGNOSTICS] Stats loaded");
-  } else {
-    Serial.println("[DIAGNOSTICS] LittleFS.begin(true) failed");
   }
 
   // Initialize TFT Display & show splash screen
-  Serial.println("[DIAGNOSTICS] Initializing TFT...");
   tft.init();
   tft.setRotation(0);
-  Serial.println("[DIAGNOSTICS] TFT initialized, drawing splash image...");
   drawRLEImage("/away.rle", 0, 0);
-  Serial.println("[DIAGNOSTICS] Splash image drawn");
   
   unsigned long bootStartTime = millis();
 
   // Initialize Radar Sensor Subsystem
-  Serial.println("[DIAGNOSTICS] Initializing Radar...");
   setupRadar();
-  Serial.println("[DIAGNOSTICS] Radar initialized");
 
   // Set Hostname & Configure static IP
-  Serial.println("[DIAGNOSTICS] Initializing WiFi...");
   WiFi.setHostname("DeskBuddy");
   WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
   WiFi.begin(SSID, PASS);
@@ -437,26 +434,18 @@ void setup(void) {
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 5000) {
     delay(100);
   }
-  Serial.println("[DIAGNOSTICS] WiFi setup complete");
 
   // Setup MQTT client
-  Serial.println("[DIAGNOSTICS] Setting up MQTT...");
   setupMqtt();
-  Serial.println("[DIAGNOSTICS] MQTT setup complete");
 
   // Setup NTP Client
-  Serial.println("[DIAGNOSTICS] Setting up NTP...");
   timeClient.begin();
   timeClient.setTimeOffset(-10800);
-  Serial.println("[DIAGNOSTICS] NTP setup complete");
 
   // Setup Web Server Subsystem
-  Serial.println("[DIAGNOSTICS] Setting up WebServer...");
   setupWebServer();
-  Serial.println("[DIAGNOSTICS] WebServer setup complete");
 
   // Setup OTA Updates
-  Serial.println("[DIAGNOSTICS] Setting up OTA...");
   ArduinoOTA
     .onStart([]() {
       otaInProgress = true;
@@ -468,7 +457,6 @@ void setup(void) {
     .onError([](ota_error_t error) {
     });
   ArduinoOTA.begin();
-  Serial.println("[DIAGNOSTICS] OTA setup complete");
 
   lastLoopTime = millis();
   lastStateTransitionTime = millis();
@@ -481,7 +469,6 @@ void setup(void) {
   if (elapsedBoot < 4000) {
     delay(4000 - elapsedBoot);
   }
-  Serial.println("[DIAGNOSTICS] setup() finished successfully!");
 }
 
 void loop(void) {
@@ -675,6 +662,7 @@ void loop(void) {
         }
       }
 
+      unsigned long lastAwaySliceMs = (lastStateTransitionTime > 0 && now >= lastStateTransitionTime) ? (now - lastStateTransitionTime) : 0;
       currentPresenceState = targetState;
       lastStateTransitionTime = now;
       continuousPresenceStart = now;
@@ -693,7 +681,7 @@ void loop(void) {
           triggerBehaviour(EVENT_FIRST_SIT, "");
         }
       } else {
-        if (currentBreakDurationMs >= 180000UL) { // Only greet if away > 3 minutes
+        if (lastAwaySliceMs >= 180000UL) { // Only greet if the user was away for at least 3 minutes since their last sit-down
           triggerBehaviour(EVENT_WELCOME_BACK, formatTime(currentBreakDurationMs));
         }
       }
@@ -722,11 +710,10 @@ void loop(void) {
           firstSitEpoch = sitDownEpoch;
           if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
             overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
-            latestBreakDuration = overnightBreakDuration * 1000UL;
           } else {
             overnightBreakDuration = currentBreakDurationMs / 1000UL;
-            latestBreakDuration = currentBreakDurationMs;
           }
+          latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
           
           totalBreakTime = 0;
           isStopByTracking = false;

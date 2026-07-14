@@ -29,12 +29,14 @@ class RollingMedianFilter {
 public:
   RollingMedianFilter(int maxSize = 100) {
     _maxSize = maxSize;
-    _buffer = new float[_maxSize];
+    _buffer     = new float[_maxSize];
+    _sortBuffer = new float[_maxSize]; // Pre-allocated: avoids per-call heap churn in getMedian()
     clear();
   }
 
   ~RollingMedianFilter() {
     delete[] _buffer;
+    delete[] _sortBuffer;
   }
 
   void clear() {
@@ -60,27 +62,27 @@ public:
     int countToCopy = (_count < windowSize) ? _count : windowSize;
     if (countToCopy == 0) return 0.0;
 
-    float* temp = new float[countToCopy];
+    // Use pre-allocated sort buffer — no heap allocation at call time
     int idx = _head;
     for (int i = 0; i < countToCopy; i++) {
       idx = (idx - 1 + _maxSize) % _maxSize;
-      temp[i] = _buffer[idx];
+      _sortBuffer[i] = _buffer[idx];
     }
 
-    std::sort(temp, temp + countToCopy);
+    std::sort(_sortBuffer, _sortBuffer + countToCopy);
     
     float result;
     if (countToCopy % 2 == 1) {
-      result = temp[countToCopy / 2];
+      result = _sortBuffer[countToCopy / 2];
     } else {
-      result = (temp[countToCopy / 2 - 1] + temp[countToCopy / 2]) / 2.0;
+      result = (_sortBuffer[countToCopy / 2 - 1] + _sortBuffer[countToCopy / 2]) / 2.0;
     }
-    delete[] temp;
     return result;
   }
 
 private:
   float* _buffer;
+  float* _sortBuffer; // Pre-allocated scratch space for sorting, avoids runtime heap churn
   int _maxSize;
   int _head;
   int _count;

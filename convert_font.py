@@ -116,9 +116,9 @@ def write_vlw_files(font_path, output_dir, allowed_chars, sizes, font_class_name
         print(f"Successfully generated VLW font at {output_file} ({len(vlw_bytes)} bytes)")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5 or len(sys.argv) > 6:
-        print("Usage: python convert_font.py <font_filepath> <size1> <size2> <size3> [char_limiter]")
-        print("Example: python convert_font.py \"good timing bd.otf\" 15 20 42 \" 0123456789:ACDEFHIMNORSTUW\"")
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
+        print("Usage: python convert_font.py <font_filepath> <size> [char_limiter]")
+        print("Example: python convert_font.py \"good timing bd.otf\" 15 \" 0123456789:ACDEFHIMNORSTUW\"")
         sys.exit(1)
         
     font_file = sys.argv[1]
@@ -127,16 +127,14 @@ if __name__ == "__main__":
         sys.exit(1)
         
     try:
-        size1 = int(sys.argv[2])
-        size2 = int(sys.argv[3])
-        size3 = int(sys.argv[4])
+        font_size = int(sys.argv[2])
     except ValueError:
-        print("Error: Font sizes must be integers.")
+        print("Error: Font size must be an integer.")
         sys.exit(1)
         
     # Character limiter (default if not supplied)
-    if len(sys.argv) == 6:
-        char_set = sys.argv[5]
+    if len(sys.argv) == 4:
+        char_set = sys.argv[3]
         print(f"Using custom character limiter: '{char_set}'")
     else:
         char_set = " 0123456789:ACDEFHIMNORSTUW/h"
@@ -152,6 +150,6 @@ if __name__ == "__main__":
     # Save directly to data directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     output_dir = os.path.join(script_dir, "data")
-    font_sizes = [size1, size2, size3]
+    font_sizes = [font_size]
     
     write_vlw_files(font_file, output_dir, char_set, font_sizes, font_class_name)

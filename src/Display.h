@@ -172,8 +172,11 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
   }
 
   if (isAi) {
-    tft.setTextColor(aiLabelColor);
-    tft.drawString("(AI GENERATED)", 120, 210, 2);
+    // Draw a prominent AI GENERATED badge at the top
+    tft.fillRoundRect(65, 20, 110, 20, 10, tft.color565(15, 23, 42)); // Dark background
+    tft.drawRoundRect(65, 20, 110, 20, 10, tft.color565(56, 189, 248)); // Blue border
+    tft.setTextColor(tft.color565(56, 189, 248), tft.color565(15, 23, 42));
+    tft.drawString("AI GENERATED", 120, 30, 2);
   }
 }
 
@@ -196,6 +199,9 @@ inline void updateTFTDisplay(unsigned long now) {
     hasNewAIResponse = false;
     xSemaphoreGive(geminiMutex);
 
+    // Publish to MQTT immediately when any message is triggered
+    publishMqttMessage(msg);
+
     if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT) {
       pendingWelcomeAlert = true;
       welcomeAlertMessage = msg;
@@ -205,7 +211,6 @@ inline void updateTFTDisplay(unsigned long now) {
       activeAlertIsAi = isAi;
       aiScreenEndTime = now + 8000;
       newAlert = true;
-      publishMqttMessage(msg);
     }
   }
 
@@ -215,7 +220,6 @@ inline void updateTFTDisplay(unsigned long now) {
     activeAlertIsAi = welcomeAlertIsAi;
     aiScreenEndTime = now + 8000;
     newAlert = true;
-    publishMqttMessage(welcomeAlertMessage);
   }
 
   bool isAlertActive = (now < aiScreenEndTime);

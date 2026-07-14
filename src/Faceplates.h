@@ -224,11 +224,19 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
     return;
   }
 
+  // Animation state for non-blocking counter-clockwise tick wipe
+  static bool  tickAnimating  = false;
+  static int   tickAnimNext   = 59;   // Next tick index to draw (counts down 59 -> 0)
+  static int   tickTargetM    = 0;    // Minute the animation is drawing toward
+
   static unsigned long lastMinimalistFaceUpdate = 0;
-  if (!forceRedraw && (now - lastMinimalistFaceUpdate < 500)) {
+  // Bypass throttle while the tick wipe animation is running
+  if (!forceRedraw && !tickAnimating && (now - lastMinimalistFaceUpdate < 500)) {
     return;
   }
-  lastMinimalistFaceUpdate = now;
+  if (!tickAnimating) {
+    lastMinimalistFaceUpdate = now;
+  }
 
   static int last_m = -1;
   static int last_h = -1;
@@ -258,10 +266,10 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
   // Draw / transition minutes ring
   if (minuteChanged) {
     fsReadCount++;
-    tft.loadFont("RamisArabic18", LittleFS); // Load smooth font for dial numbers
+    tft.loadFont("RamisArabic18", LittleFS);
     
     if (last_m != -1) {
-      // 1. Erase all old ticks and labels first (instant) using wide black lines
+      // 1. Erase all old ticks and labels immediately (no delay needed here)
       for (int i = 0; i < 60; i++) {
         float rad_old = ((i - last_m) * 6 - 6) * 3.14159265f / 180.0f;
         float c_old = cosf(rad_old);
@@ -285,37 +293,15 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
           }
         }
       }
-      
-      // 2. Draw new ticks and labels in a counter-clockwise sweep with antialiasing
-      for (int i = 59; i >= 0; i--) {
-        float rad_new = ((i - m) * 6 - 6) * 3.14159265f / 180.0f;
-        float c_new = cosf(rad_new);
-        float s_new = sinf(rad_new);
-        
-        int x_out_new = 120 + (int)(120 * c_new);
-        int y_out_new = 120 + (int)(120 * s_new);
-        int x_in_new = 120 + (int)(112 * c_new);
-        int y_in_new = 120 + (int)(112 * s_new);
-        
-        if (!inMinuteWindow(x_in_new, y_in_new) && !inMinuteWindow(x_out_new, y_out_new)) {
-          uint16_t color = (i % 5 == 0) ? TFT_WHITE : tft.color565(100, 100, 100);
-          float wd = (i % 5 == 0) ? 1.5f : 1.0f;
-          tft.drawWideLine((float)x_in_new, (float)y_in_new, (float)x_out_new, (float)y_out_new, wd, color, TFT_BLACK);
-        }
-        
-        if (i % 5 == 0) {
-          int x_text_new = 120 + (int)(100 * c_new)+1;
-          int y_text_new = 120 + (int)(100 * s_new) - 11;
-          if (!inMinuteWindow(x_text_new, y_text_new)) {
-            tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-            tft.drawString(String(i), x_text_new, y_text_new);
-          }
-        }
-        
-        delay(2); // Smooth counter-clockwise wipe transition
-      }
+
+      tft.unloadFont();
+
+      // 2. Queue the counter-clockwise draw as a non-blocking multi-frame animation
+      tickAnimating = true;
+      tickAnimNext  = 59;
+      tickTargetM   = m;
     } else {
-      // Instant draw on startup or page switch with antialiasing
+      // First draw on startup or page switch: render all ticks instantly (no animation)
       for (int i = 0; i < 60; i++) {
         float rad_new = ((i - m) * 6 - 6) * 3.14159265f / 180.0f;
         float c_new = cosf(rad_new);
@@ -341,8 +327,52 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
           }
         }
       }
+      tft.unloadFont();
     }
+  }
+
+  // Non-blocking tick wipe animation: draw one batch of ticks per call
+  // Each call draws TICK_BATCH ticks and bypasses the 500ms throttle until done.
+  // With the main loop running every ~10ms, 60 ticks at 6/frame = 10 frames = ~100ms non-blocking.
+  if (tickAnimating) {
+    const int TICK_BATCH = 6;
+    fsReadCount++;
+    tft.loadFont("RamisArabic18", LittleFS);
+
+    for (int b = 0; b < TICK_BATCH && tickAnimNext >= 0; b++, tickAnimNext--) {
+      int i = tickAnimNext;
+      float rad_new = ((i - tickTargetM) * 6 - 6) * 3.14159265f / 180.0f;
+      float c_new = cosf(rad_new);
+      float s_new = sinf(rad_new);
+
+      int x_out_new = 120 + (int)(120 * c_new);
+      int y_out_new = 120 + (int)(120 * s_new);
+      int x_in_new  = 120 + (int)(112 * c_new);
+      int y_in_new  = 120 + (int)(112 * s_new);
+
+      if (!inMinuteWindow(x_in_new, y_in_new) && !inMinuteWindow(x_out_new, y_out_new)) {
+        uint16_t color = (i % 5 == 0) ? TFT_WHITE : tft.color565(100, 100, 100);
+        float wd = (i % 5 == 0) ? 1.5f : 1.0f;
+        tft.drawWideLine((float)x_in_new, (float)y_in_new, (float)x_out_new, (float)y_out_new, wd, color, TFT_BLACK);
+      }
+
+      if (i % 5 == 0) {
+        int x_text_new = 120 + (int)(100 * c_new) + 1;
+        int y_text_new = 120 + (int)(100 * s_new) - 11;
+        if (!inMinuteWindow(x_text_new, y_text_new)) {
+          tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+          tft.drawString(String(i), x_text_new, y_text_new);
+        }
+      }
+    }
+
     tft.unloadFont();
+
+    if (tickAnimNext < 0) {
+      tickAnimating = false; // Animation complete
+    }
+    // Force the next call through immediately so animation frames are continuous
+    lastMinimalistFaceUpdate = 0;
   }
 
   // Draw capsule outline if forced redraw or if minutes changed (repairs ticks erase)
@@ -654,8 +684,8 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.setTextDatum(MC_DATUM);
     char deskHoursStr[8];
     char breakHoursStr[8];
-    snprintf(deskHoursStr, sizeof(deskHoursStr), "%dH", current_desk_hours);
-    snprintf(breakHoursStr, sizeof(breakHoursStr), "%dH", current_break_hours);
+    snprintf(deskHoursStr, sizeof(deskHoursStr), "%dh", current_desk_hours);
+    snprintf(breakHoursStr, sizeof(breakHoursStr), "%dh", current_break_hours);
     tft.drawString(String(deskHoursStr), 89, 142);
     tft.drawString(String(breakHoursStr), 154, 142);
     tft.unloadFont();
