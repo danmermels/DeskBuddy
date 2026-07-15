@@ -52,6 +52,11 @@ extern unsigned long latestBreakDuration;
 // SECTION 2: DEFAULT FACEPLATE
 // ============================================================================
 
+#define MSG_FONT_DEFAULT 4
+#define FONT_DEFAULT_WEATHER 4
+#define FONT_DEFAULT_CLOCK 7
+#define FONT_DEFAULT_DATE 2
+#define FONT_DEFAULT_STATS 4
 /**
  * SECTION 2: DEFAULT FACEPLATE
  * Draws the default digital clock face.
@@ -97,7 +102,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   // 2. Alert/Event Message Mode
   if (showEvent) {
     if (forceRedraw || ringRedrawn) {
-      drawFaceplateMessage("/msg_default.rle", message, TFT_SKYBLUE, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/msg_default.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY);
       // Redraw bezel ring on top of the alert background
       uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
       tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
@@ -122,7 +127,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
   // Weather section (top)
   tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-  tft.drawString(String(temp) + "C | " + weatherDesc, 120, 50, 4);
+  tft.drawString(String(temp) + "C | " + weatherDesc, 120, 50, FONT_DEFAULT_WEATHER);
 
   // Draw Mail Indicator on Default Clock Face
   static bool lastHasMailDefault = false;
@@ -149,11 +154,11 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   }
   char timeStrBuf[6];
   snprintf(timeStrBuf, sizeof(timeStrBuf), "%02d:%02d", display_h, m);
-  tft.drawString(String(timeStrBuf), 120, 105, 7); // Large digital font
+  tft.drawString(String(timeStrBuf), 120, 105, FONT_DEFAULT_CLOCK); // Large digital font
 
   // Date section (below time)
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  tft.drawString(buf, 120, 150, 2);
+  tft.drawString(buf, 120, 150, FONT_DEFAULT_DATE);
 
   // Cycle through metrics at the bottom (Y=190) every 15 seconds
   if (now - lastMetricSwitch > 15000) {
@@ -191,7 +196,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   if (metricText != lastMetricText || metricColor != lastMetricColor || forceRedraw || ringRedrawn) {
     tft.fillRect(42, 176, 156, 28, TFT_BLACK); // Clear text area safely without clipping bezel ring
     tft.setTextColor(metricColor, TFT_BLACK);
-    tft.drawString(metricText, 120, 190, 4);
+    tft.drawString(metricText, 120, 190, FONT_DEFAULT_STATS);
     lastMetricText = metricText;
     lastMetricColor = metricColor;
   }
@@ -207,6 +212,11 @@ bool inMinuteWindow(int x, int y) {
   return (x >= 160 && y >= 72 && y <= 150);
 }
 
+#define MSG_FONT_MINIMALIST 4
+#define FONT_MINIMALIST_TICK "RamisArabic18"
+#define FONT_MINIMALIST_HOUR "RamisArabic64"
+#define FONT_MINIMALIST_DATE "RamisArabic18"
+#define FONT_MINIMALIST_MINUTE "RamisArabic36"
 /**
  * SECTION 3: MINIMALIST FACEPLATE
  * Draws a clean, dial-based minimalist clock face.
@@ -222,7 +232,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/msg_minimalist.rle", message, TFT_WHITE, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/msg_minimalist.rle", message, TFT_WHITE, MSG_FONT_MINIMALIST, isAi, TFT_LIGHTGREY);
     }
     return;
   }
@@ -269,8 +279,8 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
   // Draw / transition minutes ring
   if (minuteChanged) {
     fsReadCount++;
-    tft.loadFont("RamisArabic18", LittleFS);
-    
+    tft.loadFont(FONT_MINIMALIST_TICK, LittleFS);
+
     if (last_m != -1) {
       // 1. Erase all old ticks and labels immediately (no delay needed here)
       for (int i = 0; i < 60; i++) {
@@ -340,7 +350,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
   if (tickAnimating) {
     const int TICK_BATCH = 6;
     fsReadCount++;
-    tft.loadFont("RamisArabic18", LittleFS);
+    tft.loadFont(FONT_MINIMALIST_TICK, LittleFS);
 
     for (int b = 0; b < TICK_BATCH && tickAnimNext >= 0; b++, tickAnimNext--) {
       int i = tickAnimNext;
@@ -396,9 +406,9 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
     char hourStrBuf[3];
     snprintf(hourStrBuf, sizeof(hourStrBuf), "%02d", display_h);
     fsReadCount++;
-    tft.loadFont("RamisArabic64", LittleFS);
+    tft.loadFont(FONT_MINIMALIST_HOUR, LittleFS);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString(String(hourStrBuf), 120, 70); // Moved 10px down (from 111 to 121)
+    tft.drawString(String(hourStrBuf), 120, 70);
     tft.unloadFont();
   }
 
@@ -408,9 +418,9 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
       tft.fillRect(40, 149, 160, 18, TFT_RED); // Clear Date area safely (doesn't overlap Hour)
     }
     fsReadCount++;
-    tft.loadFont("RamisArabic18", LittleFS);
+    tft.loadFont(FONT_MINIMALIST_DATE, LittleFS);
     tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-    tft.drawString(buf, 120, 158); // Moved 10px down (from 148 to 158)
+    tft.drawString(buf, 120, 158);
     tft.unloadFont();
     last_date = String(buf);
   }
@@ -421,11 +431,11 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
       tft.fillRect(185, 94, 45, 34, TFT_BLACK); // Clear only the large minute digits area inside the capsule
     }
     fsReadCount++;
-    tft.loadFont("RamisArabic36", LittleFS);
+    tft.loadFont(FONT_MINIMALIST_MINUTE, LittleFS);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     char minStr[3];
     snprintf(minStr, sizeof(minStr), "%02d", m);
-    tft.drawString(String(minStr), 208, 87); // Centered at X=208, Y=113 (lowered 2px)
+    tft.drawString(String(minStr), 208, 87);
     tft.unloadFont();
   }
 
@@ -492,6 +502,12 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
 
 
+#define MSG_FONT_HITECH 4
+#define FONT_HITECH_TIME "GoodTiming46"
+#define FONT_HITECH_TEMP "GoodTiming15"
+#define FONT_HITECH_DAY "GoodTiming15"
+#define FONT_HITECH_DATE "GoodTiming15"
+#define FONT_HITECH_STATS "GoodTiming20"
 /**
  * SECTION 4: HITECH FACEPLATE
  * Draws a futuristic cyberpunk HUD style clock face using a custom background bitmap.
@@ -506,7 +522,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/msg_hitech.rle", message, HITECH_CYAN, isAi, HITECH_MUTED);
+      drawFaceplateMessage("/msg_hitech.rle", message, HITECH_CYAN, MSG_FONT_HITECH, isAi, HITECH_MUTED);
     }
     return;
   }
@@ -592,7 +608,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
 
     // Draw centered time
     fsReadCount++;
-    tft.loadFont("GoodTiming46", LittleFS);
+    tft.loadFont(FONT_HITECH_TIME, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     
@@ -619,7 +635,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.fillRect(138, 21, 40, 13, HITECH_BG_STATUS);
 
     fsReadCount++;
-    tft.loadFont("GoodTiming15", LittleFS);
+    tft.loadFont(FONT_HITECH_TEMP, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
 
@@ -648,7 +664,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     // 1. Day of the Week Box (restored to original y=106, height=15)
     tft.fillRect(65, 109, 38, 13, HITECH_BG_TIME);
     fsReadCount++;
-    tft.loadFont("GoodTiming15", LittleFS);
+    tft.loadFont(FONT_HITECH_DAY, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     const char* daysOfWeek[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
@@ -660,7 +676,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     // 2. Date Box (restored to original y=106, height=15)
     tft.fillRect(113, 109, 54, 13, HITECH_BG_TIME);
     fsReadCount++;
-    tft.loadFont("GoodTiming15", LittleFS);
+    tft.loadFont(FONT_HITECH_DATE, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     char dateStr[6];
@@ -682,7 +698,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.fillRect(126, 147, 28, 16, HITECH_BOX_BG);
 
     fsReadCount++;
-    tft.loadFont("GoodTiming20", LittleFS);
+    tft.loadFont(FONT_HITECH_STATS, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
     char deskHoursStr[8];
@@ -711,6 +727,9 @@ void formatHMS(unsigned long ms, char* outStr, size_t maxLen) {
 // SECTION 5: DEV FACEPLATE
 // ============================================================================
 
+#define MSG_FONT_DEV 4
+#define FONT_DEV_DATA 2
+
 /**
  * SECTION 5: DEV FACEPLATE
  * Draws a high-density, real-time developer debug screen.
@@ -727,7 +746,7 @@ void formatHMS(unsigned long ms, char* outStr, size_t maxLen) {
 void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage(nullptr, message, TFT_GREEN, isAi, TFT_DARKGREY);
+      drawFaceplateMessage(nullptr, message, TFT_GREEN, MSG_FONT_DEV, isAi, TFT_DARKGREY);
     }
     return;
   }
@@ -750,7 +769,7 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
   auto drawDevLine = [&](int lineIndex, const char* newStr, int y) {
     if (strcmp(prevLines[lineIndex], newStr) != 0) {
       tft.setTextPadding(230);
-      tft.drawString(newStr, 120, y, 2);
+      tft.drawString(newStr, 120, y, FONT_DEV_DATA);
       tft.setTextPadding(0);
       strncpy(prevLines[lineIndex], newStr, sizeof(prevLines[lineIndex]) - 1);
     }

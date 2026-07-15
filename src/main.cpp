@@ -19,6 +19,10 @@
 // ============================================================
 #include "Constants.h"
 
+// Maximum AI response character count, shared with Display.h and Gemini.h
+extern const int AI_RESPONSE_MAX_CHARS = 45;
+extern const int DISPLAY_CHARS_PER_LINE = 13;
+
 // ============================================================
 // Subsystem Headers (extern globals are linked from this file)
 // ============================================================

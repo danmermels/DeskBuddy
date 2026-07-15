@@ -38,6 +38,8 @@ extern volatile bool hasNewAIResponse;
 extern SemaphoreHandle_t geminiMutex;
 extern String aiResponse;
 extern volatile bool lastResponseIsAi;
+extern const int AI_RESPONSE_MAX_CHARS;
+extern const int DISPLAY_CHARS_PER_LINE;
 extern volatile bool isAILoading;
 extern int lastTriggeredEventType;
 extern NTPClient timeClient;
@@ -134,7 +136,7 @@ inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t ov
 }
 
 // Helper to draw auto-wrapped text in the center of the round TFT
-inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY) {
+inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, uint8_t font, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY) {
   if (bgImage != nullptr) {
     if (!drawRLEImage(bgImage, 0, 0)) {
       tft.fillScreen(TFT_BLACK);
@@ -146,13 +148,13 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
   tft.setTextColor(textColor);
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
   
-  int y = 70;
+  int y = 45;
   String line = "";
   int startIdx = 0;
   
-  // Wrap string into lines of max 16 characters
+  // Wrap string into lines of up to DISPLAY_CHARS_PER_LINE characters
   while (startIdx < text.length()) {
-    int endIdx = startIdx + 16;
+    int endIdx = startIdx + DISPLAY_CHARS_PER_LINE;
     if (endIdx >= text.length()) {
       line = text.substring(startIdx);
       startIdx = text.length();
@@ -166,17 +168,17 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
         startIdx = endIdx;
       }
     }
-    tft.drawString(line, 120, y, 4); // Draw text centered using Font 4
-    y += 30;
-    if (y > 180) break; // Avoid vertical overflow
+    tft.drawString(line, 120, y, font);
+    y += 28;
+    if (y > 200) break; // Avoid vertical overflow (up to ~5 lines)
   }
 
   if (isAi) {
     // Draw a prominent AI GENERATED badge at the top
-    tft.fillRoundRect(65, 20, 110, 20, 10, tft.color565(15, 23, 42)); // Dark background
-    tft.drawRoundRect(65, 20, 110, 20, 10, tft.color565(56, 189, 248)); // Blue border
-    tft.setTextColor(tft.color565(56, 189, 248), tft.color565(15, 23, 42));
-    tft.drawString("AI GENERATED", 120, 30, 2);
+    //tft.fillRoundRect(65, 20, 110, 20, 10, tft.color565(15, 23, 42)); // Dark background
+    //tft.drawRoundRect(65, 20, 110, 20, 10, tft.color565(56, 189, 248)); // Blue border
+    tft.setTextColor(tft.color565(45, 152, 200), tft.color565(15, 23, 42));
+    tft.drawString("AI GENERATED", 120, 210, 2);
   }
 }
 
