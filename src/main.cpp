@@ -13,38 +13,50 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include <PubSubClient.h>
+
+// ============================================================
+// Named Constants (Imported from Constants.h)
+// ============================================================
+#include "Constants.h"
+
+// ============================================================
+// Subsystem Headers (extern globals are linked from this file)
+// ============================================================
 #include "Behaviour.h"
 #include "Learning.h"
+#include "PresenceAnalysis.h"
+#include "MessageManager.h"
 #include "../Credentials.h"
 #include "MqttService.h"
-
-// Include Display Subsystem (defines RGBColor structure, image loading, and updateTFTDisplay)
 #include "Display.h"
+#include "Radar.h"
+#include "Stats.h"
+#include "Gemini.h"
+#include "Web.h"
+#include "Faceplates.h"
+
+// ============================================================
+// TODO: Consolidate ~100 globals into a DeskBuddyState context
+//       struct to eliminate extern web across all subsystem headers.
+// ============================================================
 
 // Hardware Instances
 TFT_eSPI tft = TFT_eSPI();
 ld2410 radar;
 WebServer server(80);
 
-// Include Radar Subsystem (defines RollingMedianFilter class and declares filters)
-#include "Radar.h"
+// MessageManager instance
+MessageManager messageManager;
 
-// Instantiate Rolling Median Filters (declared as extern in Radar.h)
-RollingMedianFilter detectionDistFilter(100);
-RollingMedianFilter motionFilter(10);
+// Rolling Median Filters
+RollingMedianFilter detectionDistFilter(DIST_FILTER_SIZE);
+RollingMedianFilter motionFilter(MOTION_FILTER_SIZE);
 float filteredDetectionDist = 0.0;
 
-// User States
-#define STATE_AWAY        0
-#define STATE_FOCUS       1
-#define STATE_BUSY        2
-#define STATE_DISTRACTED  3
-#define STATE_REGULAR     4
-
 // Configuration limits
-int deskDistanceLimit = 120;
-int focusDistanceLimit = 50;
-int motionRatioLimit = 15;
+int deskDistanceLimit = DISTANCE_LIMIT_DEFAULT;
+int focusDistanceLimit = FOCUS_DISTANCE_LIMIT_DEFAULT;
+int motionRatioLimit = MOTION_RATIO_LIMIT_DEFAULT;
 
 // Productivity & Timing Metrics
 unsigned long totalDeskTime = 0;
@@ -120,7 +132,7 @@ bool lunchReminderTriggered = false;
 unsigned long sitDownTime = 0;
 uint32_t sitDownEpoch = 0;
 bool rolloverPending = false;
-unsigned long requiredValidationBufferMs = 180000UL;
+  unsigned long requiredValidationBufferMs = VALIDATION_BUFFER_MS;
 
 // File system access counters (to estimate flash lifecycles)
 uint32_t fsWriteCount = 0;
@@ -346,16 +358,10 @@ void loadDailyStats() {
   file.close();
 }
 
-// Include all helper subsystems
-#include "Stats.h"
-#include "Gemini.h"
-#include "Web.h"
-#include "Faceplates.h"
-
 // Asynchronous WiFi Reconnection Checker
 void checkWiFiConnection() {
   static unsigned long lastWiFiCheck = 0;
-  if (millis() - lastWiFiCheck > 10000) {
+  if (millis() - lastWiFiCheck > WIFI_CHECK_MS) {
     lastWiFiCheck = millis();
     if (WiFi.status() != WL_CONNECTED) {
       WiFi.disconnect();
@@ -380,6 +386,8 @@ void setup(void) {
 
   // Setup Mutex for MQTT History Thread Safety
   mqttHistoryMutex = xSemaphoreCreateMutex();
+
+
 
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
@@ -431,7 +439,7 @@ void setup(void) {
   WiFi.begin(SSID, PASS);
 
   unsigned long wifiStart = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 5000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < WIFI_TIMEOUT_MS) {
     delay(100);
   }
 
@@ -440,7 +448,7 @@ void setup(void) {
 
   // Setup NTP Client
   timeClient.begin();
-  timeClient.setTimeOffset(-10800);
+  timeClient.setTimeOffset(NTP_TIME_OFFSET);
 
   // Setup Web Server Subsystem
   setupWebServer();
@@ -462,12 +470,12 @@ void setup(void) {
   lastStateTransitionTime = millis();
   
   // Force NTP and Weather update on the very first loop execution
-  lastHourlyUpdate = millis() - 3600000 - 1000;
+  lastHourlyUpdate = millis() - NTP_INTERVAL_MS - 1000;
 
   // Ensure splash screen displays for at least 4 seconds total at boot
   unsigned long elapsedBoot = millis() - bootStartTime;
-  if (elapsedBoot < 4000) {
-    delay(4000 - elapsedBoot);
+  if (elapsedBoot < BOOT_SPLASH_MS) {
+    delay(BOOT_SPLASH_MS - elapsedBoot);
   }
 }
 
@@ -541,12 +549,12 @@ void loop(void) {
     // Update filtered values at a fixed 10Hz frequency (every 100ms)
     static unsigned long lastFilterUpdate = 0;
     static bool filteredMovingTarget = false;
-    if (now - lastFilterUpdate >= 100) {
+    if (now - lastFilterUpdate >= FILTER_UPDATE_MS) {
       lastFilterUpdate = now;
       
       // Filter motion detection
       motionFilter.add(radar.movingTargetDetected() ? 1.0f : 0.0f);
-      filteredMovingTarget = (motionFilter.getMedian(10) > 0.5f);
+      filteredMovingTarget = (motionFilter.getMedian(MOTION_FILTER_SIZE) > FILTER_MOTION_THRESHOLD);
 
       if (rawDetectionDist > 0) {
         detectionDistFilter.add((float)rawDetectionDist);
@@ -557,7 +565,7 @@ void loop(void) {
       }
       int samples = (int)(filterWindow * 10.0f);
       if (samples < 1) samples = 1;
-      if (samples > 100) samples = 100;
+      if (samples > DIST_FILTER_SIZE) samples = DIST_FILTER_SIZE;
       if (rawDetectionDist > 0) {
         filteredDetectionDist = detectionDistFilter.getMedian(samples);
       }
@@ -585,7 +593,7 @@ void loop(void) {
 
   // Debouncing logic to filter sensor instability/boundary jitter
   if (rawPresent != stablePresence) {
-    unsigned long debounceLimit = rawPresent ? 2000 : 10000; // 2s to confirm presence, 10s to confirm away
+    unsigned long debounceLimit = rawPresent ? DEBOUNCE_PRESENCE_MS : DEBOUNCE_AWAY_MS;
     if (now - lastPresenceChangeTime > debounceLimit) {
       stablePresence = rawPresent;
     }
@@ -675,14 +683,15 @@ void loop(void) {
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
       if (firstSitToday || willRollover) {
         unsigned long overnightBreak = currentBreakDurationMs / 1000UL;
-        if (overnightBreak >= 4 * 3600UL) {
+        if (overnightBreak >= OVERNIGHT_THRESHOLD_S) {
           triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreak * 1000));
         } else {
           triggerBehaviour(EVENT_FIRST_SIT, "");
         }
       } else {
-        if (lastAwaySliceMs >= 180000UL) { // Only greet if the user was away for at least 3 minutes since their last sit-down
-          triggerBehaviour(EVENT_WELCOME_BACK, formatTime(currentBreakDurationMs));
+        if (lastAwaySliceMs >= BREAK_MINIMUM_MS) {
+          String tempBreakDuration = formatTime(currentBreakDurationMs);
+          messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
         }
       }
     } else {
@@ -724,7 +733,7 @@ void loop(void) {
           resetSessionStats();
         } else {
           // Standard break return check using pre-calculated duration from transition
-          if (currentBreakDurationMs >= 180000UL) { // Only count break if away > 3 minutes
+          if (currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
             breakCount++;
             previousLatestBreakDuration = latestBreakDuration;
             latestBreakDuration = currentBreakDurationMs;
@@ -744,7 +753,7 @@ void loop(void) {
           if (targetState != candidateState) {
             candidateState = targetState;
             stateConfirmationTime = now;
-          } else if (now - stateConfirmationTime >= 180000UL) { // 3 minutes
+          } else if (now - stateConfirmationTime >= STICKY_CONFIRM_MS) { // 3 minutes
             if (candidateState == STATE_FOCUS) {
               continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
             }
@@ -757,8 +766,22 @@ void loop(void) {
       }
     }
       
+    // Process MessageManager for proactive scheduling
+    // Dispatch direct, bypassing triggerBehaviour's local-quote/AI pipeline
+    messageManager.update(millis());
+    while (true) {
+      MessageManager::DueMessage msg = messageManager.getNextDueMessage();
+      if (msg.eventType == -1) break;
+      xSemaphoreTake(geminiMutex, portMAX_DELAY);
+      lastTriggeredEventType = msg.eventType;
+      aiResponse = msg.content;
+      lastResponseIsAi = false;
+      hasNewAIResponse = true;
+      xSemaphoreGive(geminiMutex);
+    }
+      
     // Trigger Stretch alert after 45 minutes of continuous presence
-    if (now - lastStretchReminderTime > 2700000UL) {
+    if (now - lastStretchReminderTime > STRETCH_INTERVAL_MS) {
       triggerBehaviour(EVENT_STRETCH);
       lastStretchReminderTime = now;
     }
@@ -766,20 +789,20 @@ void loop(void) {
     // Trigger Slacker Roast if sitting > 1 hour and score < 35%
     static unsigned long lastSlackerRoastTime = 0;
     unsigned long continuousSittingTime = now - continuousPresenceStart;
-    if (continuousSittingTime > 3600000UL && productivityScore < 35) {
-      if (now - lastSlackerRoastTime > 3600000UL) {
+    if (continuousSittingTime > SLACKER_INTERVAL_MS && productivityScore < 35) {
+      if (now - lastSlackerRoastTime > SLACKER_INTERVAL_MS) {
         triggerBehaviour(EVENT_SLACKER);
         lastSlackerRoastTime = now;
       }
     }
 
-    // Evaluate and update longest sitting streak (minimum 15 minutes / 900,000ms)
+    // Evaluate and update longest sitting streak (minimum 15 minutes)
     unsigned long currentStreak = now - continuousPresenceStart;
-    if (longestSittingStreak >= 900000UL && currentStreak > longestSittingStreak && !streakAlertTriggered) {
+    if (longestSittingStreak >= STREAK_MINIMUM_MS && currentStreak > longestSittingStreak && !streakAlertTriggered) {
       streakAlertTriggered = true;
       triggerBehaviour(EVENT_STREAK_BEATEN, formatTime(longestSittingStreak));
     }
-    if (currentStreak > longestSittingStreak && currentStreak >= 900000UL) {
+    if (currentStreak > longestSittingStreak && currentStreak >= STREAK_MINIMUM_MS) {
       longestSittingStreak = currentStreak;
     }
   } else {
@@ -799,12 +822,12 @@ void loop(void) {
         }
         
         // Trigger Focus session congrats if user focused for > 15s
-        if (focusSessionDuration > 15000) {
+        if (focusSessionDuration > FOCUS_MINIMUM_MS) {
           triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
         }
         
         unsigned long presenceDurationMs = now - sitDownTime;
-        if (isStopByTracking && presenceDurationMs < 480000UL) { // 8 minutes threshold
+        if (isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
           // This was a STOP-BY!
           if (breakCount > 0) breakCount--;
           latestBreakDuration = previousLatestBreakDuration;
@@ -852,7 +875,7 @@ void loop(void) {
   uint32_t currentEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
   uint32_t workdayElapsed = (firstSitEpoch > 0 && currentEpoch >= firstSitEpoch) ? (currentEpoch - firstSitEpoch) : 0;
 
-  if (firstSitToday || workdayElapsed < 300) {
+  if (firstSitToday || workdayElapsed < SCORE_INITIAL_PERIOD_S) {
     // Default to 100% initially (first 5 minutes of work)
     productivityScore = 100;
   } else {
@@ -868,12 +891,12 @@ void loop(void) {
       activeBreakMs = workdayElapsedMs - totalDeskTime;
     }
     float breakTimeRatio = (float)(activeBreakMs / 1000.0f) / (float)workdayElapsed;
-    float penalty_time = 25.0f * (breakTimeRatio / 0.10f);
+    float penalty_time = 25.0f * (breakTimeRatio / BREAK_TIME_TARGET);
     
     // 3. Focus bonus (Focus counts 1.5x)
     float bonus_focus = 0.0f;
     if (totalDeskTime > 0) {
-      bonus_focus = 1.5f * (((float)totalFocusTime * 100.0f) / (float)totalDeskTime);
+      bonus_focus = FOCUS_BONUS_MULTIPLIER * (((float)totalFocusTime * 100.0f) / (float)totalDeskTime);
     }
     
     float raw_score = 100.0f - penalty_breaks - penalty_time + bonus_focus;
@@ -881,7 +904,7 @@ void loop(void) {
   }
 
   // Handle NTP Time & Weather Fetch Updates (every 1 hour or until initial NTP sync succeeds)
-  unsigned long ntpUpdateInterval = timeClient.isTimeSet() ? 3600000 : 15000;
+  unsigned long ntpUpdateInterval = timeClient.isTimeSet() ? NTP_INTERVAL_MS : NTP_RETRY_MS;
   if (WiFi.status() == WL_CONNECTED && now - lastHourlyUpdate > ntpUpdateInterval) {
     timeClient.update();
     HTTPClient http;
@@ -897,7 +920,7 @@ void loop(void) {
           weatherDesc = jsonBuffer["weather"][0]["main"].as<String>();
         }
         time_t rawtime = jsonBuffer["dt"];
-        rawtime = rawtime - 10800;
+        rawtime = rawtime + NTP_TIME_OFFSET; // offset is negative -> subtracts 3h
         ts = *localtime(&rawtime);
         strftime(buf, sizeof(buf), "%a %d/%m", &ts);
       }
@@ -909,7 +932,7 @@ void loop(void) {
       lastHourlyUpdate = now;
     } else {
       // Retry in 15 seconds
-      lastHourlyUpdate = now - ntpUpdateInterval + 15000;
+      lastHourlyUpdate = now - ntpUpdateInterval + NTP_RETRY_MS;
     }
   }
 
@@ -935,7 +958,7 @@ void loop(void) {
     statsInit = true;
   }
 
-  if (now - lastStatsSave > 600000) { // Periodically save stats to LittleFS (every 10 minutes)
+  if (now - lastStatsSave > SAVE_INTERVAL_MS) { // Periodically save stats to LittleFS (every 10 minutes)
     lastStatsSave = now;
     if (totalDeskTime != lastSavedDeskTime || 
         totalFocusTime != lastSavedFocusTime || 
@@ -961,7 +984,7 @@ void loop(void) {
     int currentMin = ts.tm_min;
     int learnedLunch = getLearnedLunchHour();
     if (currentHour == learnedLunch && currentMin >= 15) {
-      if (currentPresenceState != STATE_AWAY && !lunchReminderTriggered && totalDeskTime > 1800000UL) {
+      if (currentPresenceState != STATE_AWAY && !lunchReminderTriggered && totalDeskTime > LUNCH_MIN_DESK_MS) {
         lunchReminderTriggered = true;
         saveDailyStats();
         triggerBehaviour(EVENT_LUNCH_REMINDER);
@@ -981,5 +1004,5 @@ void loop(void) {
   // Update TFT Display
   updateTFTDisplay(now);
 
-  delay(10);
+  delay(LOOP_DELAY_MS);
 }

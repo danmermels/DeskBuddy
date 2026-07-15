@@ -3,6 +3,136 @@ import json
 import os
 
 diagrams = {
+    "holistic_architecture": """graph TB
+    subgraph SETUP["1. SETUP boot"]
+        A1[Power On] --> B1[Init Serial, Mutexes, MQTT binding]
+        B1 --> C1[Load Preferences from NVS<br/>aiMode, clockFace, targetHours,<br/>gate sensitivities, etc.]
+        C1 --> D1[Init LittleFS + loadDailyStats]
+        D1 --> E1[TFT init + Away splash screen]
+        E1 --> F1[setupRadar: Serial1 256k<br/>LD2410 config and gate sync]
+        F1 --> G1[WiFi connect 5s timeout<br/>Static IP 192.168.15.160]
+        G1 --> H1[setupMqtt, setupNTP,<br/>setupWebServer, ArduinoOTA.begin]
+        H1 --> I1[Force initial NTP/weather on 1st loop<br/>Boot splash min 4s delay]
+    end
+
+    subgraph LOOP["2. MAIN LOOP every ~10ms"]
+        direction TB
+        J1[Loop start] --> K1[ArduinoOTA.handle]
+        K1 --> L1{OTA in progress?}
+        L1 -- Yes --> M1[Delay 50ms, return early]
+        L1 -- No --> N1[server.handleClient + checkWiFiConnection]
+
+        N1 --> O1[Update local tm struct from NTP]
+        O1 --> P1[Midnight reset?<br/>Reset fsRead/write counters]
+        P1 --> Q1[Poll LD2410 radar.read<br/>Read presence/moving/static]
+        Q1 -->         R1[Every 100ms: update rolling<br/>median filters dist + motion]
+        R1 --> S1[Compute rawState based on<br/>distance and motion ratio]
+        S1 --> T1[Debounce: stablePresence<br/>2s on / 10s off]
+    end
+
+    subgraph STM["3. PRESENCE STATE MACHINE"]
+        T1 --> TM1{Stable presence?}
+
+        TM1 -- Yes --> UA1[Accumulate desk time,<br/>focus time, motion time]
+        UA1 --> UA2{Was Away?}
+        UA2 -- Yes --> UA3[Record sit-down time,<br/>calc break duration]
+        UA3 --> UA4{First sit today<br/>or day rollover?}
+        UA4 -- Yes --> UA5[triggerBehaviour EVENT_FIRST_SIT]
+        UA4 -- No --> UA6[triggerBehaviour EVENT_WELCOME_BACK]
+
+        UA2 -- No --> UA7{Rollover pending?}
+        UA7 -- Yes --> UA8[Merge day presence<br/>or count break]
+        UA8 --> UA9[Set rolloverPending=false]
+        UA7 -- No --> UA10{State changed<br/>3 min sticky?}
+        UA10 -- Yes --> UA11[Update currentPresenceState]
+
+        UA11 --> UA12{Continuous presence triggers?}
+        UA12 --> UA13[45min: Stretch reminder]
+        UA12 --> UA14[1hr + score under 35: Slacker roast]
+        UA12 --> UA15[New streak record alert]
+
+        TM1 -- No --> UA16{Was present?}
+        UA16 -- Yes --> UA17[Calc focus session duration]
+        UA17 --> UA18[Focus over 15s? trigger EVENT_FOCUS_END]
+        UA18 --> UA19{Session under 8 min?}
+        UA19 -- Yes --> UA20[Stop-by: undo break count,<br/>subtract desk time]
+        UA19 -- No --> UA21[Record break,<br/>reset session stats]
+        UA16 -- No --> UA22[Accumulate totalBreakTime]
+        UA22 --> UA23[Clear distance/motion filters]
+    end
+
+    subgraph SCORE["4. PRODUCTIVITY SCORE"]
+        X1[Score = 100 first 5 min of workday] --> X2
+        X2[penalty = break frequency + duration penalties<br/>bonus = focus time boosts]
+        X2 --> X3[Clamp 0-100, update productivityScore]
+    end
+
+    subgraph NTPWTHR["5. NTP and WEATHER hourly"]
+        W1{WiFi + timer expired?} --> W2
+        W2[timeClient.update +<br/>HTTP GET OpenWeather API]
+        W2 --> W3[Parse temp, weatherDesc,<br/>update tm struct]
+    end
+
+    subgraph SAVE["6. STATS SAVE every 10 min"]
+        V1{Desk/focus/break time<br/>changed?} --> V2
+        V2[Atomic save to /stats.json<br/>via .tmp rename pattern]
+    end
+
+    subgraph LRNCH["7. LUNCH REMINDER"]
+        L1{Learned lunch hour?<br/>At desk over 30 min?} --> L2
+        L2[triggerBehaviour EVENT_LUNCH_REMINDER]
+    end
+
+    subgraph AI["8. AI / BEHAVIOUR SYSTEM"]
+        EV1[triggerBehaviour called] --> EV2{AI Mode ON<br/>under 15 req/day?}
+        EV2 -- Yes --> EV3[Resolve persona prompt<br/>Create FreeRTOS task]
+        EV3 --> EV4[queryGeminiTask:<br/>HTTPS POST to Gemini 2.5 Flash]
+        EV4 --> EV5{HTTP 200?}
+        EV5 -- Yes --> EV6[Parse response,<br/>set hasNewAIResponse=true]
+        EV5 -- No --> EV7[Pick local fallback quote<br/>20 per event type]
+        EV2 -- No --> EV7
+    end
+
+    subgraph MQTT["9. MQTT SERVICE"]
+        MQ1{WiFi connected?} --> MQ2
+        MQ2{MQTT broker connected?} -- No --> MQ3[Reconnect every 10s]
+        MQ3 --> MQ4[Subscribe deskbuddy hash]
+        MQ2 -- Yes --> MQ5[mqttClient.loop]
+        MQ5 --> MQ6{Incoming deskbuddy/display?}
+        MQ6 -- Yes --> MQ7[Set hasNewAIResponse,<br/>show on screen immediately]
+    end
+
+    subgraph WEB["10. WEB SERVER"]
+        WB1[handleRoot: Dashboard page<br/>poll radar-data every 250ms]
+        WB1 --> WB2[handleSettings: All params,<br/>radar chart, file manager,<br/>trigger debug events]
+    end
+
+    subgraph TFT["11. TFT DISPLAY UPDATE"]
+        TF1{hasNewAIResponse?} --> TF2
+        TF2[Copy message,<br/>publish to MQTT,<br/>set aiScreenEndTime=now+8s]
+        TF2 --> TF3{State AWAY<br/>and grace expired?}
+        TF3 -- Yes --> TF4[Draw away.rle, return]
+        TF3 -- No --> TF5{Alert active?}
+        TF5 -- Yes --> TF6[Draw msg_X.rle + text]
+        TF5 -- No --> TF7[Clock face selector]
+        TF7 --> TF8[0 Default: mood ring +<br/>digital clock + cycling metrics]
+        TF7 --> TF9[1 Minimalist: dial ticks +<br/>hour/min/date + status icons]
+        TF7 --> TF10[2 HiTech: cyberpunk bitmap +<br/>time/weather/desk hours]
+        TF7 --> TF11[3 DEV: debug telemetry,<br/>100ms refresh rate]
+    end
+
+    SETUP --> LOOP
+    LOOP --> STM
+    STM --> SCORE
+    LOOP --> NTPWTHR
+    STM --> SAVE
+    STM --> LRNCH
+    STM --> AI
+    LOOP --> MQTT
+    LOOP --> WEB
+    STM --> TFT
+    AI --> TFT
+    LOOP --> J1""",
     "main_loop_flowchart": """graph TD
     Start([Loop Start]) --> PollOTA[1. Handle OTA Updates]
     PollOTA --> CheckOTA{OTA in progress?}

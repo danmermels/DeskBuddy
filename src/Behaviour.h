@@ -9,10 +9,11 @@
 #define EVENT_SLACKER       4
 #define EVENT_STREAK_BEATEN 5
 #define EVENT_LUNCH_REMINDER 6
+#define EVENT_MQTT_MESSAGE 7
 
 // --- Local Fallback/Eco Quotes (20 per category) ---
 
-const char* localFirstSit[20] = {
+static const char* localFirstSit[20] = {
   "Morning, {name}! Slept for {detail}?",
   "Rise and shine, {name}! You slept for {detail}.",
   "Welcome, {name}! Ready to focus?",
@@ -35,7 +36,7 @@ const char* localFirstSit[20] = {
   "Good morning, {name}! Slept {detail}."
 };
 
-const char* localWelcomeBack[20] = {
+static const char* localWelcomeBack[20] = {
   "Welcome back, {name}! Away for {detail}.",
   "Break's over, {name}! You were away for {detail}.",
   "Did you stretch, {name} during those {detail}?",
@@ -58,7 +59,7 @@ const char* localWelcomeBack[20] = {
   "Ready to work after a {detail} break, {name}?"
 };
 
-const char* localStretch[20] = {
+static const char* localStretch[20] = {
   "Stand up, {name}! Your spine is crying.",
   "Time to stretch, {name}! Move those legs.",
   "Hey {name}, look at something far away!",
@@ -81,7 +82,7 @@ const char* localStretch[20] = {
   "Walk, stretch, breathe, {name}. Do it now."
 };
 
-const char* localFocus[20] = {
+static const char* localFocus[20] = {
   "Focus session complete! Great work, {name}.",
   "Deep focus achieved, {name}! You're a beast!",
   "Nice work focusing there, {name}!",
@@ -104,7 +105,7 @@ const char* localFocus[20] = {
   "Superb concentration, {name}. Time to relax."
 };
 
-const char* localSlacker[20] = {
+static const char* localSlacker[20] = {
   "Procrastinator alert! Focus, {name}!",
   "Are you actually working, {name}?",
   "Your productivity score is crying, {name}.",
@@ -127,7 +128,7 @@ const char* localSlacker[20] = {
   "Attention span of a goldfish today, {name}?"
 };
 
-const char* localStreakBeaten[20] = {
+static const char* localStreakBeaten[20] = {
   "New sitting record, {name}! Keep it up!",
   "Streak beaten, {name}! You are on fire!",
   "Sitting champion, {name}! A new record!",
@@ -150,7 +151,7 @@ const char* localStreakBeaten[20] = {
   "Amazing, {name}! Longest sit of the day!"
 };
 
-const char* localLunchReminder[20] = {
+static const char* localLunchReminder[20] = {
   "Time for lunch, {name}! Go refuel.",
   "Hungry, {name}? Grab a bite to eat!",
   "Lunch time! Step away from the desk, {name}.",
@@ -175,58 +176,58 @@ const char* localLunchReminder[20] = {
 
 // --- Gemini AI Prompts (Templates used when AI is active) ---
 
-const char* PROMPT_PREAMBLE_COACH = 
+static const char* PROMPT_PREAMBLE_COACH = 
   "You are DeskBuddy, a supportive, warm, and highly motivational wellness coach sitting on the user's desk. "
   "You comment on the user's focus, presence, and work habits with encouragement and support. "
   "CRITICAL CONSTRAINT: Respond with exactly ONE short sentence in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
 
-const char* PROMPT_PREAMBLE_CRITIC = 
+static const char* PROMPT_PREAMBLE_CRITIC = 
   "You are DeskBuddy, a highly sarcastic, sassy, and sassy desk companion who roasts the user. "
   "You comment on the user's focus, presence, and work habits with sharp wit, playfulness, and mild sarcasm. "
   "CRITICAL CONSTRAINT: Respond with exactly ONE short, witty roast in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
 
-const char* PROMPT_PREAMBLE_NERD = 
+static const char* PROMPT_PREAMBLE_NERD = 
   "You are DeskBuddy, a geeky, dev-obsessed programmer assistant sitting on the user's desk. "
   "You comment on focus, presence, and work habits using programming terminology, geeky slang, and logic. "
   "CRITICAL CONSTRAINT: Respond with exactly ONE short developer reference in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
 
-const char* PROMPT_PREAMBLE_ZEN = 
+static const char* PROMPT_PREAMBLE_ZEN = 
   "You are DeskBuddy, a peaceful, calm, and mindful Zen master sitting on the user's desk. "
   "You comment on focus, presence, and work habits with calmness, peaceful reminder, and mindfulness. "
   "CRITICAL CONSTRAINT: Respond with exactly ONE short, quiet sentence in English under 30 characters total (including spaces/punctuation). Never exceed 30 characters.";
 
-const char* PROMPT_FIRST_SIT_OF_DAY = 
+static const char* PROMPT_FIRST_SIT_OF_DAY = 
   "Address {name} who just sat down for the first time today after an overnight break of {detail}. "
   "Daily Stats: desk time: {deskTime}, focus time: {focusTime}, productivity: {score}%. "
   "Learned workday start: {learnedStart}, end: {learnedEnd}. "
   "Greet them in a witty, encouraging, or playful way, including the latest break length and partially other info above.";
 
-const char* PROMPT_WELCOME_BACK = 
+static const char* PROMPT_WELCOME_BACK = 
   "Address {name} who returned to their desk after a break of {detail}. "
   "Daily Stats: desk time: {deskTime}, focus: {focusTime}, breaks taken: {breakCount}, productivity: {score}%. "
   "Welcome them back in a short, witty, or motivational way, including the latest break length and other relevant info above.";
 
-const char* PROMPT_STRETCH_REMINDER = 
+static const char* PROMPT_STRETCH_REMINDER = 
   "Address {name} who has been sitting continuously for 45 minutes (longest streak: {longestStreak}). "
   "Daily Stats: desk time: {deskTime}, productivity: {score}%. "
   "Tell them to stretch or walk in a sassy, playful way, including current sitting duration and partially other relevant info above.";
 
-const char* PROMPT_FOCUS_CONGRATS = 
+static const char* PROMPT_FOCUS_CONGRATS = 
   "Address {name} who just completed a deep focus session of {detail}. "
   "Daily Stats: desk time: {deskTime}, focus: {focusTime}, productivity: {score}%. "
   "Congratulate them on their focus and deep work, including current focus duration and partially other relevant info above.";
 
-const char* PROMPT_SLACKER_ROAST = 
+static const char* PROMPT_SLACKER_ROAST = 
   "Address {name} who has focused for less than 20% of their workday. "
   "Daily Stats: desk time: {deskTime}, focus: {focusTime}, productivity: {score}%. "
   "Playfully roast them for slacking or procrastinating, including the slacking mode duration and partially other relevant info above.";
 
-const char* PROMPT_STREAK_BEATEN = 
+static const char* PROMPT_STREAK_BEATEN = 
   "Address {name} who just beat their previous longest sitting streak of the day, which was {detail}. "
   "Daily Stats: desk time: {deskTime}, productivity: {score}%. "
   "Congratulate them or joke about their sitting endurance, including current sitting duration and partially other relevant info above.";
 
-const char* PROMPT_LUNCH_REMINDER = 
+static const char* PROMPT_LUNCH_REMINDER = 
   "Address {name} who is still working at their desk during their usual lunch hour {learnedLunch}. "
   "Daily Stats: desk time: {deskTime}, focus: {focusTime}, productivity: {score}%. "
   "Remind them to eat lunch in a witty, appetizing, or playful way, including current desk time and partially other relevant info above.";

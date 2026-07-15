@@ -35,93 +35,10 @@ inline uint8_t getEffectivePresence(int h) {
   }
 }
 
-// Add elapsed milliseconds to the current hour's presence accumulator
-inline void accumulatePresence(int hour, unsigned long elapsedMs) {
-  if (hour >= 0 && hour < 24) {
-    presenceMsCurrentDay[hour] += elapsedMs;
-  }
-}
-
 // Forward declarations
 inline int getLearnedWorkdayStart();
-
-// Determines if we should perform a day session rollover
-inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t lastAwayEpoch, int currentDay, int lastNtpDay) {
-  extern unsigned long totalDeskTime;
-
-  if (lastAwayEpoch == 0) {
-    return true; // Fresh startup / no prior departure, perform reset
-  }
-
-  if (currentEpoch < lastAwayEpoch) {
-    return true; // Time sync discrepancy, perform safety reset
-  }
-
-  uint32_t absenceDuration = currentEpoch - lastAwayEpoch;
-
-  // Calculate local departure hour using gmtime_r (since local offset is already shifted in NTPClient)
-  time_t rawDeparture = (time_t)lastAwayEpoch;
-  struct tm depTime;
-  gmtime_r(&rawDeparture, &depTime);
-  int departureHour = depTime.tm_hour;
-  if (departureHour < 0 || departureHour >= 24) departureHour = 0;
-
-  // Work hours: occupancy history probability >= 15%
-  bool departedDuringWork = (getEffectivePresence(departureHour) >= 15);
-
-  // Dynamic threshold: 7 hours if departing during workday, 3 hours if departing during sleep/off hours
-  uint32_t threshold = departedDuringWork ? 25200UL : 10800UL;
-
-  if (currentDay == lastNtpDay) {
-    // If it is the same calendar day, we only rollover if:
-    // 1. The previous session today was very short (less than 15 minutes of desk time)
-    // 2. The absence duration is greater than or equal to the threshold
-    if (totalDeskTime < 900000UL && absenceDuration >= threshold) {
-      return true;
-    }
-    return false; // Same calendar day, continue current session
-  }
-  
-  if (absenceDuration >= threshold) {
-    // Check if this is a late-night/early-morning quick check (night interruption)
-    time_t rawCurrent = (time_t)currentEpoch;
-    struct tm curTime;
-    gmtime_r(&rawCurrent, &curTime);
-    int currentHour = curTime.tm_hour;
-    if (currentHour < 0 || currentHour >= 24) currentHour = 0;
-
-    int learnedStart = getLearnedWorkdayStart();
-    int limit = learnedStart - 3;
-    if (limit < 3) limit = 3;
-
-    if (currentHour < limit && absenceDuration < 36000UL) { // < 10 hours absence
-      return false; // Treat as night interruption, do not rollover yet
-    }
-    return true; // Valid rollover
-  }
-  return false;
-}
-
-// Integrates today's presence percentage into history using exponential moving average
-inline void mergeCurrentDayPresence() {
-  for (int h = 0; h < 24; h++) {
-    uint32_t todayMs = presenceMsCurrentDay[h];
-    // Maximum milliseconds in an hour is 3,600,000
-    uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
-
-    if (historyDaysCount == 0) {
-      hourlyPresenceHistory[h] = todayPct;
-    } else {
-      // Exponential moving average: 80% history weight, 20% today weight
-      hourlyPresenceHistory[h] = (uint8_t)((hourlyPresenceHistory[h] * 4 + todayPct) / 5);
-    }
-    presenceMsCurrentDay[h] = 0; // Clear accumulator for the new session
-  }
-  
-  if (historyDaysCount < 30) {
-    historyDaysCount++;
-  }
-}
+inline int getLearnedWorkdayEnd();
+inline int getLearnedLunchHour();
 
 // Scans for the typical start of the workday (first hour >= 15% presence between 4 AM and 12 PM)
 inline int getLearnedWorkdayStart(const uint8_t* history) {
@@ -181,15 +98,6 @@ inline int getLearnedLunchHour() {
     eff[h] = getEffectivePresence(h);
   }
   return getLearnedLunchHour(eff);
-}
-
-// Determines the dynamic validation buffer duration based on learned occupancy
-inline uint32_t getDynamicValidationBufferMs(int hour) {
-  if (hour < 0 || hour >= 24) return 180000UL;
-
-  // If typical presence for this hour is >= 15% (active work hour): 45-second buffer
-  // If typical presence is < 15% (off-work/sleep hour): 3-minute buffer
-  return (getEffectivePresence(hour) >= 15) ? 45000UL : 180000UL;
 }
 
 #endif // LEARNING_H

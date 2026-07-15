@@ -3,10 +3,14 @@
 
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include "MessageManager.h"
+
+#include "Constants.h"
 
 // Extern instances defined in main.cpp
 extern WiFiClient wifiClient;
 extern PubSubClient mqttClient;
+extern MessageManager messageManager;
 
 // MQTT History Buffer declarations
 struct MqttMessage {
@@ -15,7 +19,6 @@ struct MqttMessage {
   unsigned long timestamp;
 };
 
-#define MQTT_HISTORY_SIZE 50
 extern MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
 extern int mqttHistoryHead;
 extern int mqttHistoryCount;
@@ -55,22 +58,15 @@ inline void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String t = String(topic);
   addMqttHistory(t, p);
   
-  // If a message is published to the display topic, pop it up on the screen
-  if (t == "deskbuddy/display") {
-    if (geminiMutex != NULL) {
-      xSemaphoreTake(geminiMutex, portMAX_DELAY);
-      aiResponse = p;
-      lastResponseIsAi = false;      // Display as standard local/MQTT message
-      hasNewAIResponse = true;       // Trigger the display system
-      lastTriggeredEventType = 99;   // Use a custom event type to bypass welcome delays
-      xSemaphoreGive(geminiMutex);
-    }
+  // Route MQTT messages through MessageManager for proper queueing
+  if (t == MQTT_DISPLAY_TOPIC) {
+    messageManager.scheduleMessage(EVENT_MQTT_MESSAGE, p, MSG_PRIORITY_HIGH, 0, MSG_RELEVANCE_URGENT);
   }
 }
 
 // Configure connection settings to MQTT broker
 inline void setupMqtt() {
-  mqttClient.setServer("192.168.15.18", 1883);
+  mqttClient.setServer(MQTT_BROKER_IP, MQTT_BROKER_PORT);
   mqttClient.setCallback(mqttCallback);
 }
 
@@ -80,12 +76,12 @@ inline void loopMqtt() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqttClient.connected()) {
       unsigned long now = millis();
-      if (now - lastReconnectMqtt > 10000) {
+      if (now - lastReconnectMqtt > MQTT_RECONNECT_INTERVAL_MS) {
         lastReconnectMqtt = now;
         // Attempt to connect asynchronously
-        if (mqttClient.connect("DeskBuddyClient")) {
-          mqttClient.publish("deskbuddy/status", "online");
-          mqttClient.subscribe("deskbuddy/#"); // Subscribe to all deskbuddy topics
+        if (mqttClient.connect(MQTT_CLIENT_ID)) {
+          mqttClient.publish(MQTT_STATUS_TOPIC, MQTT_STATUS_PAYLOAD);
+          mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC); // Subscribe to all deskbuddy topics
         }
       }
     } else {
@@ -97,7 +93,7 @@ inline void loopMqtt() {
 // Publish display alerts to MQTT broker
 inline void publishMqttMessage(String msg) {
   if (mqttClient.connected()) {
-    mqttClient.publish("deskbuddy/message", msg.c_str());
+    mqttClient.publish(MQTT_PUBLISH_TOPIC, msg.c_str());
   }
 }
 

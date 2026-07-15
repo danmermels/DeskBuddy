@@ -6,9 +6,12 @@
 #include <NTPClient.h>
 #include <LittleFS.h>
 #include <TFT_eSPI.h>
+#include <ld2410.h>
 #include "Display.h"
 
 // Extern references for global state variables from main.cpp
+extern struct tm ts;
+extern ld2410 radar;
 extern const RGBColor stateColors[];
 extern int currentPresenceState;
 extern bool hasMail;
@@ -729,9 +732,8 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
     return;
   }
 
-  // Fast 100ms refresh rate for real-time responsiveness
   static unsigned long lastDevUpdate = 0;
-  if (!forceRedraw && (now - lastDevUpdate < 100)) {
+  if (!forceRedraw && (now - lastDevUpdate < 200)) {
     return;
   }
   lastDevUpdate = now;
@@ -747,8 +749,9 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 
   auto drawDevLine = [&](int lineIndex, const char* newStr, int y) {
     if (strcmp(prevLines[lineIndex], newStr) != 0) {
-      tft.fillRect(20, y - 8, 200, 16, TFT_BLACK);
+      tft.setTextPadding(230);
       tft.drawString(newStr, 120, y, 2);
+      tft.setTextPadding(0);
       strncpy(prevLines[lineIndex], newStr, sizeof(prevLines[lineIndex]) - 1);
     }
   };
