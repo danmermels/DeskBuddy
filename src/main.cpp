@@ -132,11 +132,17 @@ uint32_t presenceMsCurrentDay[24] = {0};
 int historyDaysCount = 0;
 bool lunchReminderTriggered = false;
 
-// Active session rollover variables
+// Presence state machine variables
 unsigned long sitDownTime = 0;
 uint32_t sitDownEpoch = 0;
-bool rolloverPending = false;
-  unsigned long requiredValidationBufferMs = VALIDATION_BUFFER_MS;
+
+enum PresenceState {
+  PRESENCE_AWAY,
+  PRESENCE_SITTING,
+  PRESENCE_BREAK
+};
+
+PresenceState currentSessionState = PRESENCE_AWAY;
 
 // File system access counters (to estimate flash lifecycles)
 uint32_t fsWriteCount = 0;
@@ -335,7 +341,7 @@ void loadDailyStats() {
     lastNtpDay = doc["lastNtpDay"] | -1;
     longestSittingStreak = doc["longestSittingStreak"] | 0UL;
     latestBreakDuration = doc["latestBreakDuration"] | 0UL;
-    isStopByTracking = doc["isStopByTracking"] | false;
+    isStopByTracking = false; // Reset to false on boot to prevent stale stop-by rollback loops
     originalLastAwayEpoch = doc["originalLastAwayEpoch"] | 0;
     totalStopByTimeMs = doc["totalStopByTimeMs"] | 0UL;
     previousLatestBreakDuration = doc["previousLatestBreakDuration"] | 0UL;
@@ -502,6 +508,20 @@ void loop(void) {
     if (sitDownEpoch == 0) {
       sitDownEpoch = timeClient.getEpochTime();
     }
+    static bool bootStateEvaluated = false;
+    if (!bootStateEvaluated) {
+      bootStateEvaluated = true;
+      if (currentSessionState == PRESENCE_AWAY && lastAwayEpoch > 0) {
+        uint32_t currentEpoch = timeClient.getEpochTime();
+        int currentDay = timeClient.getDay();
+        uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
+        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
+          currentSessionState = PRESENCE_AWAY;
+        } else {
+          currentSessionState = PRESENCE_BREAK;
+        }
+      }
+    }
     time_t epochTime = timeClient.getEpochTime();
     struct tm *ptm = localtime(&epochTime);
     if (ptm != nullptr) {
@@ -610,9 +630,7 @@ void loop(void) {
 
   // Handle Presence State Machine Transitions
   if (targetPresent) {
-    if (!rolloverPending) {
-      accumulatePresence(ts.tm_hour, elapsed);
-    }
+    accumulatePresence(ts.tm_hour, elapsed);
     // Accumulate desk time if static presence is detected
     if (sensorStaticPresenceDetected) {
       totalDeskTime += elapsed;
@@ -645,8 +663,6 @@ void loop(void) {
       // Transition: Away -> Present
       sitDownTime = now;
       sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-      rolloverPending = true;
-      requiredValidationBufferMs = getDynamicValidationBufferMs(ts.tm_hour);
       currentSitDownSessionId++;
       
       // Calculate currentBreakDurationMs immediately at the transition using transition timestamps
@@ -665,17 +681,55 @@ void loop(void) {
         }
       }
 
-      // Check if this sit-down will trigger a day session rollover
+      // Check if this is the first sit of the day
+      bool isFirstSit = (currentSessionState == PRESENCE_AWAY);
+      bool wasFirstSitToday = firstSitToday;
+      
+      // Perform rollover check if we are in PRESENCE_BREAK
       bool willRollover = false;
-      if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+      if (currentSessionState == PRESENCE_BREAK && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
         int currentDay = timeClient.getDay();
         if (shouldResetDaySession(sitDownEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
           willRollover = true;
+          isFirstSit = true;
+          uint32_t tempLastAway = lastAwayEpoch;
+          mergeCurrentDayPresence();
+          resetDailyStats(tempLastAway, currentDay);
+        }
+      }
+
+      if (isFirstSit || firstSitToday) {
+        firstSitToday = false;
+        firstSitEpoch = sitDownEpoch;
+        if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
+          overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
+        } else {
+          overnightBreakDuration = currentBreakDurationMs / 1000UL;
+        }
+        latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
+        
+        totalBreakTime = 0;
+        isStopByTracking = false;
+        originalLastAwayEpoch = 0;
+        totalStopByTimeMs = 0;
+        previousLatestBreakDuration = 0;
+        saveDailyStats();
+        resetSessionStats();
+      } else {
+        // Standard break return check using pre-calculated duration from transition
+        if (currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
+          breakCount++;
+          previousLatestBreakDuration = latestBreakDuration;
+          latestBreakDuration = currentBreakDurationMs;
+          isStopByTracking = true;
+          saveDailyStats();
+          resetSessionStats();
         }
       }
 
       unsigned long lastAwaySliceMs = (lastStateTransitionTime > 0 && now >= lastStateTransitionTime) ? (now - lastStateTransitionTime) : 0;
       currentPresenceState = targetState;
+      currentSessionState = PRESENCE_SITTING;
       lastStateTransitionTime = now;
       continuousPresenceStart = now;
       lastStretchReminderTime = now;
@@ -685,7 +739,7 @@ void loop(void) {
 
       // Smooth transition: immediately trigger API welcome/fallback query on sit-down
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
-      if (firstSitToday || willRollover) {
+      if (isFirstSit || wasFirstSitToday || willRollover) {
         unsigned long overnightBreak = currentBreakDurationMs / 1000UL;
         if (overnightBreak >= OVERNIGHT_THRESHOLD_S) {
           triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreak * 1000));
@@ -700,73 +754,22 @@ void loop(void) {
       }
     } else {
       // User is present, and was already present
-      if (rolloverPending && now - sitDownTime >= requiredValidationBufferMs) {
-        rolloverPending = false;
-        
-        // Retroactively accumulate the validated presence time
-        accumulatePresence(ts.tm_hour, requiredValidationBufferMs);
-        
-        bool isRollover = false;
-        if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
-          int currentDay = timeClient.getDay();
-          uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
-          if (shouldResetDaySession(sitDownEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
-            isRollover = true;
-            uint32_t tempLastAway = lastAwayEpoch;
-            mergeCurrentDayPresence();
-            resetDailyStats(tempLastAway, currentDay);
-          }
-        }
-        
-        if (firstSitToday) {
-          firstSitToday = false;
-          firstSitEpoch = sitDownEpoch;
-          if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
-            overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
-          } else {
-            overnightBreakDuration = currentBreakDurationMs / 1000UL;
-          }
-          latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
-          
-          totalBreakTime = 0;
-          isStopByTracking = false;
-          originalLastAwayEpoch = 0;
-          totalStopByTimeMs = 0;
-          previousLatestBreakDuration = 0;
-          saveDailyStats();
-          resetSessionStats();
-        } else {
-          // Standard break return check using pre-calculated duration from transition
-          if (currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
-            breakCount++;
-            previousLatestBreakDuration = latestBreakDuration;
-            latestBreakDuration = currentBreakDurationMs;
-            isStopByTracking = true;
-            saveDailyStats();
-            resetSessionStats();
-          }
-        }
-      }
+      static int candidateState = -1;
+      static unsigned long stateConfirmationTime = 0;
       
-      // Sticky state transition check (only checked if rollover is confirmed)
-      if (!rolloverPending) {
-        static int candidateState = -1;
-        static unsigned long stateConfirmationTime = 0;
-        
-        if (targetState != currentPresenceState && targetState != STATE_AWAY) {
-          if (targetState != candidateState) {
-            candidateState = targetState;
-            stateConfirmationTime = now;
-          } else if (now - stateConfirmationTime >= STICKY_CONFIRM_MS) { // 3 minutes
-            if (candidateState == STATE_FOCUS) {
-              continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
-            }
-            currentPresenceState = candidateState;
-            candidateState = -1;
+      if (targetState != currentPresenceState && targetState != STATE_AWAY) {
+        if (targetState != candidateState) {
+          candidateState = targetState;
+          stateConfirmationTime = now;
+        } else if (now - stateConfirmationTime >= STICKY_CONFIRM_MS) { // 3 minutes
+          if (candidateState == STATE_FOCUS) {
+            continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
           }
-        } else {
+          currentPresenceState = candidateState;
           candidateState = -1;
         }
+      } else {
+        candidateState = -1;
       }
     }
       
@@ -810,57 +813,62 @@ void loop(void) {
       longestSittingStreak = currentStreak;
     }
   } else {
+    // Check if we need to transition from Break to Away (Day Rollover) while the user is absent
+    if (currentSessionState == PRESENCE_BREAK) {
+      uint32_t currentEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+      uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
+      if (currentEpoch > 0 && referenceAwayEpoch > 0) {
+        int currentDay = timeClient.getDay();
+        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
+          uint32_t tempLastAway = lastAwayEpoch;
+          mergeCurrentDayPresence();
+          resetDailyStats(tempLastAway, currentDay);
+          currentSessionState = PRESENCE_AWAY;
+        }
+      }
+    }
+
     if (currentPresenceState != STATE_AWAY) {
       // Transition: Present -> Away
       streakAlertTriggered = false;
       
-      if (rolloverPending) {
-        rolloverPending = false;
-        // Quick sit under validation buffer: ignore presence metrics updates, keep old lastAwayEpoch
+      unsigned long focusSessionDuration = 0;
+      if (currentPresenceState == STATE_FOCUS) {
+        focusSessionDuration = now - continuousStillStart;
+      }
+      
+      // Trigger Focus session congrats if user focused for > 15s
+      if (focusSessionDuration > FOCUS_MINIMUM_MS) {
+        triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
+      }
+      
+      unsigned long presenceDurationMs = now - sitDownTime;
+      
+      if (isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
+        // This was a STOP-BY!
+        if (breakCount > 0) breakCount--;
+        latestBreakDuration = previousLatestBreakDuration;
+        
+        totalStopByTimeMs += presenceDurationMs;
+        lastAwayEpoch = originalLastAwayEpoch;
+        
         currentPresenceState = STATE_AWAY;
         lastStateTransitionTime = now;
+        saveDailyStats();
       } else {
-        unsigned long focusSessionDuration = 0;
-        if (currentPresenceState == STATE_FOCUS) {
-          focusSessionDuration = now - continuousStillStart;
-        }
-        
-        // Trigger Focus session congrats if user focused for > 15s
-        if (focusSessionDuration > FOCUS_MINIMUM_MS) {
-          triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
-        }
-        
-        unsigned long presenceDurationMs = now - sitDownTime;
-        if (isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
-          // This was a STOP-BY!
-          if (breakCount > 0) breakCount--;
-          latestBreakDuration = previousLatestBreakDuration;
-          
-          if (totalDeskTime >= presenceDurationMs) {
-            totalDeskTime -= presenceDurationMs;
-          }
-          if (sessionDeskTime >= presenceDurationMs) {
-            sessionDeskTime -= presenceDurationMs;
-          }
-          
-          totalStopByTimeMs += presenceDurationMs;
-          lastAwayEpoch = originalLastAwayEpoch;
-          
-          currentPresenceState = STATE_AWAY;
-          lastStateTransitionTime = now;
-          saveDailyStats();
-        } else {
-          // This was a REAL presence session (>= 8 minutes) or we weren't tracking stop-bys
-          currentPresenceState = STATE_AWAY;
-          lastStateTransitionTime = now;
-          lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-          isStopByTracking = false;
-          totalStopByTimeMs = 0;
-          originalLastAwayEpoch = lastAwayEpoch; // Save start of this new break session
-          saveDailyStats();
-        }
+        // This was a REAL presence session (>= 8 minutes) or we weren't tracking stop-bys
+        currentPresenceState = STATE_AWAY;
+        lastStateTransitionTime = now;
+        lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+        isStopByTracking = false;
+        totalStopByTimeMs = 0;
+        originalLastAwayEpoch = lastAwayEpoch; // Save start of this new break session
+        saveDailyStats();
       }
+      
+      currentSessionState = PRESENCE_BREAK;
     } else {
+      // User is Away, and was already Away
       // Accumulate break time
       totalBreakTime += elapsed;
     }

@@ -96,16 +96,4 @@ inline void mergeCurrentDayPresence() {
   }
 }
 
-inline uint32_t getDynamicValidationBufferMs(int hour) {
-  extern uint8_t getEffectivePresence(int h);
-  
-  // Forward declaration of implementation
-  // This function is defined in this header file (not a forward declaration)
-  if (hour < 0 || hour >= 24) return 180000UL;
-
-  // If typical presence for this hour is >= 15% (active work hour): 45-second buffer
-  // If typical presence is < 15% (off-work/sleep hour): 3-minute buffer
-  return (getEffectivePresence(hour) >= 15) ? 45000UL : 180000UL;
-}
-
 #endif // PRESENCE_ANALYSIS_H

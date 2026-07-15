@@ -11,8 +11,6 @@
 // --- Timing Constants (milliseconds) ---
 #define DEBOUNCE_PRESENCE_MS      2000UL
 #define DEBOUNCE_AWAY_MS         10000UL
-#define VALIDATION_BUFFER_MS     180000UL   // 3 min default rollover buffer
-#define WORK_VALIDATION_BUFFER_MS  45000UL  // 45s during learned work hours
 #define BREAK_MINIMUM_MS         180000UL   // 3 min minimum for break counting
 #define STOP_BY_THRESHOLD_MS     480000UL   // 8 min threshold for stop-by detection
 #define STRETCH_INTERVAL_MS     2700000UL   // 45 min between stretch reminders
