@@ -76,28 +76,38 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
 }
 
 inline void mergeCurrentDayPresence(int dayIndex) {
-  
-  
-  
-  
   if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
   
-  int count = appStats.historyDaysCountWeekly[dayIndex];
   for (int h = 0; h < 24; h++) {
     uint32_t todayMs = appStats.presenceMsCurrentDay[h];
     // Maximum milliseconds in an hour is 3,600,000
     uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
 
-    if (count == 0) {
-      appStats.hourlyPresenceHistoryWeekly[dayIndex][h] = todayPct;
+    // Calculate group average (Weekday average or Weekend average)
+    uint8_t groupAvg = 0;
+    if (dayIndex >= 1 && dayIndex <= 5) {
+      // Weekday average (Mon-Fri)
+      int sum = 0;
+      for (int d = 1; d <= 5; d++) {
+        sum += appStats.hourlyPresenceHistoryWeekly[d][h];
+      }
+      groupAvg = sum / 5;
     } else {
-      // Exponential moving average: 80% history weight, 20% today weight
-      appStats.hourlyPresenceHistoryWeekly[dayIndex][h] = (uint8_t)((appStats.hourlyPresenceHistoryWeekly[dayIndex][h] * 4 + todayPct) / 5);
+      // Weekend average (Sat-Sun)
+      groupAvg = (appStats.hourlyPresenceHistoryWeekly[0][h] + appStats.hourlyPresenceHistoryWeekly[6][h]) / 2;
     }
+
+    // Today-scaled group average: (groupAvg * todayPct) / 100
+    uint16_t scaledGroupAvg = ((uint16_t)groupAvg * todayPct) / 100;
+
+    // Blend: 50% specific day history, 40% today's percentage, 10% today-scaled group average
+    appStats.hourlyPresenceHistoryWeekly[dayIndex][h] = 
+      (uint8_t)((appStats.hourlyPresenceHistoryWeekly[dayIndex][h] * 5 + todayPct * 4 + scaledGroupAvg) / 10);
+
     appStats.presenceMsCurrentDay[h] = 0; // Clear accumulator for the new session
   }
   
-  if (appStats.historyDaysCountWeekly[dayIndex] < 30) {
+  if (appStats.historyDaysCountWeekly[dayIndex] < 1000) {
     appStats.historyDaysCountWeekly[dayIndex]++;
   }
 }

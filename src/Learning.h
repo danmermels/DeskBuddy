@@ -21,16 +21,7 @@ inline uint8_t getEffectivePresence(int dayIndex, int h) {
   if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
   if (h < 0 || h >= 24) return 0;
   
-  int count = appStats.historyDaysCountWeekly[dayIndex];
-  if (count <= 0) {
-    return PREDEFINED_PATTERN[h];
-  } else if (count == 1) {
-    return (uint8_t)((2 * (uint16_t)PREDEFINED_PATTERN[h] + appStats.hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
-  } else if (count == 2) {
-    return (uint8_t)(((uint16_t)PREDEFINED_PATTERN[h] + 2 * appStats.hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
-  } else {
-    return appStats.hourlyPresenceHistoryWeekly[dayIndex][h];
-  }
+  return appStats.hourlyPresenceHistoryWeekly[dayIndex][h];
 }
 
 // Scans for the typical start of the workday (first hour >= 15% presence between 4 AM and 12 PM)

@@ -805,7 +805,7 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
   char dailyBreakStr[12];
   formatHMS(appStats.totalDeskTime, dailyDeskStr, sizeof(dailyDeskStr));
   formatHMS(appStats.totalBreakTime, dailyBreakStr, sizeof(dailyBreakStr));
-  snprintf(line, sizeof(line), "DAY: S:%s B:%s", dailyDeskStr, dailyBreakStr);
+  snprintf(line, sizeof(line), "DAY: S:%s A:%s", dailyDeskStr, dailyBreakStr);
   drawDevLine(8, line, 150);
 
   // Line 10: Break Count & Latest Break Duration

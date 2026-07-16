@@ -251,7 +251,13 @@ void loadDailyStats() {
   appStats.fsReadCount++;
   Serial.println("[STATS] loadDailyStats: Checking if stats.json exists...");
   if (!LittleFS.exists("/stats.json")) {
-    Serial.println("[STATS] loadDailyStats: No stats.json found, skipping load.");
+    Serial.println("[STATS] loadDailyStats: No stats.json found, initializing with default patterns.");
+    for (int d = 0; d < 7; d++) {
+      for (int h = 0; h < 24; h++) {
+        appStats.hourlyPresenceHistoryWeekly[d][h] = PREDEFINED_PATTERN[h];
+      }
+    }
+    saveDailyStats();
     return;
   }
   
