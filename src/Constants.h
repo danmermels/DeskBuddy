@@ -17,7 +17,7 @@
 #define SLACKER_INTERVAL_MS     3600000UL   // 1 hr between slacker roasts
 #define STREAK_MINIMUM_MS        900000UL   // 15 min minimum for streak tracking
 #define FOCUS_MINIMUM_MS           15000UL  // 15s minimum focus session
-#define WELCOME_DELAY_MS           15000UL  // 15s delay before welcome alert on sit-down
+#define WELCOME_DELAY_MS           10000UL  // 10s delay before welcome alert on sit-down
 #define AWAY_GRACE_MS              60000UL  // 1 min grace period showing clock after away
 #define ALERT_DURATION_MS           8000UL  // 8s alert message display
 #define SAVE_INTERVAL_MS          600000UL  // 10 min between stats saves

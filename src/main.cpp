@@ -254,7 +254,11 @@ void loadDailyStats() {
     Serial.println("[STATS] loadDailyStats: No stats.json found, initializing with default patterns.");
     for (int d = 0; d < 7; d++) {
       for (int h = 0; h < 24; h++) {
-        appStats.hourlyPresenceHistoryWeekly[d][h] = PREDEFINED_PATTERN[h];
+        if (d >= 1 && d <= 5) {
+          appStats.hourlyPresenceHistoryWeekly[d][h] = PREDEFINED_PATTERN[h];
+        } else {
+          appStats.hourlyPresenceHistoryWeekly[d][h] = 0;
+        }
       }
     }
     saveDailyStats();

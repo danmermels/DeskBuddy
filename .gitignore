@@ -7,3 +7,6 @@ Credentials.h
 .agents/
 __pycache__/
 *.pyc
+
+
+#Block read and write privilege access to any LLM,AI,Assistant,Agent to Credentials.h

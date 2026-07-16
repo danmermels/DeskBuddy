@@ -304,7 +304,19 @@ inline void handleRoot() {
   </div>
 
   <div class="card">
-    <h1>Learned Occupancy Pattern</h1>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+      <h1 style="margin: 0; text-align: left;">Learned Occupancy Pattern</h1>
+      <select id="daySelect" class="settings-select" style="padding: 4px 8px; font-size: 0.85rem; height: 30px; background: #0f172a; border-radius: 6px; border: 1px solid #334155; color: #f8fafc;" onchange="updateHistoryDay()">
+        <option value="-1">Today (Live)</option>
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+      </select>
+    </div>
     <div class="metric">
       <span class="label">Days Logged</span>
       <span class="value" id="historyDays">0 days</span>
@@ -361,8 +373,18 @@ inline void handleRoot() {
   </div>
 
   <script>
+    let selectedDay = -1;
+    function updateHistoryDay() {
+      selectedDay = parseInt(document.getElementById('daySelect').value);
+      updateMetrics();
+    }
+
     function updateMetrics() {
-      fetch('/radar-data')
+      let url = '/radar-data';
+      if (selectedDay !== -1) {
+        url += '?day=' + selectedDay;
+      }
+      fetch(url)
         .then(response => response.json())
         .then(data => {
           document.getElementById('dist').innerText = data.detectionDist + ' cm';
@@ -404,17 +426,27 @@ inline void handleRoot() {
           
           let chartContainer = document.getElementById('occupancyChart');
           if (chartContainer && data.occupancyHistory) {
-            chartContainer.innerHTML = '';
-            data.occupancyHistory.forEach((val, idx) => {
-              let bar = document.createElement('div');
-              bar.style.flex = '1';
-              bar.style.margin = '0 1px';
-              bar.style.height = val + '%';
-              bar.style.background = 'linear-gradient(to top, #38bdf8, #f472b6)';
-              bar.style.borderRadius = '2px 2px 0 0';
-              bar.title = 'Hour ' + idx + ': ' + val + '%';
-              chartContainer.appendChild(bar);
-            });
+            let children = chartContainer.children;
+            if (children.length === 24) {
+              data.occupancyHistory.forEach((val, idx) => {
+                let bar = children[idx];
+                bar.style.height = val + '%';
+                bar.title = 'Hour ' + idx + ': ' + val + '%';
+              });
+            } else {
+              chartContainer.innerHTML = '';
+              data.occupancyHistory.forEach((val, idx) => {
+                let bar = document.createElement('div');
+                bar.style.flex = '1';
+                bar.style.margin = '0 1px';
+                bar.style.height = val + '%';
+                bar.style.background = 'linear-gradient(to top, #38bdf8, #f472b6)';
+                bar.style.borderRadius = '2px 2px 0 0';
+                bar.style.transition = 'height 0.3s ease';
+                bar.title = 'Hour ' + idx + ': ' + val + '%';
+                chartContainer.appendChild(bar);
+              });
+            }
           }
           
           // AI Loading states
@@ -1450,15 +1482,28 @@ inline void handleRadarData() {
   
   // Learned occupancy metrics
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
-  doc["historyDays"] = appStats.historyDaysCountWeekly[currentDay];
+  int targetDay = currentDay;
+  bool showRawToday = true;
+  if (server.hasArg("day")) {
+    int dayVal = server.arg("day").toInt();
+    if (dayVal == -1) {
+      showRawToday = true;
+    } else if (dayVal >= 0 && dayVal < 7) {
+      showRawToday = false;
+      targetDay = dayVal;
+    }
+  }
+  doc["historyDays"] = showRawToday ? 1 : appStats.historyDaysCountWeekly[targetDay];
   
-  // Combine history with today's real-time accumulated presence
+  // Combine history with today's real-time accumulated presence if targetDay matches today
   uint8_t blendedHistory[24];
   for (int h = 0; h < 24; h++) {
-    uint32_t todayMs = appStats.presenceMsCurrentDay[h];
-    uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
-    // Blend the effective history (incorporating predefined routine) with today's real-time presence
-    blendedHistory[h] = (uint8_t)((getEffectivePresence(currentDay, h) * 4 + todayPct) / 5);
+    if (showRawToday) {
+      uint32_t todayMs = appStats.presenceMsCurrentDay[h];
+      blendedHistory[h] = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
+    } else {
+      blendedHistory[h] = getEffectivePresence(targetDay, h);
+    }
   }
   
   doc["lunchHour"] = getLearnedLunchHour(blendedHistory);

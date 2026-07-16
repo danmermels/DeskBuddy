@@ -33,10 +33,6 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
   int departureHour = depTime.tm_hour;
   if (departureHour < 0 || departureHour >= 24) departureHour = 0;
 
-  // Forward declarations (defined in Learning.h)
-  extern uint8_t getEffectivePresence(int dayIndex, int h);
-  int learnedStart = 8; // Fallback (actual implementation in Learning.h)
-
   int departureDay = depTime.tm_wday;
   if (departureDay < 0 || departureDay >= 7) departureDay = 1;
 
@@ -56,14 +52,16 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
     return false; // Same calendar day, continue current session
   }
   
-  if (absenceDuration >= threshold) {
-    // Check if this is a late-night/early-morning quick check (night interruption)
+  // Different calendar day:
+  // Use a lower threshold (4 hours = 14400s) to catch short sleep windows (like 1 AM to 6 AM)
+  if (absenceDuration >= 14400UL) {
     time_t rawCurrent = (time_t)currentEpoch;
     struct tm curTime;
     gmtime_r(&rawCurrent, &curTime);
     int currentHour = curTime.tm_hour;
     if (currentHour < 0 || currentHour >= 24) currentHour = 0;
 
+    int learnedStart = getLearnedWorkdayStart(currentDay);
     int limit = learnedStart - 3;
     if (limit < 3) limit = 3;
 

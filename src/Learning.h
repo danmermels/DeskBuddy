@@ -21,6 +21,13 @@ inline uint8_t getEffectivePresence(int dayIndex, int h) {
   if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
   if (h < 0 || h >= 24) return 0;
   
+  if (appStats.historyDaysCountWeekly[dayIndex] == 0) {
+    if (dayIndex >= 1 && dayIndex <= 5) {
+      return PREDEFINED_PATTERN[h];
+    } else {
+      return 0; // Weekends are empty by default
+    }
+  }
   return appStats.hourlyPresenceHistoryWeekly[dayIndex][h];
 }
 
