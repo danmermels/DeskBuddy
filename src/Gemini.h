@@ -5,91 +5,71 @@
 #include <ESP32_AI_Connect.h>
 #include "Behaviour.h"
 
-// Extern references for global variables and helpers in main.cpp
-extern SemaphoreHandle_t geminiMutex;
-extern String currentPrompt;
-extern volatile bool lastResponseIsAi;
-extern int lastTriggeredEventType;
-extern String lastTriggeredEventDetail;
-extern String aiResponse;
-extern volatile bool hasNewAIResponse;
-extern String currentUserName;
-extern String userName;
-extern int aiMode;
-extern int dailyAiRequestCount;
-extern unsigned long totalDeskTime;
-extern unsigned long totalFocusTime;
-extern unsigned long totalBreakTime;
-extern int breakCount;
-extern int productivityScore;
-extern volatile bool isAILoading;
-extern unsigned long longestSittingStreak;
+#include "State.h"
 #include <NTPClient.h>
+
 extern NTPClient timeClient;
-extern int historyDaysCountWeekly[7];
-extern int currentPresenceState;
 extern volatile uint32_t currentSitDownSessionId;
 extern uint32_t geminiQuerySessionId;
 
 extern String formatTime(unsigned long ms);
 extern const int AI_RESPONSE_MAX_CHARS;
-inline String resolveLocalPlaceholders(String temp, String detail) {
-  temp.replace("{name}", userName);
+inline String resolveLocalPlaceholders(String templateStr, String detail) {
+  templateStr.replace("{name}", appConfig.userName);
   if (detail == "") {
-    temp.replace("{detail}", "a while");
+    templateStr.replace("{detail}", "a while");
   } else {
-    temp.replace("{detail}", detail);
+    templateStr.replace("{detail}", detail);
   }
-  if (lastTriggeredEventType == EVENT_FIRST_SIT) {
-    temp.replace("{score}", "100");
-    temp.replace("{deskTime}", "0m");
-    temp.replace("{focusTime}", "0m");
-    temp.replace("{breakTime}", "0m");
-    temp.replace("{breakCount}", "0");
+  if (appState.lastTriggeredEventType == EVENT_FIRST_SIT) {
+    templateStr.replace("{score}", "100");
+    templateStr.replace("{deskTime}", "0m");
+    templateStr.replace("{focusTime}", "0m");
+    templateStr.replace("{breakTime}", "0m");
+    templateStr.replace("{breakCount}", "0");
   } else {
-    temp.replace("{score}", String(productivityScore));
-    temp.replace("{deskTime}", formatTime(totalDeskTime));
-    temp.replace("{focusTime}", formatTime(totalFocusTime));
-    temp.replace("{breakTime}", formatTime(totalBreakTime));
-    temp.replace("{breakCount}", String(breakCount));
+    templateStr.replace("{score}", String(appStats.productivityScore));
+    templateStr.replace("{deskTime}", formatTime(appStats.totalDeskTime));
+    templateStr.replace("{focusTime}", formatTime(appStats.totalFocusTime));
+    templateStr.replace("{breakTime}", formatTime(appStats.totalBreakTime));
+    templateStr.replace("{breakCount}", String(appStats.breakCount));
   }
-  temp.replace("{longestStreak}", formatTime(longestSittingStreak));
+  templateStr.replace("{longestStreak}", formatTime(appStats.longestSittingStreak));
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
-  temp.replace("{historyDays}", String(historyDaysCountWeekly[currentDay]));
-  return temp;
+  templateStr.replace("{historyDays}", String(appStats.historyDaysCountWeekly[currentDay]));
+  return templateStr;
 }
 
-inline String resolvePromptPlaceholders(String temp, String detail) {
+inline String resolvePromptPlaceholders(String templateStr, String detail) {
   extern const char* PROMPT_PREAMBLE_COACH;
   extern const char* PROMPT_PREAMBLE_CRITIC;
   extern const char* PROMPT_PREAMBLE_NERD;
   extern const char* PROMPT_PREAMBLE_ZEN;
-  extern int aiPersona;
-  extern int getLearnedWorkdayStart(int dayIndex);
+    extern int getLearnedWorkdayStart(int dayIndex);
   extern int getLearnedWorkdayEnd(int dayIndex);
   extern int getLearnedLunchHour(int dayIndex);
 
   const char* activePreamble = PROMPT_PREAMBLE_COACH;
-  if (aiPersona == 1) activePreamble = PROMPT_PREAMBLE_CRITIC;
-  else if (aiPersona == 2) activePreamble = PROMPT_PREAMBLE_NERD;
-  else if (aiPersona == 3) activePreamble = PROMPT_PREAMBLE_ZEN;
+  if (appConfig.aiPersona == 1) activePreamble = PROMPT_PREAMBLE_CRITIC;
+  else if (appConfig.aiPersona == 2) activePreamble = PROMPT_PREAMBLE_NERD;
+  else if (appConfig.aiPersona == 3) activePreamble = PROMPT_PREAMBLE_ZEN;
 
-  String fullPrompt = String(activePreamble) + "\n\n" + temp;
+  String fullPrompt = String(activePreamble) + "\n\n" + appState.temp;
 
-  fullPrompt.replace("{name}", userName);
+  fullPrompt.replace("{name}", appConfig.userName);
   if (detail == "") {
     fullPrompt.replace("{detail}", "a while");
   } else {
     fullPrompt.replace("{detail}", detail);
   }
-  fullPrompt.replace("{score}", String(productivityScore));
-  fullPrompt.replace("{deskTime}", formatTime(totalDeskTime));
-  fullPrompt.replace("{focusTime}", formatTime(totalFocusTime));
-  fullPrompt.replace("{breakTime}", formatTime(totalBreakTime));
-  fullPrompt.replace("{breakCount}", String(breakCount));
-  fullPrompt.replace("{longestStreak}", formatTime(longestSittingStreak));
+  fullPrompt.replace("{score}", String(appStats.productivityScore));
+  fullPrompt.replace("{deskTime}", formatTime(appStats.totalDeskTime));
+  fullPrompt.replace("{focusTime}", formatTime(appStats.totalFocusTime));
+  fullPrompt.replace("{breakTime}", formatTime(appStats.totalBreakTime));
+  fullPrompt.replace("{breakCount}", String(appStats.breakCount));
+  fullPrompt.replace("{longestStreak}", formatTime(appStats.longestSittingStreak));
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
-  fullPrompt.replace("{historyDays}", String(historyDaysCountWeekly[currentDay]));
+  fullPrompt.replace("{historyDays}", String(appStats.historyDaysCountWeekly[currentDay]));
   
   char startBuf[10], endBuf[10], lunchBuf[10];
   snprintf(startBuf, sizeof(startBuf), "%02d:00", getLearnedWorkdayStart(currentDay));
@@ -105,10 +85,10 @@ inline String resolvePromptPlaceholders(String temp, String detail) {
 
 // Asynchronous FreeRTOS Task for Gemini HTTPS Queries
 inline void queryGeminiTask(void * parameter) {
-  xSemaphoreTake(geminiMutex, portMAX_DELAY);
-  String prompt = currentPrompt;
+  xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+  String prompt = appState.currentPrompt;
   uint32_t querySessionId = geminiQuerySessionId;
-  xSemaphoreGive(geminiMutex);
+  xSemaphoreGive(appState.geminiMutex);
 
   bool success = false;
   
@@ -127,19 +107,19 @@ inline void queryGeminiTask(void * parameter) {
     }
     
     bool discard = false;
-    if (lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_WELCOME_BACK) {
-      if (querySessionId != currentSitDownSessionId || currentPresenceState == STATE_AWAY) {
+    if (appState.lastTriggeredEventType == EVENT_FIRST_SIT || appState.lastTriggeredEventType == EVENT_WELCOME_BACK) {
+      if (querySessionId != currentSitDownSessionId || appState.currentPresenceState == STATE_AWAY) {
         discard = true;
       }
     }
     
-    xSemaphoreTake(geminiMutex, portMAX_DELAY);
+    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
     if (!discard) {
-      lastResponseIsAi = true;
-      aiResponse = response;
-      hasNewAIResponse = true;
+      appState.lastResponseIsAi = true;
+      appState.aiResponse = response;
+      appState.hasNewAIResponse = true;
     }
-    xSemaphoreGive(geminiMutex);
+    xSemaphoreGive(appState.geminiMutex);
     success = true;
   }
 
@@ -147,7 +127,7 @@ inline void queryGeminiTask(void * parameter) {
   if (!success) {
     const char* quote = "";
     int randIdx = random(20);
-    switch (lastTriggeredEventType) {
+    switch (appState.lastTriggeredEventType) {
       case EVENT_FIRST_SIT:     quote = localFirstSit[randIdx]; break;
       case EVENT_WELCOME_BACK:  quote = localWelcomeBack[randIdx]; break;
       case EVENT_STRETCH:       quote = localStretch[randIdx]; break;
@@ -158,40 +138,40 @@ inline void queryGeminiTask(void * parameter) {
       default:                  quote = localWelcomeBack[randIdx]; break;
     }
     
-    xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    lastResponseIsAi = false;
-    String nameCopy = currentUserName;
-    xSemaphoreGive(geminiMutex);
+    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    appState.lastResponseIsAi = false;
+    String nameCopy = appState.currentUserName;
+    xSemaphoreGive(appState.geminiMutex);
 
-    String personalQuote = resolveLocalPlaceholders(String(quote), lastTriggeredEventDetail);
+    String personalQuote = resolveLocalPlaceholders(String(quote), appState.lastTriggeredEventDetail);
     
     bool discard = false;
-    if (lastTriggeredEventType == EVENT_FIRST_SIT || lastTriggeredEventType == EVENT_WELCOME_BACK) {
-      if (querySessionId != currentSitDownSessionId || currentPresenceState == STATE_AWAY) {
+    if (appState.lastTriggeredEventType == EVENT_FIRST_SIT || appState.lastTriggeredEventType == EVENT_WELCOME_BACK) {
+      if (querySessionId != currentSitDownSessionId || appState.currentPresenceState == STATE_AWAY) {
         discard = true;
       }
     }
     
-    xSemaphoreTake(geminiMutex, portMAX_DELAY);
+    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
     if (!discard) {
-      aiResponse = personalQuote;
-      hasNewAIResponse = true;
+      appState.aiResponse = personalQuote;
+      appState.hasNewAIResponse = true;
     }
-    xSemaphoreGive(geminiMutex);
+    xSemaphoreGive(appState.geminiMutex);
   }
   
-  isAILoading = false;
+  appState.isAILoading = false;
   vTaskDelete(NULL); // One-shot task deletion
 }
 
 // Coordinated behaviour trigger: runs background Gemini task or picks local fallback
 inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 0) {
-  lastTriggeredEventType = eventType;
+  appState.lastTriggeredEventType = eventType;
 
-  xSemaphoreTake(geminiMutex, portMAX_DELAY);
-  lastTriggeredEventDetail = detail;
-  currentUserName = userName;
-  xSemaphoreGive(geminiMutex);
+  xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+  appState.lastTriggeredEventDetail = detail;
+  appState.currentUserName = appConfig.userName;
+  xSemaphoreGive(appState.geminiMutex);
 
   bool useAI = false;
   if (forceMode == 1) {
@@ -199,17 +179,17 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   } else if (forceMode == 2) {
     useAI = false;
   } else {
-    if (aiMode == 2) {
+    if (appConfig.aiMode == 2) {
       // Frequent mode: all events can trigger AI
       useAI = true;
-    } else if (aiMode == 1) {
+    } else if (appConfig.aiMode == 1) {
       // Balanced mode: AI triggers for FIRST_SIT, STRETCH, WELCOME_BACK, and LUNCH_REMINDER
       if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LUNCH_REMINDER) {
         useAI = true;
       }
     }
     // Enforce daily cap (max 15 requests per day) for normal triggers
-    if (useAI && dailyAiRequestCount >= 15) {
+    if (useAI && appStats.dailyAiRequestCount >= 15) {
       useAI = false;
     }
   }
@@ -226,16 +206,16 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_LUNCH_REMINDER: basePrompt = resolvePromptPlaceholders(PROMPT_LUNCH_REMINDER, detail); break;
     }
 
-    if (!isAILoading) {
+    if (!appState.isAILoading) {
       if (forceMode != 1) {
-        dailyAiRequestCount++;
+        appStats.dailyAiRequestCount++;
       }
-      xSemaphoreTake(geminiMutex, portMAX_DELAY);
-      currentPrompt = basePrompt;
+      xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+      appState.currentPrompt = basePrompt;
       geminiQuerySessionId = currentSitDownSessionId;
-      xSemaphoreGive(geminiMutex);
+      xSemaphoreGive(appState.geminiMutex);
       
-      isAILoading = true;
+      appState.isAILoading = true;
       xTaskCreate(
         queryGeminiTask,
         "GeminiQuery",
@@ -262,11 +242,11 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     String personalQuote = resolveLocalPlaceholders(String(quote), detail);
 
     // Immediately post fallback quote to display thread-safely
-    xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    lastResponseIsAi = false;
-    aiResponse = personalQuote;
-    hasNewAIResponse = true;
-    xSemaphoreGive(geminiMutex);
+    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    appState.lastResponseIsAi = false;
+    appState.aiResponse = personalQuote;
+    appState.hasNewAIResponse = true;
+    xSemaphoreGive(appState.geminiMutex);
   }
 }
 

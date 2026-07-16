@@ -9,38 +9,15 @@
 #include <ld2410.h>
 #include "Display.h"
 
+#include "State.h"
+
 // Extern references for global state variables from main.cpp
 extern struct tm ts;
 extern ld2410 radar;
 extern const RGBColor stateColors[];
-extern int currentPresenceState;
-extern bool hasMail;
-extern RGBColor currentRingColor;
-extern RGBColor startRingColor;
-extern RGBColor targetRingColor;
-extern unsigned long ringTransitionStart;
-extern const unsigned long ringTransitionDuration;
-extern int temp;
-extern String weatherDesc;
-extern int productivityScore;
-extern float targetHours;
-extern unsigned long totalDeskTime;
-extern unsigned long totalFocusTime;
-extern unsigned long totalBreakTime;
-extern int breakCount;
-extern unsigned long continuousPresenceStart;
 extern char buf[];
-extern bool time24h;
-extern uint32_t fsReadCount;
-extern uint32_t fsWriteCount;
 extern NTPClient timeClient;
 extern String formatTime(unsigned long ms);
-extern float filteredDetectionDist;
-extern int rawDetectionDist;
-extern unsigned long sessionDeskTime;
-extern unsigned long sessionMotionTime;
-extern unsigned long lastStateTransitionTime;
-extern unsigned long latestBreakDuration;
 
 // ============================================================================
 // SECTION 1: GRAPHICS & ASSETS INTERFACE
@@ -69,31 +46,31 @@ extern unsigned long latestBreakDuration;
  */
 void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
   // 1. Mood Ring Animation & Drawing
-  RGBColor targetColor = stateColors[currentPresenceState];
-  if (targetColor != targetRingColor) {
-    startRingColor = currentRingColor;
-    targetRingColor = targetColor;
-    ringTransitionStart = now;
+  RGBColor targetColor = stateColors[appState.currentPresenceState];
+  if (targetColor != appState.targetRingColor) {
+    appState.startRingColor = appState.currentRingColor;
+    appState.targetRingColor = targetColor;
+    appState.ringTransitionStart = now;
   }
 
   static unsigned long lastRingUpdate = 0;
-  bool isTransitioning = (currentRingColor != targetRingColor);
+  bool isTransitioning = (appState.currentRingColor != appState.targetRingColor);
   bool ringRedrawn = false;
 
   if (forceRedraw || (isTransitioning && (now - lastRingUpdate > 50))) {
     if (isTransitioning) {
-      unsigned long elapsed = now - ringTransitionStart;
-      if (elapsed >= ringTransitionDuration) {
-        currentRingColor = targetRingColor;
+      unsigned long elapsed = now - appState.ringTransitionStart;
+      if (elapsed >= appState.ringTransitionDuration) {
+        appState.currentRingColor = appState.targetRingColor;
       } else {
-        float t = (float)elapsed / ringTransitionDuration;
+        float t = (float)elapsed / appState.ringTransitionDuration;
         t = (1.0f - cosf(t * 3.14159265f)) / 2.0f; // Cosine ease-in-out
-        currentRingColor.r = startRingColor.r + t * (targetRingColor.r - startRingColor.r);
-        currentRingColor.g = startRingColor.g + t * (targetRingColor.g - startRingColor.g);
-        currentRingColor.b = startRingColor.b + t * (targetRingColor.b - startRingColor.b);
+        appState.currentRingColor.r = appState.startRingColor.r + t * (appState.targetRingColor.r - appState.startRingColor.r);
+        appState.currentRingColor.g = appState.startRingColor.g + t * (appState.targetRingColor.g - appState.startRingColor.g);
+        appState.currentRingColor.b = appState.startRingColor.b + t * (appState.targetRingColor.b - appState.startRingColor.b);
       }
     }
-    uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
+    uint16_t color565 = tft.color565(appState.currentRingColor.r, appState.currentRingColor.g, appState.currentRingColor.b);
     tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
     lastRingUpdate = now;
     ringRedrawn = true;
@@ -104,7 +81,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     if (forceRedraw || ringRedrawn) {
       drawFaceplateMessage("/msg_default.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY);
       // Redraw bezel ring on top of the alert background
-      uint16_t color565 = tft.color565(currentRingColor.r, currentRingColor.g, currentRingColor.b);
+      uint16_t color565 = tft.color565(appState.currentRingColor.r, appState.currentRingColor.g, appState.currentRingColor.b);
       tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
     }
     return;
@@ -127,12 +104,12 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
   // Weather section (top)
   tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-  tft.drawString(String(temp) + "C | " + weatherDesc, 120, 50, FONT_DEFAULT_WEATHER);
+  tft.drawString(String(appState.temp) + "C | " + appState.weatherDesc, 120, 50, FONT_DEFAULT_WEATHER);
 
   // Draw Mail Indicator on Default Clock Face
   static bool lastHasMailDefault = false;
-  if (forceRedraw || (hasMail != lastHasMailDefault)) {
-    if (hasMail) {
+  if (forceRedraw || (appConfig.hasMail != lastHasMailDefault)) {
+    if (appConfig.hasMail) {
       tft.fillRect(200, 46, 17, 12, TFT_BLACK); // Clear first
       tft.drawRect(200, 46, 17, 12, TFT_YELLOW);
       tft.drawLine(200, 46, 208, 52, TFT_YELLOW);
@@ -140,7 +117,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     } else {
       tft.fillRect(200, 46, 17, 12, TFT_BLACK);
     }
-    lastHasMailDefault = hasMail;
+    lastHasMailDefault = appConfig.hasMail;
   }
 
   // Time section (center)
@@ -148,7 +125,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   int h = timeClient.getHours();
   int m = timeClient.getMinutes();
   int display_h = h;
-  if (!time24h) {
+  if (!appConfig.time24h) {
     display_h = h % 12;
     if (display_h == 0) display_h = 12;
   }
@@ -172,24 +149,24 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   switch (metricIndex) {
     case 0: {
       int pct = 0;
-      if (targetHours > 0.0f) {
-        pct = (int)((totalDeskTime * 100.0f) / (targetHours * 3600.0f * 1000.0f));
+      if (appConfig.targetHours > 0.0f) {
+        pct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
       }
       if (pct > 100) pct = 100;
       metricText = "Day: " + String(pct) + "%";
       break;
     }
     case 1:
-      metricText = "Score: " + String(productivityScore) + "%";
+      metricText = "Score: " + String(appStats.productivityScore) + "%";
       break;
     case 2:
-      metricText = "At Desk: " + formatTime(now - continuousPresenceStart);
+      metricText = "At Desk: " + formatTime(now - appState.continuousPresenceStart);
       break;
     case 3:
-      metricText = "Breaks: " + String(breakCount);
+      metricText = "Breaks: " + String(appStats.breakCount);
       break;
     case 4:
-      metricText = "Focus: " + formatTime(totalFocusTime);
+      metricText = "Focus: " + formatTime(appStats.totalFocusTime);
       break;
   }
 
@@ -278,7 +255,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
   // Draw / transition minutes ring
   if (minuteChanged) {
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_MINIMALIST_TICK, LittleFS);
 
     if (last_m != -1) {
@@ -349,7 +326,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
   // With the main loop running every ~10ms, 60 ticks at 6/frame = 10 frames = ~100ms non-blocking.
   if (tickAnimating) {
     const int TICK_BATCH = 6;
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_MINIMALIST_TICK, LittleFS);
 
     for (int b = 0; b < TICK_BATCH && tickAnimNext >= 0; b++, tickAnimNext--) {
@@ -399,13 +376,13 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
       tft.fillRect(66, 85, 108, 62, TFT_BLACK); // Clear Hour area safely
     }
     int display_h = h;
-    if (!time24h) {
+    if (!appConfig.time24h) {
       display_h = h % 12;
       if (display_h == 0) display_h = 12;
     }
     char hourStrBuf[3];
     snprintf(hourStrBuf, sizeof(hourStrBuf), "%02d", display_h);
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_MINIMALIST_HOUR, LittleFS);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.drawString(String(hourStrBuf), 120, 70);
@@ -417,7 +394,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
     if (last_date != "") {
       tft.fillRect(40, 149, 160, 18, TFT_RED); // Clear Date area safely (doesn't overlap Hour)
     }
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_MINIMALIST_DATE, LittleFS);
     tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
     tft.drawString(buf, 120, 158);
@@ -430,7 +407,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
     if (last_m != -1) {
       tft.fillRect(185, 94, 45, 34, TFT_BLACK); // Clear only the large minute digits area inside the capsule
     }
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_MINIMALIST_MINUTE, LittleFS);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     char minStr[3];
@@ -447,7 +424,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
   if (forceRedraw || 
       (wifi_connected != (last_wifi_status == 1)) || 
       (internet_online != (last_internet_online == 1)) ||
-      (hasMail != (last_mail_status == 1))) {
+      (appConfig.hasMail != (last_mail_status == 1))) {
     
     // Clear old checkmark icon area if it was drawn (starts at X=142, width 16, Y=52 to 68)
     tft.fillRect(142, 52, 30, 16, TFT_BLACK); // Expanded clear area for mail icon too
@@ -467,7 +444,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
     drawRLEImage("/internet.rle", netX, netY, netCol);
 
     // Draw Mail envelope icon at X=152, Y=53 (width 15)
-    if (hasMail) {
+    if (appConfig.hasMail) {
       tft.fillRect(152, 53, 15, 11, TFT_BLACK);
       tft.drawRect(152, 55, 15, 11, TFT_WHITE);
       tft.drawLine(152, 55, 159, 61, TFT_WHITE);
@@ -478,7 +455,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
     last_wifi_status = wifi_connected ? 1 : 0;
     last_internet_online = internet_online ? 1 : 0;
-    last_mail_status = hasMail ? 1 : 0;
+    last_mail_status = appConfig.hasMail ? 1 : 0;
   }
 
   // Update statics at the end
@@ -562,7 +539,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
 
   int wifi_status = wifi_connected ? 1 : 0;
   int internet_status = internet_online ? 1 : 0;
-  int mail_status = hasMail ? 1 : 0;
+  int mail_status = appConfig.hasMail ? 1 : 0;
 
   if (wifi_status != last_wifi) {
     if (wifi_connected) {
@@ -585,7 +562,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
   }
 
   if (mail_status != last_mail || forceRedraw) {
-    if (hasMail) {
+    if (appConfig.hasMail) {
       tft.fillRect(112, 18, 16, 15, HITECH_BG_STATUS); // Clear area safely
       tft.drawRect(112, 20, 15, 11, HITECH_CYAN);
       tft.drawLine(112, 20, 119, 26, HITECH_CYAN);
@@ -607,13 +584,13 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     
 
     // Draw centered time
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_HITECH_TIME, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
     
     int display_h = h;
-    if (!time24h) {
+    if (!appConfig.time24h) {
       display_h = h % 12;
       if (display_h == 0) display_h = 12;
     }
@@ -630,17 +607,17 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
   // Draw temperature in format 00 and celsius upper o
   // Window: lower-left (147, 208) -> standard (147, 31); top-right (174, 220) -> standard (174, 19)
   // Box: x = 147, y = 19, width = 28, height = 13. Center: X = 160.5, Y = 25
-  if (temp != last_temp) {
+  if (appState.temp != last_temp) {
     // Clear box area (aligned to Y=19 center with 13px height)
     tft.fillRect(138, 21, 40, 13, HITECH_BG_STATUS);
 
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_HITECH_TEMP, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
 
     char tempValStr[3];
-    snprintf(tempValStr, sizeof(tempValStr), "%02d", temp);
+    snprintf(tempValStr, sizeof(tempValStr), "%02d", appState.temp);
 
     // Draw 2-digit temperature centered at X=153, Y=19
     tft.drawString(String(tempValStr), 150, 19);
@@ -652,7 +629,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.drawString("C", 170, 19);
 
     tft.unloadFont();
-    last_temp = temp;
+    last_temp = appState.temp;
   }
 
   // Draw 3-letter day of week abbreviation and date in DD MM format
@@ -663,7 +640,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
   if (ts.tm_mday != last_mday || ts.tm_mon != last_mon) {
     // 1. Day of the Week Box (restored to original y=106, height=15)
     tft.fillRect(65, 109, 38, 13, HITECH_BG_TIME);
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_HITECH_DAY, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
@@ -675,7 +652,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
 
     // 2. Date Box (restored to original y=106, height=15)
     tft.fillRect(113, 109, 54, 13, HITECH_BG_TIME);
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_HITECH_DATE, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
@@ -689,15 +666,15 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
   }
 
   // Draw sitting and away hours (updated dynamically when values change or forceRedraw)
-  int current_desk_hours = totalDeskTime / 3600000UL;
-  int current_break_hours = totalBreakTime / 3600000UL;
+  int current_desk_hours = appStats.totalDeskTime / 3600000UL;
+  int current_break_hours = appStats.totalBreakTime / 3600000UL;
 
   if (current_desk_hours != last_desk_hours || current_break_hours != last_break_hours || forceRedraw) {
     // Clear boxes with HITECH_BG_STATUS (aligned to Y=134 to Y=150 inside slot borders)
     tft.fillRect(61, 147, 28, 15, HITECH_BOX_BG);
     tft.fillRect(126, 147, 28, 16, HITECH_BOX_BG);
 
-    fsReadCount++;
+    appStats.fsReadCount++;
     tft.loadFont(FONT_HITECH_STATS, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_STATUS);
     tft.setTextDatum(MC_DATUM);
@@ -798,7 +775,7 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 
   // Line 5: Presence State
   const char* stateNames[] = {"AWAY", "FOCUS", "BUSY", "DISTRACTED", "REGULAR"};
-  const char* stateStr = (currentPresenceState >= 0 && currentPresenceState < 5) ? stateNames[currentPresenceState] : "UNKNOWN";
+  const char* stateStr = (appState.currentPresenceState >= 0 && appState.currentPresenceState < 5) ? stateNames[appState.currentPresenceState] : "UNKNOWN";
   snprintf(line, sizeof(line), "STATE: %s", stateStr);
   drawDevLine(4, line, 86);
 
@@ -810,13 +787,13 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
   drawDevLine(5, line, 102);
 
   // Line 7: Raw & Filtered distance
-  snprintf(line, sizeof(line), "DIST: R:%d F:%d", rawDetectionDist, (int)filteredDetectionDist);
+  snprintf(line, sizeof(line), "DIST: R:%d F:%d", appState.rawDetectionDist, (int)appState.filteredDetectionDist);
   drawDevLine(6, line, 118);
 
   // Line 8: Session Sitting Timer
   unsigned long sessSitMs = 0;
-  if (currentPresenceState != STATE_AWAY) {
-    sessSitMs = now - continuousPresenceStart;
+  if (appState.currentPresenceState != STATE_AWAY) {
+    sessSitMs = now - appState.continuousPresenceStart;
   }
   char sitStr[12];
   formatHMS(sessSitMs, sitStr, sizeof(sitStr));
@@ -826,24 +803,23 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
   // Line 9: Workday stats
   char dailyDeskStr[12];
   char dailyBreakStr[12];
-  formatHMS(totalDeskTime, dailyDeskStr, sizeof(dailyDeskStr));
-  formatHMS(totalBreakTime, dailyBreakStr, sizeof(dailyBreakStr));
+  formatHMS(appStats.totalDeskTime, dailyDeskStr, sizeof(dailyDeskStr));
+  formatHMS(appStats.totalBreakTime, dailyBreakStr, sizeof(dailyBreakStr));
   snprintf(line, sizeof(line), "DAY: S:%s B:%s", dailyDeskStr, dailyBreakStr);
   drawDevLine(8, line, 150);
 
   // Line 10: Break Count & Latest Break Duration
-  unsigned long latestBreakMins = latestBreakDuration / 60000UL;
-  snprintf(line, sizeof(line), "BREAKS: %d L:%lum", breakCount, latestBreakMins);
+  unsigned long latestBreakMins = appStats.latestBreakDuration / 60000UL;
+  snprintf(line, sizeof(line), "BREAKS: %d L:%lum", appStats.breakCount, latestBreakMins);
   drawDevLine(9, line, 166);
 
   // Line 11: File System Reads & Writes
-  snprintf(line, sizeof(line), "FS: R:%u W:%u", fsReadCount, fsWriteCount);
+  snprintf(line, sizeof(line), "FS: R:%u W:%u", appStats.fsReadCount, appStats.fsWriteCount);
   drawDevLine(10, line, 182);
 
   // Line 12: Heap & AI Requests Count
-  extern int dailyAiRequestCount;
-  uint32_t freeHeapK = ESP.getFreeHeap() / 1024;
-  snprintf(line, sizeof(line), "HEAP:%uK AI:%d/15", freeHeapK, dailyAiRequestCount);
+    uint32_t freeHeapK = ESP.getFreeHeap() / 1024;
+  snprintf(line, sizeof(line), "HEAP:%uK AI:%d/15", freeHeapK, appStats.dailyAiRequestCount);
   drawDevLine(11, line, 198);
 }
 

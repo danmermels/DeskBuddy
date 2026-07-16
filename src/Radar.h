@@ -6,24 +6,11 @@
 #include <algorithm>
 #include <Preferences.h>
 
+#include "State.h"
+
 // Extern global references from main.cpp
 extern ld2410 radar;
 extern Preferences preferences;
-extern int g0mSens;
-extern int g0sSens;
-extern int g1mSens;
-extern int g1sSens;
-extern int g2mSens;
-extern int g2sSens;
-extern int g3mSens;
-extern int g3sSens;
-extern int g4mSens;
-extern int g4sSens;
-extern int g5mSens;
-extern int g5sSens;
-extern int g6mSens;
-extern int g6sSens;
-extern int deskDistanceLimit;
 
 class RollingMedianFilter {
 public:
@@ -93,7 +80,6 @@ extern RollingMedianFilter detectionDistFilter;
 extern RollingMedianFilter motionFilter;
 
 // Filtered values
-extern float filteredDetectionDist;
 
 inline void setupRadar() {
   // Initialize Serial1 for Radar on Pins 0 (RX) and 5 (TX)
@@ -118,58 +104,58 @@ inline void setupRadar() {
     // Re-verify serial connection and query configuration from the physical module
     if (radar.requestCurrentConfiguration()) {
       // Sync local state variables with settings retrieved from the module
-      g0mSens = radar.motion_sensitivity[0];
-      g0sSens = radar.stationary_sensitivity[0];
-      g1mSens = radar.motion_sensitivity[1];
-      g1sSens = radar.stationary_sensitivity[1];
-      g2mSens = radar.motion_sensitivity[2];
-      g2sSens = radar.stationary_sensitivity[2];
-      g3mSens = radar.motion_sensitivity[3];
-      g3sSens = radar.stationary_sensitivity[3];
-      g4mSens = radar.motion_sensitivity[4];
-      g4sSens = radar.stationary_sensitivity[4];
-      g5mSens = radar.motion_sensitivity[5];
-      g5sSens = radar.stationary_sensitivity[5];
-      g6mSens = radar.motion_sensitivity[6];
-      g6sSens = radar.stationary_sensitivity[6];
+      appConfig.g0mSens = radar.motion_sensitivity[0];
+      appConfig.g0sSens = radar.stationary_sensitivity[0];
+      appConfig.g1mSens = radar.motion_sensitivity[1];
+      appConfig.g1sSens = radar.stationary_sensitivity[1];
+      appConfig.g2mSens = radar.motion_sensitivity[2];
+      appConfig.g2sSens = radar.stationary_sensitivity[2];
+      appConfig.g3mSens = radar.motion_sensitivity[3];
+      appConfig.g3sSens = radar.stationary_sensitivity[3];
+      appConfig.g4mSens = radar.motion_sensitivity[4];
+      appConfig.g4sSens = radar.stationary_sensitivity[4];
+      appConfig.g5mSens = radar.motion_sensitivity[5];
+      appConfig.g5sSens = radar.stationary_sensitivity[5];
+      appConfig.g6mSens = radar.motion_sensitivity[6];
+      appConfig.g6sSens = radar.stationary_sensitivity[6];
       
       // Calculate deskDistanceLimit based on max_gate (each gate corresponds to 20cm)
       if (radar.max_gate >= 2 && radar.max_gate <= 8) {
-        deskDistanceLimit = radar.max_gate * 20;
+        appConfig.deskDistanceLimit = radar.max_gate * 20;
       }
       
       // Commit these synced values back to Preferences (Flash)
       preferences.begin("deskbuddy", false);
-      preferences.putInt("distLimit", deskDistanceLimit);
-      preferences.putInt("g0mSens", g0mSens);
-      preferences.putInt("g0sSens", g0sSens);
-      preferences.putInt("g1mSens", g1mSens);
-      preferences.putInt("g1sSens", g1sSens);
-      preferences.putInt("g2mSens", g2mSens);
-      preferences.putInt("g2sSens", g2sSens);
-      preferences.putInt("g3mSens", g3mSens);
-      preferences.putInt("g3sSens", g3sSens);
-      preferences.putInt("g4mSens", g4mSens);
-      preferences.putInt("g4sSens", g4sSens);
-      preferences.putInt("g5mSens", g5mSens);
-      preferences.putInt("g5sSens", g5sSens);
-      preferences.putInt("g6mSens", g6mSens);
-      preferences.putInt("g6sSens", g6sSens);
+      preferences.putInt("distLimit", appConfig.deskDistanceLimit);
+      preferences.putInt("g0mSens", appConfig.g0mSens);
+      preferences.putInt("g0sSens", appConfig.g0sSens);
+      preferences.putInt("g1mSens", appConfig.g1mSens);
+      preferences.putInt("g1sSens", appConfig.g1sSens);
+      preferences.putInt("g2mSens", appConfig.g2mSens);
+      preferences.putInt("g2sSens", appConfig.g2sSens);
+      preferences.putInt("g3mSens", appConfig.g3mSens);
+      preferences.putInt("g3sSens", appConfig.g3sSens);
+      preferences.putInt("g4mSens", appConfig.g4mSens);
+      preferences.putInt("g4sSens", appConfig.g4sSens);
+      preferences.putInt("g5mSens", appConfig.g5mSens);
+      preferences.putInt("g5sSens", appConfig.g5sSens);
+      preferences.putInt("g6mSens", appConfig.g6mSens);
+      preferences.putInt("g6sSens", appConfig.g6sSens);
       preferences.end();
       
       Serial.println("LD2410 configurations retrieved and synced successfully from the module.");
     } else {
       Serial.println("Failed to retrieve configuration from LD2410. Falling back to local settings.");
       // Fallback: apply local configurations (loaded from Preferences at startup) to the module
-      radar.setGateSensitivityThreshold(0, g0mSens, g0sSens);
-      radar.setGateSensitivityThreshold(1, g1mSens, g1sSens);
-      radar.setGateSensitivityThreshold(2, g2mSens, g2sSens);
-      radar.setGateSensitivityThreshold(3, g3mSens, g3sSens);
-      radar.setGateSensitivityThreshold(4, g4mSens, g4sSens);
-      radar.setGateSensitivityThreshold(5, g5mSens, g5sSens);
-      radar.setGateSensitivityThreshold(6, g6mSens, g6sSens);
+      radar.setGateSensitivityThreshold(0, appConfig.g0mSens, appConfig.g0sSens);
+      radar.setGateSensitivityThreshold(1, appConfig.g1mSens, appConfig.g1sSens);
+      radar.setGateSensitivityThreshold(2, appConfig.g2mSens, appConfig.g2sSens);
+      radar.setGateSensitivityThreshold(3, appConfig.g3mSens, appConfig.g3sSens);
+      radar.setGateSensitivityThreshold(4, appConfig.g4mSens, appConfig.g4sSens);
+      radar.setGateSensitivityThreshold(5, appConfig.g5mSens, appConfig.g5sSens);
+      radar.setGateSensitivityThreshold(6, appConfig.g6mSens, appConfig.g6sSens);
       
-      int requiredGates = (deskDistanceLimit + 19) / 20;
+      int requiredGates = (appConfig.deskDistanceLimit + 19) / 20;
       if (requiredGates < 2) requiredGates = 2;
       if (requiredGates > 8) requiredGates = 8;
       radar.setMaxValues(requiredGates, requiredGates, 5);

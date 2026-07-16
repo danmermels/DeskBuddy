@@ -4,12 +4,25 @@
 #include <Arduino.h>
 #include "Constants.h"
 
+// RGB Color structure
+#ifndef RGB_COLOR_STRUCT
+#define RGB_COLOR_STRUCT
+struct RGBColor {
+  uint8_t r, g, b;
+  bool operator==(const RGBColor& o) const { return r == o.r && g == o.g && b == o.b; }
+  bool operator!=(const RGBColor& o) const { return !(*this == o); }
+};
+#endif
+
 // MQTT Message structure
+#ifndef MQTT_MESSAGE_STRUCT
+#define MQTT_MESSAGE_STRUCT
 struct MqttMessage {
   String topic;
   String payload;
   unsigned long timestamp;
 };
+#endif
 
 struct ConfigState {
   float targetHours = 8.0;
@@ -55,6 +68,7 @@ struct StatsState {
   unsigned long latestBreakDuration = 0;
   unsigned long totalMotionTime = 0;
   unsigned long motionCount = 0;
+  int productivityScore = 0;
   
   uint8_t hourlyPresenceHistoryWeekly[7][24] = {0};
   uint32_t presenceMsCurrentDay[24] = {0};
@@ -81,11 +95,12 @@ struct RuntimeState {
   unsigned long continuousStillStart = 0;
   unsigned long lastStretchReminderTime = 0;
   volatile bool otaInProgress = false;
+  bool streakAlertTriggered = false;
   
   unsigned long sitDownTime = 0;
   uint32_t sitDownEpoch = 0;
   bool rolloverPending = false;
-  unsigned long requiredValidationBufferMs = VALIDATION_BUFFER_MS;
+  unsigned long requiredValidationBufferMs = 180000UL;
 
   int rawDetectionDist = 0;
   bool sensorPresenceDetected = false;
@@ -107,6 +122,15 @@ struct RuntimeState {
   String currentPrompt = "";
   String lastTriggeredEventDetail = "";
   String currentUserName = "human";
+  int temp = 21;
+  String weatherDesc = "Clear";
+  
+  unsigned long aiScreenEndTime = 0;
+  RGBColor currentRingColor = {80, 80, 80};
+  RGBColor startRingColor = {80, 80, 80};
+  RGBColor targetRingColor = {80, 80, 80};
+  unsigned long ringTransitionStart = 0;
+  unsigned long ringTransitionDuration = RING_TRANSITION_MS;
   
   SemaphoreHandle_t geminiMutex = NULL;
   

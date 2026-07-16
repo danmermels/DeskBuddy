@@ -26,33 +26,14 @@ struct RGBColor {
 };
 #endif
 
+#include "State.h"
+
 // Externs for global state variables from main.cpp
 extern TFT_eSPI tft;
-extern int clockFace;
-extern int currentPresenceState;
-extern bool hasMail;
-extern unsigned long lastStateTransitionTime;
-extern unsigned long sitDownTime;
-extern unsigned long aiScreenEndTime;
-extern volatile bool hasNewAIResponse;
-extern SemaphoreHandle_t geminiMutex;
-extern String aiResponse;
-extern volatile bool lastResponseIsAi;
+extern NTPClient timeClient;
 extern const int AI_RESPONSE_MAX_CHARS;
 extern const int DISPLAY_CHARS_PER_LINE;
-extern volatile bool isAILoading;
-extern int lastTriggeredEventType;
-extern NTPClient timeClient;
-extern bool time24h;
-extern uint32_t fsReadCount;
-extern uint32_t fsWriteCount;
-
 extern const RGBColor stateColors[];
-extern RGBColor currentRingColor;
-extern RGBColor startRingColor;
-extern RGBColor targetRingColor;
-extern unsigned long ringTransitionStart;
-extern const unsigned long ringTransitionDuration;
 
 // Forward declarations for clock faces (defined in Faceplates.h)
 extern void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
@@ -62,7 +43,7 @@ extern void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
 // Draw custom PackBits-RLE compressed image from LittleFS to TFT
 inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t overrideColor = 0) {
-  fsReadCount++;
+  appStats.fsReadCount++;
   fs::File file = LittleFS.open(filename, "r");
   if (!file) return false;
 
@@ -194,47 +175,47 @@ inline void updateTFTDisplay(unsigned long now) {
   static bool welcomeAlertIsAi = false;
 
   bool newAlert = false;
-  if (hasNewAIResponse) {
-    xSemaphoreTake(geminiMutex, portMAX_DELAY);
-    String msg = aiResponse;
-    bool isAi = lastResponseIsAi;
-    hasNewAIResponse = false;
-    xSemaphoreGive(geminiMutex);
+  if (appState.hasNewAIResponse) {
+    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    String msg = appState.aiResponse;
+    bool isAi = appState.lastResponseIsAi;
+    appState.hasNewAIResponse = false;
+    xSemaphoreGive(appState.geminiMutex);
 
     // Publish to MQTT immediately when any message is triggered
     publishMqttMessage(msg);
 
-    if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT) {
+    if (appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_FIRST_SIT) {
       pendingWelcomeAlert = true;
       welcomeAlertMessage = msg;
       welcomeAlertIsAi = isAi;
     } else {
       activeAlertMessage = msg;
       activeAlertIsAi = isAi;
-      aiScreenEndTime = now + 8000;
+      appState.aiScreenEndTime = now + 8000;
       newAlert = true;
     }
   }
 
-  if (pendingWelcomeAlert && (now - sitDownTime >= 15000UL)) {
+  if (pendingWelcomeAlert && (now - appState.sitDownTime >= 15000UL)) {
     pendingWelcomeAlert = false;
     activeAlertMessage = welcomeAlertMessage;
     activeAlertIsAi = welcomeAlertIsAi;
-    aiScreenEndTime = now + 8000;
+    appState.aiScreenEndTime = now + 8000;
     newAlert = true;
   }
 
-  bool isAlertActive = (now < aiScreenEndTime);
+  bool isAlertActive = (now < appState.aiScreenEndTime);
   int targetPage = -1;
-  if (currentPresenceState == STATE_AWAY) {
+  if (appState.currentPresenceState == STATE_AWAY) {
     pendingWelcomeAlert = false;
     welcomeAlertMessage = "";
-    if (hasNewAIResponse) {
-      if (lastTriggeredEventType == EVENT_WELCOME_BACK || lastTriggeredEventType == EVENT_FIRST_SIT) {
-        hasNewAIResponse = false;
+    if (appState.hasNewAIResponse) {
+      if (appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_FIRST_SIT) {
+        appState.hasNewAIResponse = false;
       }
     }
-    if (now - lastStateTransitionTime < 60000UL) {
+    if (now - appState.lastStateTransitionTime < 60000UL) {
       targetPage = 0; // Show Clock page during the 1-minute grace period
     } else {
       targetPage = -1; // Away page
@@ -248,17 +229,17 @@ inline void updateTFTDisplay(unsigned long now) {
   static bool lastTime24h = true;
 
   bool forceRedraw = (targetPage != lastDisplayedPage) || 
-                     (clockFace != lastClockFace) || 
-                     (time24h != lastTime24h) ||
+                     (appConfig.clockFace != lastClockFace) || 
+                     (appConfig.time24h != lastTime24h) ||
                      newAlert;
 
-  if (clockFace != lastClockFace) {
+  if (appConfig.clockFace != lastClockFace) {
     tft.fillScreen(TFT_BLACK);
-    lastClockFace = clockFace;
+    lastClockFace = appConfig.clockFace;
   }
 
-  if (time24h != lastTime24h) {
-    lastTime24h = time24h;
+  if (appConfig.time24h != lastTime24h) {
+    lastTime24h = appConfig.time24h;
     tft.fillScreen(TFT_BLACK);
   }
 
@@ -267,10 +248,10 @@ inline void updateTFTDisplay(unsigned long now) {
     lastDisplayedPage = targetPage;
   }
 
-  lastDisplayedState = currentPresenceState;
+  lastDisplayedState = appState.currentPresenceState;
 
   // 1. If user is AWAY (and grace period has expired)
-  if (currentPresenceState == STATE_AWAY && (now - lastStateTransitionTime >= 60000UL)) {
+  if (appState.currentPresenceState == STATE_AWAY && (now - appState.lastStateTransitionTime >= 60000UL)) {
     if (forceRedraw) {
       drawRLEImage("/away.rle", 0, 0);
     }
@@ -283,19 +264,19 @@ inline void updateTFTDisplay(unsigned long now) {
   bool wifiAvailable = (WiFi.status() == WL_CONNECTED);
   bool internetAvailable = wifiAvailable && timeClient.isTimeSet();
 
-  switch (clockFace) {
+  switch (appConfig.clockFace) {
     case 1:
-      drawMinimalistClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
+      drawMinimalistClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 2:
-      drawHiTechClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
+      drawHiTechClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 3:
-      drawDevClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
+      drawDevClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 0:
     default:
-      drawDefaultClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, hasMail);
+      drawDefaultClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
   }
 }

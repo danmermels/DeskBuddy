@@ -3,13 +3,8 @@
 
 #include <Arduino.h>
 
-// Learning and Day Session Rollover Variables (extern declarations, defined in main.cpp)
-extern uint8_t hourlyPresenceHistoryWeekly[7][24];
-extern uint32_t presenceMsCurrentDay[24];
-extern int historyDaysCountWeekly[7];
-extern bool lunchReminderTriggered;
+#include "State.h"
 
-// Predefined occupancy pattern (simulating a standard 9-to-6 workday with lunch break)
 const uint8_t PREDEFINED_PATTERN[24] = {
   0, 0, 0, 0, 0, 0, 0, 0,  // 12 AM - 7 AM
   10,                      // 8 AM
@@ -26,15 +21,15 @@ inline uint8_t getEffectivePresence(int dayIndex, int h) {
   if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
   if (h < 0 || h >= 24) return 0;
   
-  int count = historyDaysCountWeekly[dayIndex];
+  int count = appStats.historyDaysCountWeekly[dayIndex];
   if (count <= 0) {
     return PREDEFINED_PATTERN[h];
   } else if (count == 1) {
-    return (uint8_t)((2 * (uint16_t)PREDEFINED_PATTERN[h] + hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
+    return (uint8_t)((2 * (uint16_t)PREDEFINED_PATTERN[h] + appStats.hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
   } else if (count == 2) {
-    return (uint8_t)(((uint16_t)PREDEFINED_PATTERN[h] + 2 * hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
+    return (uint8_t)(((uint16_t)PREDEFINED_PATTERN[h] + 2 * appStats.hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
   } else {
-    return hourlyPresenceHistoryWeekly[dayIndex][h];
+    return appStats.hourlyPresenceHistoryWeekly[dayIndex][h];
   }
 }
 

@@ -9,63 +9,16 @@
 #include <LittleFS.h>
 #include "MqttService.h"
 
+#include "State.h"
+
 // Extern references for global state in main.cpp
-extern MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
-extern int mqttHistoryHead;
-extern int mqttHistoryCount;
-extern SemaphoreHandle_t mqttHistoryMutex;
 extern PubSubClient mqttClient;
 extern WebServer server;
 extern Preferences preferences;
-extern int currentPresenceState;
-extern bool sensorPresenceDetected;
-extern bool sensorMovingTargetDetected;
-extern float filteredDetectionDist;
-extern int rawDetectionDist;
-extern float sessionDistanceAverage;
-extern unsigned long totalDeskTime;
-extern unsigned long totalFocusTime;
-extern unsigned long totalBreakTime;
-extern unsigned long overnightBreakDuration;
-extern int breakCount;
-extern unsigned long latestBreakDuration;
-extern unsigned long longestSittingStreak;
-extern uint32_t firstSitEpoch;
-extern int productivityScore;
-extern int aiMode;
-extern int aiPersona;
-extern int clockFace;
-extern bool hasMail;
-extern bool time24h;
-extern float targetHours;
-extern String userName;
-extern int focusDistanceLimit;
-extern int motionRatioLimit;
-extern unsigned long sessionDeskTime;
-extern unsigned long sessionMotionTime;
-extern unsigned long totalMotionTime;
-extern int motionCount;
-extern int deskDistanceLimit;
-extern float filterWindow;
 extern ld2410 radar;
-extern int g0mSens, g0sSens, g1mSens, g1sSens, g2mSens, g2sSens, g3mSens, g3sSens, g4mSens, g4sSens, g5mSens, g5sSens, g6mSens, g6sSens;
-extern SemaphoreHandle_t geminiMutex;
-extern String aiResponse;
-extern volatile bool lastResponseIsAi;
-extern volatile bool isAILoading;
-extern bool firstSitToday;
-extern uint32_t lastAwayEpoch;
-extern int dailyAiRequestCount;
-extern unsigned long sessionDistanceSum;
-extern unsigned long sessionDistanceCount;
 #include <NTPClient.h>
 extern NTPClient timeClient;
-extern uint8_t hourlyPresenceHistoryWeekly[7][24];
-extern uint32_t presenceMsCurrentDay[24];
-extern int historyDaysCountWeekly[7];
 extern uint8_t getEffectivePresence(int dayIndex, int h);
-extern uint32_t fsWriteCount;
-extern uint32_t fsReadCount;
 extern int getLearnedWorkdayStart(int dayIndex);
 extern int getLearnedWorkdayStart(const uint8_t* history);
 extern int getLearnedWorkdayEnd(int dayIndex);
@@ -168,6 +121,102 @@ inline void handleRoot() {
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    .settings-input {
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      padding: 8px 12px;
+      border-radius: 8px;
+      outline: none;
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .settings-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+    .btn {
+      background: #38bdf8;
+      color: #0f172a;
+      font-weight: bold;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.95rem;
+      transition: opacity 0.2s, transform 0.1s, background-color 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn:hover {
+      opacity: 0.95;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    .btn-secondary {
+      background: #334155;
+      color: #94a3b8;
+    }
+    .btn-secondary:hover {
+      background: #475569;
+      color: #f8fafc;
+    }
+    .btn-purple {
+      background: #7c3aed;
+      color: #f5f3ff;
+    }
+    .btn-purple:hover {
+      background: #8b5cf6;
+    }
+    .panel-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .mqtt-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      background: #0f172a;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid #334155;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .status-connected {
+      background: #10b981;
+      color: #10b981;
+    }
+    .status-disconnected {
+      background: #ef4444;
+      color: #ef4444;
+    }
+    #mqttConsole::-webkit-scrollbar {
+      width: 6px;
+    }
+    #mqttConsole::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    #mqttConsole::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    #mqttConsole::-webkit-scrollbar-thumb:hover {
+      background: #38bdf8;
     }
   </style>
 </head>
@@ -290,18 +339,24 @@ inline void handleRoot() {
   </div>
 
   <div class="card">
-    <h1>MQTT Terminal</h1>
+    <div class="panel-header-row">
+      <h1 style="margin: 0; font-size: 1.5rem; color: #38bdf8;">MQTT Terminal</h1>
+      <div class="mqtt-status" id="mqttStatus">
+        <span class="status-dot status-disconnected"></span>
+        <span id="mqttStatusText">Offline</span>
+      </div>
+    </div>
     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
       <input type="text" id="mqttTopic" placeholder="topic" class="settings-input" style="flex: 1; min-width: 140px; text-align: left; box-sizing: border-box;" value="deskbuddy/message">
-      <button class="btn" onclick="switchToDisplayTopic()" style="padding: 6px 10px; font-size: 0.8rem; background: #8b5cf6;">Display</button>
+      <button class="btn btn-purple" onclick="switchToDisplayTopic()" style="padding: 6px 10px; font-size: 0.8rem; height: 38px;">Display</button>
       <input type="text" id="mqttPayload" placeholder="Type message..." class="settings-input" style="flex: 2; min-width: 180px; text-align: left; box-sizing: border-box;" onkeydown="if(event.key === 'Enter') sendMqttMessage()">
-      <button class="btn" onclick="sendMqttMessage()" style="padding: 6px 15px;">Send</button>
+      <button class="btn" onclick="sendMqttMessage()" style="padding: 6px 15px; height: 38px;">Send</button>
     </div>
-    <div id="mqttConsole" style="background: #0f172a; border-radius: 8px; border: 1px solid #334155; height: 180px; overflow-y: auto; padding: 10px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
+    <div id="mqttConsole" style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid #334155; height: 180px; overflow-y: auto; padding: 10px; font-family: 'Fira Code', monospace; font-size: 0.85rem; color: #38bdf8; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
       <div style="color: #64748b; font-style: italic;">Console initialized. Awaiting MQTT updates...</div>
     </div>
     <div style="display: flex; gap: 8px; margin-top: 8px;">
-      <button class="btn" onclick="clearMqttHistory()" style="padding: 5px 12px; font-size: 0.85rem; background: #334155;">Clear History</button>
+      <button class="btn btn-secondary" onclick="clearMqttHistory()" style="padding: 5px 12px; font-size: 0.85rem;">Clear History</button>
     </div>
   </div>
 
@@ -376,6 +431,17 @@ inline void handleRoot() {
           
           let isAi = data.isAiGenerated;
           document.getElementById('aiBadge').style.display = isAi ? "block" : "none";
+          
+          // Update MQTT Status
+          let statusDot = document.querySelector('#mqttStatus .status-dot');
+          let statusText = document.getElementById('mqttStatusText');
+          if (data.mqttConnected) {
+            statusDot.className = "status-dot status-connected";
+            statusText.innerText = data.mqttBroker ? `Broker: ${data.mqttBroker}` : 'Connected';
+          } else {
+            statusDot.className = "status-dot status-disconnected";
+            statusText.innerText = 'Disconnected';
+          }
           
           setTimeout(updateMetrics, 250);
         })
@@ -783,7 +849,7 @@ inline void handleSettings() {
     <form action="/save-settings" method="POST">
       <div class="metric">
         <span class="label">AI Mode</span>
-        <select name="aiMode" id="aiModeSelect" class="settings-select">
+        <select name="appConfig.aiMode" id="aiModeSelect" class="settings-select">
           <option value="0">Eco (Off)</option>
           <option value="1">Balanced</option>
           <option value="2">Frequent</option>
@@ -791,7 +857,7 @@ inline void handleSettings() {
       </div>
       <div class="metric">
         <span class="label">AI Persona</span>
-        <select name="aiPersona" id="aiPersonaSelect" class="settings-select">
+        <select name="appConfig.aiPersona" id="aiPersonaSelect" class="settings-select">
           <option value="0">Coach</option>
           <option value="1">Critic</option>
           <option value="2">Nerd</option>
@@ -800,7 +866,7 @@ inline void handleSettings() {
       </div>
       <div class="metric">
         <span class="label">Clock Face Style</span>
-        <select name="clockFace" id="clockFaceSelect" class="settings-select">
+        <select name="appConfig.clockFace" id="clockFaceSelect" class="settings-select">
           <option value="0">Default Digital</option>
           <option value="1">Minimalist</option>
           <option value="2">HiTech</option>
@@ -809,23 +875,23 @@ inline void handleSettings() {
       </div>
       <div class="metric">
         <span class="label">Time Format</span>
-        <select name="time24h" id="time24hSelect" class="settings-select">
+        <select name="appConfig.time24h" id="time24hSelect" class="settings-select">
           <option value="1">24-Hour</option>
           <option value="0">12-Hour</option>
         </select>
       </div>
       <div class="metric">
         <span class="label">User Name</span>
-        <input type="text" name="userName" id="userNameInput" class="settings-input" style="width: 150px; text-align: left;">
+        <input type="text" name="appConfig.userName" id="userNameInput" class="settings-input" style="width: 150px; text-align: left;">
       </div>
 
       <div class="metric">
         <span class="label">Daily Target Hours</span>
-        <input type="number" step="0.1" min="0.1" max="24.0" name="targetHours" id="targetHoursInput" class="settings-input">
+        <input type="number" step="0.1" min="0.1" max="24.0" name="appConfig.targetHours" id="targetHoursInput" class="settings-input">
       </div>
       <div class="metric">
         <span class="label">Mail Alert Active</span>
-        <select name="hasMail" id="hasMailSelect" class="settings-select">
+        <select name="appConfig.hasMail" id="hasMailSelect" class="settings-select">
           <option value="0">No Mail</option>
           <option value="1">Mail Active</option>
         </select>
@@ -856,7 +922,7 @@ inline void handleSettings() {
           <span class="label">Filter Window (Seconds)</span>
           <span class="value" id="filterWindowVal">2.0s</span>
         </div>
-        <input type="range" name="filterWindow" id="filterWindowSlider" min="0.5" max="10.0" step="0.5" class="slider" oninput="document.getElementById('filterWindowVal').innerText = parseFloat(this.value).toFixed(1) + 's'">
+        <input type="range" name="appConfig.filterWindow" id="filterWindowSlider" min="0.5" max="10.0" step="0.5" class="slider" oninput="document.getElementById('filterWindowVal').innerText = parseFloat(this.value).toFixed(1) + 's'">
       </div>
       <details style="margin-top: 15px; border-top: 1px solid #334155; padding-top: 10px;">
         <summary style="cursor: pointer; color: #38bdf8; font-weight: bold; padding: 5px 0; outline: none;">Gate Sensitivity Trigger Levels (Gates 0-6)</summary>
@@ -869,7 +935,7 @@ inline void handleSettings() {
               <span class="label">Gate 0 Static Sensitivity</span>
               <span class="value" id="g0sSensVal">50</span>
             </div>
-            <input type="range" name="g0sSens" id="g0sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g0sSens" id="g0sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0sSensVal').innerText = this.value">
           </div>
           <!-- Gate 1 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -877,7 +943,7 @@ inline void handleSettings() {
               <span class="label">Gate 1 Static Sensitivity</span>
               <span class="value" id="g1sSensVal">50</span>
             </div>
-            <input type="range" name="g1sSens" id="g1sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g1sSens" id="g1sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1sSensVal').innerText = this.value">
           </div>
           <!-- Gate 2 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -885,7 +951,7 @@ inline void handleSettings() {
               <span class="label">Gate 2 Static Sensitivity</span>
               <span class="value" id="g2sSensVal">50</span>
             </div>
-            <input type="range" name="g2sSens" id="g2sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g2sSens" id="g2sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2sSensVal').innerText = this.value">
           </div>
           <!-- Gate 3 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -893,7 +959,7 @@ inline void handleSettings() {
               <span class="label">Gate 3 Static Sensitivity</span>
               <span class="value" id="g3sSensVal">50</span>
             </div>
-            <input type="range" name="g3sSens" id="g3sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g3sSens" id="g3sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3sSensVal').innerText = this.value">
           </div>
           <!-- Gate 4 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -901,7 +967,7 @@ inline void handleSettings() {
               <span class="label">Gate 4 Static Sensitivity</span>
               <span class="value" id="g4sSensVal">50</span>
             </div>
-            <input type="range" name="g4sSens" id="g4sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g4sSens" id="g4sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4sSensVal').innerText = this.value">
           </div>
           <!-- Gate 5 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -909,7 +975,7 @@ inline void handleSettings() {
               <span class="label">Gate 5 Static Sensitivity</span>
               <span class="value" id="g5sSensVal">50</span>
             </div>
-            <input type="range" name="g5sSens" id="g5sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g5sSens" id="g5sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5sSensVal').innerText = this.value">
           </div>
           <!-- Gate 6 Static -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -917,7 +983,7 @@ inline void handleSettings() {
               <span class="label">Gate 6 Static Sensitivity</span>
               <span class="value" id="g6sSensVal">50</span>
             </div>
-            <input type="range" name="g6sSens" id="g6sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6sSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g6sSens" id="g6sSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6sSensVal').innerText = this.value">
           </div>
 
           <div style="font-weight: bold; color: #38bdf8; margin: 15px 0 10px 0; border-top: 1px solid #334155; border-bottom: 1px solid #334155; padding: 10px 0 5px 0;">Moving Gate Sensitivities</div>
@@ -928,7 +994,7 @@ inline void handleSettings() {
               <span class="label">Gate 0 Moving Sensitivity</span>
               <span class="value" id="g0mSensVal">100</span>
             </div>
-            <input type="range" name="g0mSens" id="g0mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g0mSens" id="g0mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g0mSensVal').innerText = this.value">
           </div>
           <!-- Gate 1 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -936,7 +1002,7 @@ inline void handleSettings() {
               <span class="label">Gate 1 Moving Sensitivity</span>
               <span class="value" id="g1mSensVal">100</span>
             </div>
-            <input type="range" name="g1mSens" id="g1mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g1mSens" id="g1mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g1mSensVal').innerText = this.value">
           </div>
           <!-- Gate 2 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -944,7 +1010,7 @@ inline void handleSettings() {
               <span class="label">Gate 2 Moving Sensitivity</span>
               <span class="value" id="g2mSensVal">100</span>
             </div>
-            <input type="range" name="g2mSens" id="g2mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g2mSens" id="g2mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g2mSensVal').innerText = this.value">
           </div>
           <!-- Gate 3 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -952,7 +1018,7 @@ inline void handleSettings() {
               <span class="label">Gate 3 Moving Sensitivity</span>
               <span class="value" id="g3mSensVal">100</span>
             </div>
-            <input type="range" name="g3mSens" id="g3mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g3mSens" id="g3mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g3mSensVal').innerText = this.value">
           </div>
           <!-- Gate 4 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -960,7 +1026,7 @@ inline void handleSettings() {
               <span class="label">Gate 4 Moving Sensitivity</span>
               <span class="value" id="g4mSensVal">80</span>
             </div>
-            <input type="range" name="g4mSens" id="g4mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g4mSens" id="g4mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g4mSensVal').innerText = this.value">
           </div>
           <!-- Gate 5 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -968,7 +1034,7 @@ inline void handleSettings() {
               <span class="label">Gate 5 Moving Sensitivity</span>
               <span class="value" id="g5mSensVal">100</span>
             </div>
-            <input type="range" name="g5mSens" id="g5mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g5mSens" id="g5mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g5mSensVal').innerText = this.value">
           </div>
           <!-- Gate 6 Moving -->
           <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
@@ -976,7 +1042,7 @@ inline void handleSettings() {
               <span class="label">Gate 6 Moving Sensitivity</span>
               <span class="value" id="g6mSensVal">100</span>
             </div>
-            <input type="range" name="g6mSens" id="g6mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6mSensVal').innerText = this.value">
+            <input type="range" name="appConfig.g6mSens" id="g6mSensSlider" min="0" max="100" step="1" class="slider" oninput="document.getElementById('g6mSensVal').innerText = this.value">
           </div>
         </div>
       </details>
@@ -1341,53 +1407,55 @@ inline void handleSettings() {
 
 inline void handleRadarData() {
   DynamicJsonDocument doc(4096);
-  doc["presence"] = (currentPresenceState != STATE_AWAY);
-  doc["state"] = getPresenceStateName(currentPresenceState);
-  doc["presenceDetected"] = sensorPresenceDetected;
-  doc["movingTargetDetected"] = sensorMovingTargetDetected;
+  doc["presence"] = (appState.currentPresenceState != STATE_AWAY);
+  doc["state"] = getPresenceStateName(appState.currentPresenceState);
+  doc["presenceDetected"] = appState.sensorPresenceDetected;
+  doc["movingTargetDetected"] = appState.sensorMovingTargetDetected;
+  doc["mqttConnected"] = mqttClient.connected();
+  doc["mqttBroker"] = MQTT_BROKER_IP;
   
   // Distance metrics (always return current stored values to avoid single-frame connection dropouts)
-  doc["detectionDist"] = (int)filteredDetectionDist;
-  doc["rawDetectionDist"] = rawDetectionDist;
-  doc["sessionDistAvg"] = (int)sessionDistanceAverage;
+  doc["detectionDist"] = (int)appState.filteredDetectionDist;
+  doc["rawDetectionDist"] = appState.rawDetectionDist;
+  doc["sessionDistAvg"] = (int)appState.sessionDistanceAverage;
   
-  doc["deskTime"] = formatTime(totalDeskTime);
-  doc["focusTime"] = formatTime(totalFocusTime);
-  doc["breakTime"] = formatTime(totalBreakTime);
-  doc["overnightBreak"] = formatTime(overnightBreakDuration * 1000);
-  doc["breaks"] = breakCount;
-  doc["latestBreak"] = formatTime(latestBreakDuration);
-  doc["longestStreak"] = formatTime(longestSittingStreak);
-  doc["firstSitTime"] = formatEpochTime(firstSitEpoch);
-  doc["score"] = productivityScore;
-  doc["aiMode"] = aiMode;
-  doc["aiPersona"] = aiPersona;
-  doc["dailyAiRequests"] = dailyAiRequestCount;
-  doc["fsReadCount"] = fsReadCount;
-  doc["fsWriteCount"] = fsWriteCount;
+  doc["deskTime"] = formatTime(appStats.totalDeskTime);
+  doc["focusTime"] = formatTime(appStats.totalFocusTime);
+  doc["breakTime"] = formatTime(appStats.totalBreakTime);
+  doc["overnightBreak"] = formatTime(appStats.overnightBreakDuration * 1000);
+  doc["breaks"] = appStats.breakCount;
+  doc["latestBreak"] = formatTime(appStats.latestBreakDuration);
+  doc["longestStreak"] = formatTime(appStats.longestSittingStreak);
+  doc["firstSitTime"] = formatEpochTime(appStats.firstSitEpoch);
+  doc["score"] = appStats.productivityScore;
+  doc["aiMode"] = appConfig.aiMode;
+  doc["aiPersona"] = appConfig.aiPersona;
+  doc["dailyAiRequests"] = appStats.dailyAiRequestCount;
+  doc["fsReadCount"] = appStats.fsReadCount;
+  doc["fsWriteCount"] = appStats.fsWriteCount;
   doc["fsTotalBytes"] = (uint32_t)LittleFS.totalBytes();
   doc["uptimeSeconds"] = (uint32_t)(millis() / 1000);
-  doc["clockFace"] = clockFace;
-  doc["targetHours"] = targetHours;
-  doc["hasMail"] = hasMail;
-  doc["time24h"] = time24h;
-  doc["userName"] = userName;
-  doc["focusDistLim"] = focusDistanceLimit;
-  doc["motionRatioLim"] = motionRatioLimit;
-  doc["motionRatio"] = (sessionDeskTime > 0) ? std::min((int)((sessionMotionTime * 100) / sessionDeskTime), 100) : 0;
-  doc["totalMotionTime"] = formatTime(totalMotionTime);
-  doc["motionCount"] = motionCount;
-  doc["distLimit"] = deskDistanceLimit;
-  doc["filterWindow"] = filterWindow;
+  doc["clockFace"] = appConfig.clockFace;
+  doc["targetHours"] = appConfig.targetHours;
+  doc["hasMail"] = appConfig.hasMail;
+  doc["time24h"] = appConfig.time24h;
+  doc["userName"] = appConfig.userName;
+  doc["focusDistLim"] = appConfig.focusDistanceLimit;
+  doc["motionRatioLim"] = appConfig.motionRatioLimit;
+  doc["motionRatio"] = (appState.sessionDeskTime > 0) ? std::min((int)((appState.sessionMotionTime * 100) / appState.sessionDeskTime), 100) : 0;
+  doc["totalMotionTime"] = formatTime(appStats.totalMotionTime);
+  doc["motionCount"] = appStats.motionCount;
+  doc["distLimit"] = appConfig.deskDistanceLimit;
+  doc["filterWindow"] = appConfig.filterWindow;
   
   // Learned occupancy metrics
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
-  doc["historyDays"] = historyDaysCountWeekly[currentDay];
+  doc["historyDays"] = appStats.historyDaysCountWeekly[currentDay];
   
   // Combine history with today's real-time accumulated presence
   uint8_t blendedHistory[24];
   for (int h = 0; h < 24; h++) {
-    uint32_t todayMs = presenceMsCurrentDay[h];
+    uint32_t todayMs = appStats.presenceMsCurrentDay[h];
     uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
     // Blend the effective history (incorporating predefined routine) with today's real-time presence
     blendedHistory[h] = (uint8_t)((getEffectivePresence(currentDay, h) * 4 + todayPct) / 5);
@@ -1403,27 +1471,27 @@ inline void handleRadarData() {
   }
   
   // Gate sensitivities (always report current synced variables)
-  doc["g0mSens"] = g0mSens;
-  doc["g0sSens"] = g0sSens;
-  doc["g1mSens"] = g1mSens;
-  doc["g1sSens"] = g1sSens;
-  doc["g2mSens"] = g2mSens;
-  doc["g2sSens"] = g2sSens;
-  doc["g3mSens"] = g3mSens;
-  doc["g3sSens"] = g3sSens;
-  doc["g4mSens"] = g4mSens;
-  doc["g4sSens"] = g4sSens;
-  doc["g5mSens"] = g5mSens;
-  doc["g5sSens"] = g5sSens;
-  doc["g6mSens"] = g6mSens;
-  doc["g6sSens"] = g6sSens;
+  doc["g0mSens"] = appConfig.g0mSens;
+  doc["g0sSens"] = appConfig.g0sSens;
+  doc["g1mSens"] = appConfig.g1mSens;
+  doc["g1sSens"] = appConfig.g1sSens;
+  doc["g2mSens"] = appConfig.g2mSens;
+  doc["g2sSens"] = appConfig.g2sSens;
+  doc["g3mSens"] = appConfig.g3mSens;
+  doc["g3sSens"] = appConfig.g3sSens;
+  doc["g4mSens"] = appConfig.g4mSens;
+  doc["g4sSens"] = appConfig.g4sSens;
+  doc["g5mSens"] = appConfig.g5mSens;
+  doc["g5sSens"] = appConfig.g5sSens;
+  doc["g6mSens"] = appConfig.g6mSens;
+  doc["g6sSens"] = appConfig.g6sSens;
   
   // Add AI response thread-safely
-  xSemaphoreTake(geminiMutex, portMAX_DELAY);
-  doc["aiMessage"] = aiResponse;
-  doc["isAiGenerated"] = lastResponseIsAi;
-  xSemaphoreGive(geminiMutex);
-  doc["aiLoading"] = isAILoading;
+  xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+  doc["aiMessage"] = appState.aiResponse;
+  doc["isAiGenerated"] = appState.lastResponseIsAi;
+  xSemaphoreGive(appState.geminiMutex);
+  doc["aiLoading"] = appState.isAILoading;
   
   String json;
   serializeJson(doc, json);
@@ -1436,105 +1504,105 @@ inline void handleSaveSettings() {
 
     if (server.hasArg("aiMode")) {
       int val = server.arg("aiMode").toInt();
-      if (val != aiMode) { aiMode = val; preferences.putInt("aiMode", aiMode); }
+      if (val != appConfig.aiMode) { appConfig.aiMode = val; preferences.putInt("aiMode", appConfig.aiMode); }
     }
     if (server.hasArg("aiPersona")) {
       int val = server.arg("aiPersona").toInt();
-      if (val != aiPersona) { aiPersona = val; preferences.putInt("aiPersona", aiPersona); }
+      if (val != appConfig.aiPersona) { appConfig.aiPersona = val; preferences.putInt("aiPersona", appConfig.aiPersona); }
     }
     if (server.hasArg("clockFace")) {
       int val = server.arg("clockFace").toInt();
-      if (val != clockFace) { clockFace = val; preferences.putInt("clockFace", clockFace); }
+      if (val != appConfig.clockFace) { appConfig.clockFace = val; preferences.putInt("clockFace", appConfig.clockFace); }
     }
     if (server.hasArg("targetHours")) {
       float val = server.arg("targetHours").toFloat();
       if (val < 0.1f) val = 8.0f;
-      if (val != targetHours) { targetHours = val; preferences.putFloat("targetHours", targetHours); }
+      if (val != appConfig.targetHours) { appConfig.targetHours = val; preferences.putFloat("targetHours", appConfig.targetHours); }
     }
     if (server.hasArg("hasMail")) {
       bool val = (server.arg("hasMail").toInt() == 1);
-      if (val != hasMail) { hasMail = val; preferences.putBool("hasMail", hasMail); }
+      if (val != appConfig.hasMail) { appConfig.hasMail = val; preferences.putBool("hasMail", appConfig.hasMail); }
     }
     if (server.hasArg("time24h")) {
       bool val = (server.arg("time24h").toInt() == 1);
-      if (val != time24h) { time24h = val; preferences.putBool("time24h", time24h); }
+      if (val != appConfig.time24h) { appConfig.time24h = val; preferences.putBool("time24h", appConfig.time24h); }
     }
     if (server.hasArg("userName")) {
       String val = server.arg("userName");
-      if (val != userName) { userName = val; preferences.putString("userName", userName.c_str()); }
+      if (val != appConfig.userName) { appConfig.userName = val; preferences.putString("userName", appConfig.userName.c_str()); }
     }
     if (server.hasArg("focusDistLim")) {
       int val = server.arg("focusDistLim").toInt();
-      if (val != focusDistanceLimit) { focusDistanceLimit = val; preferences.putInt("focusDistLim", focusDistanceLimit); }
+      if (val != appConfig.focusDistanceLimit) { appConfig.focusDistanceLimit = val; preferences.putInt("focusDistLim", appConfig.focusDistanceLimit); }
     }
     if (server.hasArg("motionRatioLim")) {
       int val = server.arg("motionRatioLim").toInt();
-      if (val != motionRatioLimit) { motionRatioLimit = val; preferences.putInt("motionRatioLim", motionRatioLimit); }
+      if (val != appConfig.motionRatioLimit) { appConfig.motionRatioLimit = val; preferences.putInt("motionRatioLim", appConfig.motionRatioLimit); }
     }
     if (server.hasArg("distLimit")) {
       int val = server.arg("distLimit").toInt();
-      if (val != deskDistanceLimit) { deskDistanceLimit = val; preferences.putInt("distLimit", deskDistanceLimit); }
+      if (val != appConfig.deskDistanceLimit) { appConfig.deskDistanceLimit = val; preferences.putInt("distLimit", appConfig.deskDistanceLimit); }
     }
     if (server.hasArg("filterWindow")) {
       float val = server.arg("filterWindow").toFloat();
-      if (val != filterWindow) { filterWindow = val; preferences.putFloat("filterWindow", filterWindow); }
+      if (val != appConfig.filterWindow) { appConfig.filterWindow = val; preferences.putFloat("filterWindow", appConfig.filterWindow); }
     }
 
     if (server.hasArg("g0mSens")) {
       int val = server.arg("g0mSens").toInt();
-      if (val != g0mSens) { g0mSens = val; preferences.putInt("g0mSens", g0mSens); }
+      if (val != appConfig.g0mSens) { appConfig.g0mSens = val; preferences.putInt("g0mSens", appConfig.g0mSens); }
     }
     if (server.hasArg("g0sSens")) {
       int val = server.arg("g0sSens").toInt();
-      if (val != g0sSens) { g0sSens = val; preferences.putInt("g0sSens", g0sSens); }
+      if (val != appConfig.g0sSens) { appConfig.g0sSens = val; preferences.putInt("g0sSens", appConfig.g0sSens); }
     }
     if (server.hasArg("g1mSens")) {
       int val = server.arg("g1mSens").toInt();
-      if (val != g1mSens) { g1mSens = val; preferences.putInt("g1mSens", g1mSens); }
+      if (val != appConfig.g1mSens) { appConfig.g1mSens = val; preferences.putInt("g1mSens", appConfig.g1mSens); }
     }
     if (server.hasArg("g1sSens")) {
       int val = server.arg("g1sSens").toInt();
-      if (val != g1sSens) { g1sSens = val; preferences.putInt("g1sSens", g1sSens); }
+      if (val != appConfig.g1sSens) { appConfig.g1sSens = val; preferences.putInt("g1sSens", appConfig.g1sSens); }
     }
     if (server.hasArg("g2mSens")) {
       int val = server.arg("g2mSens").toInt();
-      if (val != g2mSens) { g2mSens = val; preferences.putInt("g2mSens", g2mSens); }
+      if (val != appConfig.g2mSens) { appConfig.g2mSens = val; preferences.putInt("g2mSens", appConfig.g2mSens); }
     }
     if (server.hasArg("g2sSens")) {
       int val = server.arg("g2sSens").toInt();
-      if (val != g2sSens) { g2sSens = val; preferences.putInt("g2sSens", g2sSens); }
+      if (val != appConfig.g2sSens) { appConfig.g2sSens = val; preferences.putInt("g2sSens", appConfig.g2sSens); }
     }
     if (server.hasArg("g3mSens")) {
       int val = server.arg("g3mSens").toInt();
-      if (val != g3mSens) { g3mSens = val; preferences.putInt("g3mSens", g3mSens); }
+      if (val != appConfig.g3mSens) { appConfig.g3mSens = val; preferences.putInt("g3mSens", appConfig.g3mSens); }
     }
     if (server.hasArg("g3sSens")) {
       int val = server.arg("g3sSens").toInt();
-      if (val != g3sSens) { g3sSens = val; preferences.putInt("g3sSens", g3sSens); }
+      if (val != appConfig.g3sSens) { appConfig.g3sSens = val; preferences.putInt("g3sSens", appConfig.g3sSens); }
     }
     if (server.hasArg("g4mSens")) {
       int val = server.arg("g4mSens").toInt();
-      if (val != g4mSens) { g4mSens = val; preferences.putInt("g4mSens", g4mSens); }
+      if (val != appConfig.g4mSens) { appConfig.g4mSens = val; preferences.putInt("g4mSens", appConfig.g4mSens); }
     }
     if (server.hasArg("g4sSens")) {
       int val = server.arg("g4sSens").toInt();
-      if (val != g4sSens) { g4sSens = val; preferences.putInt("g4sSens", g4sSens); }
+      if (val != appConfig.g4sSens) { appConfig.g4sSens = val; preferences.putInt("g4sSens", appConfig.g4sSens); }
     }
     if (server.hasArg("g5mSens")) {
       int val = server.arg("g5mSens").toInt();
-      if (val != g5mSens) { g5mSens = val; preferences.putInt("g5mSens", g5mSens); }
+      if (val != appConfig.g5mSens) { appConfig.g5mSens = val; preferences.putInt("g5mSens", appConfig.g5mSens); }
     }
     if (server.hasArg("g5sSens")) {
       int val = server.arg("g5sSens").toInt();
-      if (val != g5sSens) { g5sSens = val; preferences.putInt("g5sSens", g5sSens); }
+      if (val != appConfig.g5sSens) { appConfig.g5sSens = val; preferences.putInt("g5sSens", appConfig.g5sSens); }
     }
     if (server.hasArg("g6mSens")) {
       int val = server.arg("g6mSens").toInt();
-      if (val != g6mSens) { g6mSens = val; preferences.putInt("g6mSens", g6mSens); }
+      if (val != appConfig.g6mSens) { appConfig.g6mSens = val; preferences.putInt("g6mSens", appConfig.g6mSens); }
     }
     if (server.hasArg("g6sSens")) {
       int val = server.arg("g6sSens").toInt();
-      if (val != g6sSens) { g6sSens = val; preferences.putInt("g6sSens", g6sSens); }
+      if (val != appConfig.g6sSens) { appConfig.g6sSens = val; preferences.putInt("g6sSens", appConfig.g6sSens); }
     }
 
     preferences.end();
@@ -1543,14 +1611,14 @@ inline void handleSaveSettings() {
     
     // Dynamically adjust physical radar gates according to new range limit
     if (radar.isConnected()) {
-      radar.setGateSensitivityThreshold(0, g0mSens, g0sSens);
-      radar.setGateSensitivityThreshold(1, g1mSens, g1sSens);
-      radar.setGateSensitivityThreshold(2, g2mSens, g2sSens);
-      radar.setGateSensitivityThreshold(3, g3mSens, g3sSens);
-      radar.setGateSensitivityThreshold(4, g4mSens, g4sSens);
-      radar.setGateSensitivityThreshold(5, g5mSens, g5sSens);
-      radar.setGateSensitivityThreshold(6, g6mSens, g6sSens);
-      int requiredGates = (deskDistanceLimit + 19) / 20;
+      radar.setGateSensitivityThreshold(0, appConfig.g0mSens, appConfig.g0sSens);
+      radar.setGateSensitivityThreshold(1, appConfig.g1mSens, appConfig.g1sSens);
+      radar.setGateSensitivityThreshold(2, appConfig.g2mSens, appConfig.g2sSens);
+      radar.setGateSensitivityThreshold(3, appConfig.g3mSens, appConfig.g3sSens);
+      radar.setGateSensitivityThreshold(4, appConfig.g4mSens, appConfig.g4sSens);
+      radar.setGateSensitivityThreshold(5, appConfig.g5mSens, appConfig.g5sSens);
+      radar.setGateSensitivityThreshold(6, appConfig.g6mSens, appConfig.g6sSens);
+      int requiredGates = (appConfig.deskDistanceLimit + 19) / 20;
       if (requiredGates < 2) requiredGates = 2;
       if (requiredGates > 8) requiredGates = 8;
       radar.setMaxValues(requiredGates, requiredGates, 5);
@@ -1565,24 +1633,24 @@ inline void handleSaveSettings() {
 }
 
 inline void handleResetStats() {
-  firstSitToday = true;
-  firstSitEpoch = 0;
-  breakCount = 0;
-  totalDeskTime = 0;
-  totalFocusTime = 0;
-  totalBreakTime = 0;
-  overnightBreakDuration = 0;
-  lastAwayEpoch = 0;
-  dailyAiRequestCount = 0;
-  longestSittingStreak = 0;
-  latestBreakDuration = 0;
-  totalMotionTime = 0;
-  motionCount = 0;
-  sessionDeskTime = 0;
-  sessionMotionTime = 0;
-  sessionDistanceSum = 0;
-  sessionDistanceCount = 0;
-  sessionDistanceAverage = 0.0;
+  appStats.firstSitToday = true;
+  appStats.firstSitEpoch = 0;
+  appStats.breakCount = 0;
+  appStats.totalDeskTime = 0;
+  appStats.totalFocusTime = 0;
+  appStats.totalBreakTime = 0;
+  appStats.overnightBreakDuration = 0;
+  appStats.lastAwayEpoch = 0;
+  appStats.dailyAiRequestCount = 0;
+  appStats.longestSittingStreak = 0;
+  appStats.latestBreakDuration = 0;
+  appStats.totalMotionTime = 0;
+  appStats.motionCount = 0;
+  appState.sessionDeskTime = 0;
+  appState.sessionMotionTime = 0;
+  appState.sessionDistanceSum = 0;
+  appState.sessionDistanceCount = 0;
+  appState.sessionDistanceAverage = 0.0;
 
   saveDailyStats();
 
@@ -1593,20 +1661,20 @@ inline void handleMqttHistory() {
   DynamicJsonDocument doc(4096);
   JsonArray arr = doc.createNestedArray("messages");
   
-  if (mqttHistoryMutex != NULL) {
-    xSemaphoreTake(mqttHistoryMutex, portMAX_DELAY);
-    int idx = mqttHistoryHead;
-    int count = mqttHistoryCount;
+  if (appState.mqttHistoryMutex != NULL) {
+    xSemaphoreTake(appState.mqttHistoryMutex, portMAX_DELAY);
+    int idx = appState.mqttHistoryHead;
+    int count = appState.mqttHistoryCount;
 
     // Return in chronological order (oldest to newest)
     for (int i = 0; i < count; i++) {
       int curIdx = (idx - count + i + MQTT_HISTORY_SIZE) % MQTT_HISTORY_SIZE;
       JsonObject obj = arr.createNestedObject();
-      obj["topic"] = mqttHistory[curIdx].topic;
-      obj["payload"] = mqttHistory[curIdx].payload;
-      obj["timestamp"] = (double)mqttHistory[curIdx].timestamp;
+      obj["topic"] = appState.mqttHistory[curIdx].topic;
+      obj["payload"] = appState.mqttHistory[curIdx].payload;
+      obj["timestamp"] = (double)appState.mqttHistory[curIdx].timestamp;
     }
-    xSemaphoreGive(mqttHistoryMutex);
+    xSemaphoreGive(appState.mqttHistoryMutex);
   }
 
   String response;
@@ -1631,11 +1699,11 @@ inline void handleMqttPublish() {
 }
 
 inline void handleMqttClear() {
-  if (mqttHistoryMutex != NULL) {
-    xSemaphoreTake(mqttHistoryMutex, portMAX_DELAY);
-    mqttHistoryHead = 0;
-    mqttHistoryCount = 0;
-    xSemaphoreGive(mqttHistoryMutex);
+  if (appState.mqttHistoryMutex != NULL) {
+    xSemaphoreTake(appState.mqttHistoryMutex, portMAX_DELAY);
+    appState.mqttHistoryHead = 0;
+    appState.mqttHistoryCount = 0;
+    xSemaphoreGive(appState.mqttHistoryMutex);
   }
   server.send(200, "text/plain", "Cleared");
 }
@@ -1671,7 +1739,7 @@ inline void handleFactoryReset() {
   preferences.end();
 
   if (LittleFS.exists("/stats.json")) {
-    fsWriteCount++;
+    appStats.fsWriteCount++;
     LittleFS.remove("/stats.json");
   }
 
@@ -1688,7 +1756,7 @@ inline void handleFilesList() {
   DynamicJsonDocument doc(2048);
   JsonArray files = doc.createNestedArray("files");
   
-  fsReadCount++;
+  appStats.fsReadCount++;
   fs::File root = LittleFS.open("/");
   if (root && root.isDirectory()) {
     fs::File file = root.openNextFile();
@@ -1719,7 +1787,7 @@ inline void handleDownloadFile() {
       path = "/" + path;
     }
     if (LittleFS.exists(path)) {
-      fsReadCount++;
+      appStats.fsReadCount++;
       fs::File file = LittleFS.open(path, "r");
       if (file) {
         // Extract filename for Content-Disposition header
@@ -1755,7 +1823,7 @@ inline void handleDeleteFile() {
       return;
     }
     if (LittleFS.exists(path)) {
-      fsWriteCount++;
+      appStats.fsWriteCount++;
       LittleFS.remove(path);
       server.send(200, "text/plain", "File deleted successfully");
     } else {
@@ -1778,7 +1846,7 @@ inline void handleFileUpload() {
       filename = "/" + filename;
     }
     // Open the file for writing in LittleFS
-    fsWriteCount++;
+    appStats.fsWriteCount++;
     uploadFile = LittleFS.open(filename, "w");
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) {

@@ -40,9 +40,14 @@ extern const int DISPLAY_CHARS_PER_LINE = 13;
 #include "Faceplates.h"
 
 // ============================================================
-// TODO: Consolidate ~100 globals into a DeskBuddyState context
-//       struct to eliminate extern web across all subsystem headers.
+// State management definitions
 // ============================================================
+#include "State.h"
+
+ConfigState appConfig;
+StatsState appStats;
+RuntimeState appState;
+TodoState appTodo;
 
 // Hardware Instances
 TFT_eSPI tft = TFT_eSPI();
@@ -55,86 +60,28 @@ MessageManager messageManager;
 // Rolling Median Filters
 RollingMedianFilter detectionDistFilter(DIST_FILTER_SIZE);
 RollingMedianFilter motionFilter(MOTION_FILTER_SIZE);
-float filteredDetectionDist = 0.0;
 
 // Configuration limits
-int deskDistanceLimit = DISTANCE_LIMIT_DEFAULT;
-int focusDistanceLimit = FOCUS_DISTANCE_LIMIT_DEFAULT;
-int motionRatioLimit = MOTION_RATIO_LIMIT_DEFAULT;
 
 // Productivity & Timing Metrics
-unsigned long totalDeskTime = 0;
-unsigned long totalFocusTime = 0;
-unsigned long totalBreakTime = 0;
-int breakCount = 0;
-int productivityScore = 0;
-unsigned long latestBreakDuration = 0;
-unsigned long overnightBreakDuration = 0;
-uint32_t lastAwayEpoch = 0;
-unsigned long currentBreakDurationMs = 0;
-bool isStopByTracking = false;
-uint32_t originalLastAwayEpoch = 0;
-unsigned long totalStopByTimeMs = 0;
-unsigned long previousLatestBreakDuration = 0;
-int lastMidnightCheckDay = -1;
 volatile uint32_t currentSitDownSessionId = 0;
 uint32_t geminiQuerySessionId = 0;
 
-int currentPresenceState = STATE_AWAY;
-unsigned long lastStateTransitionTime = 0;
-unsigned long lastLoopTime = 0;
-unsigned long continuousPresenceStart = 0;
-unsigned long continuousStillStart = 0;
-unsigned long lastStretchReminderTime = 0;
 
 // Asynchronous Gemini AI Variables
-volatile bool isAILoading = false;
-String aiResponse = "";
-volatile bool hasNewAIResponse = false;
-volatile bool lastResponseIsAi = false;
-String currentPrompt = "";
-String lastTriggeredEventDetail = "";
-String currentUserName = "human";
-SemaphoreHandle_t geminiMutex = NULL;
-volatile bool otaInProgress = false;
 
 // MQTT Globals
 WiFiClient wifiClient;
 PubSubClient mqttClient;
 
 // MQTT History Buffer
-MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
-int mqttHistoryHead = 0;
-int mqttHistoryCount = 0;
-SemaphoreHandle_t mqttHistoryMutex = NULL;
 
 // Persistent Preferences & Settings
 Preferences preferences;
-float targetHours = 8.0;
-int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
-int aiPersona = 0; // 0 = Coach, 1 = Critic, 2 = Nerd, 3 = Zen
-int clockFace = 0;
-int dailyAiRequestCount = 0;
-String userName = "human";
-bool firstSitToday = true;
-uint32_t firstSitEpoch = 0;
-unsigned long longestSittingStreak = 0;
-bool streakAlertTriggered = false;
-int lastNtpDay = -1;
-int lastTriggeredEventType = EVENT_FIRST_SIT;
-float filterWindow = 2.0;
-bool hasMail = false;
-bool time24h = true;
 
 // Learning and Workday Session variables
-uint8_t hourlyPresenceHistoryWeekly[7][24] = {0};
-uint32_t presenceMsCurrentDay[24] = {0};
-int historyDaysCountWeekly[7] = {0};
-bool lunchReminderTriggered = false;
 
 // Presence state machine variables
-unsigned long sitDownTime = 0;
-uint32_t sitDownEpoch = 0;
 
 enum PresenceState {
   PRESENCE_AWAY,
@@ -145,41 +92,14 @@ enum PresenceState {
 PresenceState currentSessionState = PRESENCE_AWAY;
 
 // File system access counters (to estimate flash lifecycles)
-uint32_t fsWriteCount = 0;
-uint32_t fsReadCount = 0;
 
 // Radar Gate Sensitivity Thresholds (0-100)
-int g0mSens = 100;
-int g0sSens = 50;
-int g1mSens = 100;
-int g1sSens = 50;
-int g2mSens = 100;
-int g2sSens = 50;
-int g3mSens = 80;
-int g3sSens = 50;
-int g4mSens = 100;
-int g4sSens = 50;
-int g5mSens = 100;
-int g5sSens = 50;
-int g6mSens = 100;
-int g6sSens = 50;
 
 // Raw radar values
-int rawDetectionDist = 0;
-bool sensorPresenceDetected = false;
-bool sensorMovingTargetDetected = false;
-bool sensorStaticPresenceDetected = false;
 
 // Session-specific and cumulative motion tracking
-unsigned long sessionDeskTime = 0;
-unsigned long sessionMotionTime = 0;
-unsigned long totalMotionTime = 0;
-int motionCount = 0;
 
 // Session-specific distance tracking
-unsigned long sessionDistanceSum = 0;
-unsigned long sessionDistanceCount = 0;
-float sessionDistanceAverage = 0.0;
 
 // Animated Ring Colors & Parameters
 const RGBColor stateColors[] = {
@@ -190,18 +110,11 @@ const RGBColor stateColors[] = {
   {200, 200, 200}   // STATE_REGULAR: Soft White
 };
 
-RGBColor currentRingColor = {80, 80, 80};
-RGBColor startRingColor = {80, 80, 80};
-RGBColor targetRingColor = {80, 80, 80};
-unsigned long ringTransitionStart = 0;
-const unsigned long ringTransitionDuration = 1000; // 1 second
 
 // NTP Client & Weather Data
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
 unsigned long lastHourlyUpdate = 0;
-int temp = 0;
-String weatherDesc = "Clear";
 struct tm ts;
 char buf[80];
 
@@ -214,7 +127,6 @@ IPAddress secondaryDNS(8, 8, 8, 8);     // Secondary DNS
 
 // UI Pages
 int uiPage = 0;
-unsigned long aiScreenEndTime = 0;
 
 // Formatting helper for durations
 String formatTime(unsigned long ms) {
@@ -266,50 +178,50 @@ void saveDailyStats() {
     return;
   }
   DynamicJsonDocument doc(8192);
-  doc["firstSitToday"] = firstSitToday;
-  doc["firstSitEpoch"] = firstSitEpoch;
-  doc["breakCount"] = breakCount;
-  doc["totalDeskTime"] = totalDeskTime;
-  doc["totalFocusTime"] = totalFocusTime;
-  doc["totalBreakTime"] = totalBreakTime;
-  doc["overnightBreakDuration"] = overnightBreakDuration;
-  doc["lastAwayEpoch"] = lastAwayEpoch;
-  doc["dailyAiRequestCount"] = dailyAiRequestCount;
-  doc["lastNtpDay"] = lastNtpDay;
-  doc["longestSittingStreak"] = longestSittingStreak;
-  doc["latestBreakDuration"] = latestBreakDuration;
-  doc["totalMotionTime"] = totalMotionTime;
-  doc["motionCount"] = motionCount;
-  doc["isStopByTracking"] = isStopByTracking;
-  doc["originalLastAwayEpoch"] = originalLastAwayEpoch;
-  doc["totalStopByTimeMs"] = totalStopByTimeMs;
-  doc["previousLatestBreakDuration"] = previousLatestBreakDuration;
-  doc["lastMidnightCheckDay"] = lastMidnightCheckDay;
-  doc["userName"] = userName;
-  doc["deskDistanceLimit"] = deskDistanceLimit;
-  doc["focusDistanceLimit"] = focusDistanceLimit;
-  doc["motionRatioLimit"] = motionRatioLimit;
-  doc["hasMail"] = hasMail;
-  doc["time24h"] = time24h;
-  doc["targetHours"] = targetHours;
+  doc["firstSitToday"] = appStats.firstSitToday;
+  doc["firstSitEpoch"] = appStats.firstSitEpoch;
+  doc["breakCount"] = appStats.breakCount;
+  doc["totalDeskTime"] = appStats.totalDeskTime;
+  doc["totalFocusTime"] = appStats.totalFocusTime;
+  doc["totalBreakTime"] = appStats.totalBreakTime;
+  doc["overnightBreakDuration"] = appStats.overnightBreakDuration;
+  doc["lastAwayEpoch"] = appStats.lastAwayEpoch;
+  doc["dailyAiRequestCount"] = appStats.dailyAiRequestCount;
+  doc["lastNtpDay"] = appStats.lastNtpDay;
+  doc["longestSittingStreak"] = appStats.longestSittingStreak;
+  doc["latestBreakDuration"] = appStats.latestBreakDuration;
+  doc["totalMotionTime"] = appStats.totalMotionTime;
+  doc["motionCount"] = appStats.motionCount;
+  doc["isStopByTracking"] = appState.isStopByTracking;
+  doc["originalLastAwayEpoch"] = appState.originalLastAwayEpoch;
+  doc["totalStopByTimeMs"] = appState.totalStopByTimeMs;
+  doc["previousLatestBreakDuration"] = appStats.previousLatestBreakDuration;
+  doc["lastMidnightCheckDay"] = appStats.lastMidnightCheckDay;
+  doc["userName"] = appConfig.userName;
+  doc["deskDistanceLimit"] = appConfig.deskDistanceLimit;
+  doc["focusDistanceLimit"] = appConfig.focusDistanceLimit;
+  doc["motionRatioLimit"] = appConfig.motionRatioLimit;
+  doc["hasMail"] = appConfig.hasMail;
+  doc["time24h"] = appConfig.time24h;
+  doc["targetHours"] = appConfig.targetHours;
   JsonArray countArray = doc.createNestedArray("historyDaysCountWeekly");
   for (int d = 0; d < 7; d++) {
-    countArray.add(historyDaysCountWeekly[d]);
+    countArray.add(appStats.historyDaysCountWeekly[d]);
   }
-  doc["lunchReminderTriggered"] = lunchReminderTriggered;
-  doc["fsWriteCount"] = fsWriteCount + 1; // Anticipate this successful save
-  doc["fsReadCount"] = fsReadCount;
+  doc["lunchReminderTriggered"] = appStats.lunchReminderTriggered;
+  doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
+  doc["fsReadCount"] = appStats.fsReadCount;
 
   JsonArray historyArray = doc.createNestedArray("hourlyPresenceHistoryWeekly");
   for (int d = 0; d < 7; d++) {
     JsonArray dayArray = historyArray.createNestedArray();
     for (int h = 0; h < 24; h++) {
-      dayArray.add(hourlyPresenceHistoryWeekly[d][h]);
+      dayArray.add(appStats.hourlyPresenceHistoryWeekly[d][h]);
     }
   }
   JsonArray msArray = doc.createNestedArray("presenceMsCurrentDay");
   for (int h = 0; h < 24; h++) {
-    msArray.add(presenceMsCurrentDay[h]);
+    msArray.add(appStats.presenceMsCurrentDay[h]);
   }
 
   Serial.println("[STATS] saveDailyStats: Serializing JSON payload...");
@@ -327,8 +239,8 @@ void saveDailyStats() {
   
   Serial.println("[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...");
   if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
-    fsWriteCount++;
-    Serial.printf("[STATS] saveDailyStats SUCCESS! Total writes: %d\n", fsWriteCount);
+    appStats.fsWriteCount++;
+    Serial.printf("[STATS] saveDailyStats SUCCESS! Total writes: %d\n", appStats.fsWriteCount);
   } else {
     Serial.println("[STATS] ERROR: saveDailyStats rename failed!");
   }
@@ -336,7 +248,7 @@ void saveDailyStats() {
 
 // Load daily statistics from LittleFS
 void loadDailyStats() {
-  fsReadCount++;
+  appStats.fsReadCount++;
   Serial.println("[STATS] loadDailyStats: Checking if stats.json exists...");
   if (!LittleFS.exists("/stats.json")) {
     Serial.println("[STATS] loadDailyStats: No stats.json found, skipping load.");
@@ -353,39 +265,39 @@ void loadDailyStats() {
   Serial.println("[STATS] loadDailyStats: Deserializing JSON payload...");
   DeserializationError error = deserializeJson(doc, file);
   if (!error) {
-    firstSitToday = doc["firstSitToday"] | true;
-    firstSitEpoch = doc["firstSitEpoch"] | 0;
-    breakCount = doc["breakCount"] | 0;
-    totalDeskTime = doc["totalDeskTime"] | 0UL;
-    totalFocusTime = doc["totalFocusTime"] | 0UL;
-    totalBreakTime = doc["totalBreakTime"] | 0UL;
-    overnightBreakDuration = doc["overnightBreakDuration"] | 0UL;
-    lastAwayEpoch = doc["lastAwayEpoch"] | 0;
-    dailyAiRequestCount = doc["dailyAiRequestCount"] | 0;
-    lastNtpDay = doc["lastNtpDay"] | -1;
-    longestSittingStreak = doc["longestSittingStreak"] | 0UL;
-    latestBreakDuration = doc["latestBreakDuration"] | 0UL;
-    totalMotionTime = doc["totalMotionTime"] | 0UL;
-    motionCount = doc["motionCount"] | 0;
-    isStopByTracking = false; // Reset to false on boot to prevent stale stop-by rollback loops
-    originalLastAwayEpoch = doc["originalLastAwayEpoch"] | 0;
-    totalStopByTimeMs = doc["totalStopByTimeMs"] | 0UL;
-    previousLatestBreakDuration = doc["previousLatestBreakDuration"] | 0UL;
-    lastMidnightCheckDay = doc["lastMidnightCheckDay"] | -1;
+    appStats.firstSitToday = doc["firstSitToday"] | true;
+    appStats.firstSitEpoch = doc["firstSitEpoch"] | 0;
+    appStats.breakCount = doc["breakCount"] | 0;
+    appStats.totalDeskTime = doc["totalDeskTime"] | 0UL;
+    appStats.totalFocusTime = doc["totalFocusTime"] | 0UL;
+    appStats.totalBreakTime = doc["totalBreakTime"] | 0UL;
+    appStats.overnightBreakDuration = doc["overnightBreakDuration"] | 0UL;
+    appStats.lastAwayEpoch = doc["lastAwayEpoch"] | 0;
+    appStats.dailyAiRequestCount = doc["dailyAiRequestCount"] | 0;
+    appStats.lastNtpDay = doc["lastNtpDay"] | -1;
+    appStats.longestSittingStreak = doc["longestSittingStreak"] | 0UL;
+    appStats.latestBreakDuration = doc["latestBreakDuration"] | 0UL;
+    appStats.totalMotionTime = doc["totalMotionTime"] | 0UL;
+    appStats.motionCount = doc["motionCount"] | 0;
+    appState.isStopByTracking = false; // Reset to false on boot to prevent stale stop-by rollback loops
+    appState.originalLastAwayEpoch = doc["originalLastAwayEpoch"] | 0;
+    appState.totalStopByTimeMs = doc["totalStopByTimeMs"] | 0UL;
+    appStats.previousLatestBreakDuration = doc["previousLatestBreakDuration"] | 0UL;
+    appStats.lastMidnightCheckDay = doc["lastMidnightCheckDay"] | -1;
     // Configuration parameters are loaded on boot from Preferences, not stats.json
-    lunchReminderTriggered = doc["lunchReminderTriggered"] | false;
-    fsWriteCount = doc["fsWriteCount"] | 0;
-    fsReadCount = doc["fsReadCount"] | fsReadCount;
+    appStats.lunchReminderTriggered = doc["lunchReminderTriggered"] | false;
+    appStats.fsWriteCount = doc["fsWriteCount"] | 0;
+    appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
 
     if (doc.containsKey("historyDaysCountWeekly")) {
       JsonArray countArray = doc["historyDaysCountWeekly"].as<JsonArray>();
       for (int d = 0; d < 7 && d < countArray.size(); d++) {
-        historyDaysCountWeekly[d] = countArray[d];
+        appStats.historyDaysCountWeekly[d] = countArray[d];
       }
     } else {
       int historyDaysCount = doc["historyDaysCount"] | 0;
       for (int d = 0; d < 7; d++) {
-        historyDaysCountWeekly[d] = historyDaysCount;
+        appStats.historyDaysCountWeekly[d] = historyDaysCount;
       }
     }
 
@@ -394,7 +306,7 @@ void loadDailyStats() {
       for (int d = 0; d < 7 && d < historyArray.size(); d++) {
         JsonArray dayArray = historyArray[d].as<JsonArray>();
         for (int h = 0; h < 24 && h < dayArray.size(); h++) {
-          hourlyPresenceHistoryWeekly[d][h] = dayArray[h];
+          appStats.hourlyPresenceHistoryWeekly[d][h] = dayArray[h];
         }
       }
     } else if (doc.containsKey("hourlyPresenceHistory")) {
@@ -403,7 +315,7 @@ void loadDailyStats() {
       for (int h = 0; h < 24 && h < historyArray.size(); h++) {
         uint8_t val = historyArray[h];
         for (int d = 0; d < 7; d++) {
-          hourlyPresenceHistoryWeekly[d][h] = val;
+          appStats.hourlyPresenceHistoryWeekly[d][h] = val;
         }
       }
     }
@@ -411,7 +323,7 @@ void loadDailyStats() {
     if (doc.containsKey("presenceMsCurrentDay")) {
       JsonArray msArray = doc["presenceMsCurrentDay"].as<JsonArray>();
       for (int h = 0; h < 24 && h < msArray.size(); h++) {
-        presenceMsCurrentDay[h] = msArray[h];
+        appStats.presenceMsCurrentDay[h] = msArray[h];
       }
     }
     Serial.println("[STATS] loadDailyStats SUCCESS!");
@@ -444,41 +356,41 @@ void setup(void) {
   Serial.println("[DIAGNOSTICS] mqttClient bound");
 
   // Setup Mutex for Gemini Thread Safety
-  geminiMutex = xSemaphoreCreateMutex();
+  appState.geminiMutex = xSemaphoreCreateMutex();
   Serial.println("[DIAGNOSTICS] Mutex created");
 
   // Setup Mutex for MQTT History Thread Safety
-  mqttHistoryMutex = xSemaphoreCreateMutex();
+  appState.mqttHistoryMutex = xSemaphoreCreateMutex();
 
 
 
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
-  aiMode = preferences.getInt("aiMode", 1);
-  aiPersona = preferences.getInt("aiPersona", 0);
-  clockFace = preferences.getInt("clockFace", 0);
-  targetHours = preferences.getFloat("targetHours", 8.0);
-  userName = preferences.getString("userName", "human");
-  focusDistanceLimit = preferences.getInt("focusDistLim", 50);
-  motionRatioLimit = preferences.getInt("motionRatioLim", 15);
-  deskDistanceLimit = preferences.getInt("distLimit", 120);
-  filterWindow = preferences.getFloat("filterWindow", 2.0);
-  hasMail = preferences.getBool("hasMail", false);
-  time24h = preferences.getBool("time24h", true);
-  g0mSens = preferences.getInt("g0mSens", 90);
-  g0sSens = preferences.getInt("g0sSens", 90);
-  g1mSens = preferences.getInt("g1mSens", 60);
-  g1sSens = preferences.getInt("g1sSens", 40);
-  g2mSens = preferences.getInt("g2mSens", 50);
-  g2sSens = preferences.getInt("g2sSens", 40);
-  g3mSens = preferences.getInt("g3mSens", 40);
-  g3sSens = preferences.getInt("g3sSens", 40);
-  g4mSens = preferences.getInt("g4mSens", 45);
-  g4sSens = preferences.getInt("g4sSens", 40);
-  g5mSens = preferences.getInt("g5mSens", 50);
-  g5sSens = preferences.getInt("g5sSens", 40);
-  g6mSens = preferences.getInt("g6mSens", 50);
-  g6sSens = preferences.getInt("g6sSens", 40);
+  appConfig.aiMode = preferences.getInt("aiMode", 1);
+  appConfig.aiPersona = preferences.getInt("aiPersona", 0);
+  appConfig.clockFace = preferences.getInt("clockFace", 0);
+  appConfig.targetHours = preferences.getFloat("targetHours", 8.0);
+  appConfig.userName = preferences.getString("userName", "human");
+  appConfig.focusDistanceLimit = preferences.getInt("focusDistLim", 50);
+  appConfig.motionRatioLimit = preferences.getInt("motionRatioLim", 15);
+  appConfig.deskDistanceLimit = preferences.getInt("distLimit", 120);
+  appConfig.filterWindow = preferences.getFloat("filterWindow", 2.0);
+  appConfig.hasMail = preferences.getBool("hasMail", false);
+  appConfig.time24h = preferences.getBool("time24h", true);
+  appConfig.g0mSens = preferences.getInt("g0mSens", 90);
+  appConfig.g0sSens = preferences.getInt("g0sSens", 90);
+  appConfig.g1mSens = preferences.getInt("g1mSens", 60);
+  appConfig.g1sSens = preferences.getInt("g1sSens", 40);
+  appConfig.g2mSens = preferences.getInt("g2mSens", 50);
+  appConfig.g2sSens = preferences.getInt("g2sSens", 40);
+  appConfig.g3mSens = preferences.getInt("g3mSens", 40);
+  appConfig.g3sSens = preferences.getInt("g3sSens", 40);
+  appConfig.g4mSens = preferences.getInt("g4mSens", 45);
+  appConfig.g4sSens = preferences.getInt("g4sSens", 40);
+  appConfig.g5mSens = preferences.getInt("g5mSens", 50);
+  appConfig.g5sSens = preferences.getInt("g5sSens", 40);
+  appConfig.g6mSens = preferences.getInt("g6mSens", 50);
+  appConfig.g6sSens = preferences.getInt("g6sSens", 40);
   preferences.end();
 
   // Initialize LittleFS & load daily stats
@@ -523,7 +435,7 @@ void setup(void) {
   // Setup OTA Updates
   ArduinoOTA
     .onStart([]() {
-      otaInProgress = true;
+      appState.otaInProgress = true;
     })
     .onEnd([]() {
     })
@@ -533,8 +445,8 @@ void setup(void) {
     });
   ArduinoOTA.begin();
 
-  lastLoopTime = millis();
-  lastStateTransitionTime = millis();
+  appState.lastLoopTime = millis();
+  appState.lastStateTransitionTime = millis();
   
   // Force NTP and Weather update on the very first loop execution
   lastHourlyUpdate = millis() - NTP_INTERVAL_MS - 1000;
@@ -549,7 +461,7 @@ void setup(void) {
 void loop(void) {
   // Poll critical background systems
   ArduinoOTA.handle();
-  if (otaInProgress) {
+  if (appState.otaInProgress) {
     delay(50);
     return;
   }
@@ -557,26 +469,26 @@ void loop(void) {
   checkWiFiConnection();
 
   unsigned long now = millis();
-  unsigned long elapsed = now - lastLoopTime;
-  lastLoopTime = now;
+  unsigned long elapsed = now - appState.lastLoopTime;
+  appState.lastLoopTime = now;
 
   // Keep local time struct and date string updated from NTP
   if (timeClient.isTimeSet()) {
-    if (sitDownEpoch == 0) {
-      sitDownEpoch = timeClient.getEpochTime();
+    if (appState.sitDownEpoch == 0) {
+      appState.sitDownEpoch = timeClient.getEpochTime();
     }
-    if (firstSitEpoch == 0 && !firstSitToday) {
-      firstSitEpoch = (sitDownEpoch > 0) ? sitDownEpoch : timeClient.getEpochTime();
+    if (appStats.firstSitEpoch == 0 && !appStats.firstSitToday) {
+      appStats.firstSitEpoch = (appState.sitDownEpoch > 0) ? appState.sitDownEpoch : timeClient.getEpochTime();
       saveDailyStats();
     }
     static bool bootStateEvaluated = false;
     if (!bootStateEvaluated) {
       bootStateEvaluated = true;
-      if (currentSessionState == PRESENCE_AWAY && lastAwayEpoch > 0) {
+      if (currentSessionState == PRESENCE_AWAY && appStats.lastAwayEpoch > 0) {
         uint32_t currentEpoch = timeClient.getEpochTime();
         int currentDay = timeClient.getDay();
-        uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
-        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
+        uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
+        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
           currentSessionState = PRESENCE_AWAY;
         } else {
           currentSessionState = PRESENCE_BREAK;
@@ -592,20 +504,20 @@ void loop(void) {
   }
 
   // Initialize lastNtpDay if not set yet
-  if (lastNtpDay == -1 && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
-    lastNtpDay = timeClient.getDay();
+  if (appStats.lastNtpDay == -1 && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    appStats.lastNtpDay = timeClient.getDay();
     saveDailyStats();
   }
 
   // Midnight diagnostics reset
   if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     int currentDay = timeClient.getDay();
-    if (lastMidnightCheckDay == -1) {
-      lastMidnightCheckDay = currentDay;
-    } else if (currentDay != lastMidnightCheckDay) {
-      fsReadCount = 0;
-      fsWriteCount = 0;
-      lastMidnightCheckDay = currentDay;
+    if (appStats.lastMidnightCheckDay == -1) {
+      appStats.lastMidnightCheckDay = currentDay;
+    } else if (currentDay != appStats.lastMidnightCheckDay) {
+      appStats.fsReadCount = 0;
+      appStats.fsWriteCount = 0;
+      appStats.lastMidnightCheckDay = currentDay;
       saveDailyStats();
     }
   }
@@ -615,20 +527,20 @@ void loop(void) {
 
   bool rawPresent = false;
   int rawState = STATE_AWAY;
-  sensorPresenceDetected = false;
-  sensorMovingTargetDetected = false;
-  sensorStaticPresenceDetected = false;
+  appState.sensorPresenceDetected = false;
+  appState.sensorMovingTargetDetected = false;
+  appState.sensorStaticPresenceDetected = false;
 
   // Read from the physical radar sensor
   radar.read();
   if (radar.isConnected()) {
-    sensorPresenceDetected = radar.presenceDetected();
-    sensorStaticPresenceDetected = radar.stationaryTargetDetected();
+    appState.sensorPresenceDetected = radar.presenceDetected();
+    appState.sensorStaticPresenceDetected = radar.stationaryTargetDetected();
 
     if (radar.presenceDetected()) {
-      rawDetectionDist = radar.detectionDistance();
+      appState.rawDetectionDist = radar.detectionDistance();
     } else {
-      rawDetectionDist = 0;
+      appState.rawDetectionDist = 0;
     }
 
     // Update filtered values at a fixed 10Hz frequency (every 100ms)
@@ -641,31 +553,31 @@ void loop(void) {
       motionFilter.add(radar.movingTargetDetected() ? 1.0f : 0.0f);
       filteredMovingTarget = (motionFilter.getMedian(MOTION_FILTER_SIZE) > FILTER_MOTION_THRESHOLD);
 
-      if (rawDetectionDist > 0) {
-        detectionDistFilter.add((float)rawDetectionDist);
+      if (appState.rawDetectionDist > 0) {
+        detectionDistFilter.add((float)appState.rawDetectionDist);
         // Accumulate session distance stats
-        sessionDistanceSum += rawDetectionDist;
-        sessionDistanceCount++;
-        sessionDistanceAverage = (float)sessionDistanceSum / sessionDistanceCount;
+        appState.sessionDistanceSum += appState.rawDetectionDist;
+        appState.sessionDistanceCount++;
+        appState.sessionDistanceAverage = (float)appState.sessionDistanceSum / appState.sessionDistanceCount;
       }
-      int samples = (int)(filterWindow * 10.0f);
+      int samples = (int)(appConfig.filterWindow * 10.0f);
       if (samples < 1) samples = 1;
       if (samples > DIST_FILTER_SIZE) samples = DIST_FILTER_SIZE;
-      if (rawDetectionDist > 0) {
-        filteredDetectionDist = detectionDistFilter.getMedian(samples);
+      if (appState.rawDetectionDist > 0) {
+        appState.filteredDetectionDist = detectionDistFilter.getMedian(samples);
       }
     }
     
-    sensorMovingTargetDetected = filteredMovingTarget;
+    appState.sensorMovingTargetDetected = filteredMovingTarget;
   }
 
-  rawPresent = sensorPresenceDetected;
+  rawPresent = appState.sensorPresenceDetected;
   if (rawPresent) {
-    float currentDist = (sessionDistanceAverage > 0.0) ? sessionDistanceAverage : (float)rawDetectionDist;
-    bool inFocusZone = (currentDist > 0.0 && currentDist < focusDistanceLimit);
-    int motionRatio = (sessionDeskTime > 0) ? (sessionMotionTime * 100) / sessionDeskTime : 0;
+    float currentDist = (appState.sessionDistanceAverage > 0.0) ? appState.sessionDistanceAverage : (float)appState.rawDetectionDist;
+    bool inFocusZone = (currentDist > 0.0 && currentDist < appConfig.focusDistanceLimit);
+    int motionRatio = (appState.sessionDeskTime > 0) ? (appState.sessionMotionTime * 100) / appState.sessionDeskTime : 0;
     if (motionRatio > 100) motionRatio = 100;
-    bool highMotion = (motionRatio > motionRatioLimit);
+    bool highMotion = (motionRatio > appConfig.motionRatioLimit);
 
     if (inFocusZone) {
       rawState = highMotion ? STATE_BUSY : STATE_FOCUS;
@@ -693,114 +605,114 @@ void loop(void) {
   if (targetPresent) {
     accumulatePresence(ts.tm_hour, elapsed);
     // Accumulate desk time if present
-    totalDeskTime += elapsed;
-    sessionDeskTime += elapsed;
+    appStats.totalDeskTime += elapsed;
+    appState.sessionDeskTime += elapsed;
     
     // Accumulate focus time
-    if (currentPresenceState == STATE_FOCUS) {
-      totalFocusTime += elapsed;
+    if (appState.currentPresenceState == STATE_FOCUS) {
+      appStats.totalFocusTime += elapsed;
     }
 
     // Accumulate motion time
-    if (sensorMovingTargetDetected) {
-      sessionMotionTime += elapsed;
-      totalMotionTime += elapsed;
+    if (appState.sensorMovingTargetDetected) {
+      appState.sessionMotionTime += elapsed;
+      appStats.totalMotionTime += elapsed;
     }
 
     // Count motion occurrences
     static bool lastMovingState = false;
-    if (sensorMovingTargetDetected) {
+    if (appState.sensorMovingTargetDetected) {
       if (!lastMovingState) {
-        motionCount++;
+        appStats.motionCount++;
         lastMovingState = true;
       }
     } else {
       lastMovingState = false;
     }
 
-    if (currentPresenceState == STATE_AWAY) {
+    if (appState.currentPresenceState == STATE_AWAY) {
       // Transition: Away -> Present
-      sitDownTime = now;
-      sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+      appState.sitDownTime = now;
+      appState.sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
       currentSitDownSessionId++;
       
       // Calculate currentBreakDurationMs immediately at the transition using transition timestamps
-      currentBreakDurationMs = 0;
-      uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
-      if (referenceAwayEpoch > 0 && sitDownEpoch >= referenceAwayEpoch) {
-        unsigned long grossSec = sitDownEpoch - referenceAwayEpoch;
+      appState.currentBreakDurationMs = 0;
+      uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
+      if (referenceAwayEpoch > 0 && appState.sitDownEpoch >= referenceAwayEpoch) {
+        unsigned long grossSec = appState.sitDownEpoch - referenceAwayEpoch;
         unsigned long grossMs = grossSec * 1000UL;
-        if (grossMs >= totalStopByTimeMs) {
-          currentBreakDurationMs = grossMs - totalStopByTimeMs;
+        if (grossMs >= appState.totalStopByTimeMs) {
+          appState.currentBreakDurationMs = grossMs - appState.totalStopByTimeMs;
         }
-      } else if (lastStateTransitionTime > 0 && now >= lastStateTransitionTime) {
-        unsigned long grossMs = now - lastStateTransitionTime;
-        if (grossMs >= totalStopByTimeMs) {
-          currentBreakDurationMs = grossMs - totalStopByTimeMs;
+      } else if (appState.lastStateTransitionTime > 0 && now >= appState.lastStateTransitionTime) {
+        unsigned long grossMs = now - appState.lastStateTransitionTime;
+        if (grossMs >= appState.totalStopByTimeMs) {
+          appState.currentBreakDurationMs = grossMs - appState.totalStopByTimeMs;
         }
       }
 
       // Check if this is the first sit of the day
       bool isFirstSit = (currentSessionState == PRESENCE_AWAY);
-      bool wasFirstSitToday = firstSitToday;
+      bool wasFirstSitToday = appStats.firstSitToday;
       
       // Perform rollover check if we are in PRESENCE_BREAK
       bool willRollover = false;
       if (currentSessionState == PRESENCE_BREAK && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
         int currentDay = timeClient.getDay();
-        if (shouldResetDaySession(sitDownEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
+        if (shouldResetDaySession(appState.sitDownEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
           willRollover = true;
           isFirstSit = true;
-          uint32_t tempLastAway = lastAwayEpoch;
-          int mergeDay = (lastNtpDay != -1) ? lastNtpDay : currentDay;
+          uint32_t tempLastAway = appStats.lastAwayEpoch;
+          int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
           mergeCurrentDayPresence(mergeDay);
           resetDailyStats(tempLastAway, currentDay);
         }
       }
 
-      if (firstSitToday) {
-        firstSitToday = false;
-        firstSitEpoch = sitDownEpoch;
-        if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
-          overnightBreakDuration = firstSitEpoch - lastAwayEpoch;
+      if (appStats.firstSitToday) {
+        appStats.firstSitToday = false;
+        appStats.firstSitEpoch = appState.sitDownEpoch;
+        if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
+          appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
         } else {
-          overnightBreakDuration = currentBreakDurationMs / 1000UL;
+          appStats.overnightBreakDuration = appState.currentBreakDurationMs / 1000UL;
         }
-        latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
+        appStats.latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
         
-        totalBreakTime = 0;
-        isStopByTracking = false;
-        originalLastAwayEpoch = 0;
-        totalStopByTimeMs = 0;
-        previousLatestBreakDuration = 0;
+        appStats.totalBreakTime = 0;
+        appState.isStopByTracking = false;
+        appState.originalLastAwayEpoch = 0;
+        appState.totalStopByTimeMs = 0;
+        appStats.previousLatestBreakDuration = 0;
         saveDailyStats();
         resetSessionStats();
       } else {
         // Standard break return check using pre-calculated duration from transition
-        if (currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
-          breakCount++;
-          previousLatestBreakDuration = latestBreakDuration;
-          latestBreakDuration = currentBreakDurationMs;
-          isStopByTracking = true;
+        if (appState.currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
+          appStats.breakCount++;
+          appStats.previousLatestBreakDuration = appStats.latestBreakDuration;
+          appStats.latestBreakDuration = appState.currentBreakDurationMs;
+          appState.isStopByTracking = true;
           saveDailyStats();
           resetSessionStats();
         }
       }
 
-      unsigned long lastAwaySliceMs = (lastStateTransitionTime > 0 && now >= lastStateTransitionTime) ? (now - lastStateTransitionTime) : 0;
-      currentPresenceState = targetState;
+      unsigned long lastAwaySliceMs = (appState.lastStateTransitionTime > 0 && now >= appState.lastStateTransitionTime) ? (now - appState.lastStateTransitionTime) : 0;
+      appState.currentPresenceState = targetState;
       currentSessionState = PRESENCE_SITTING;
-      lastStateTransitionTime = now;
-      continuousPresenceStart = now;
-      lastStretchReminderTime = now;
+      appState.lastStateTransitionTime = now;
+      appState.continuousPresenceStart = now;
+      appState.lastStretchReminderTime = now;
       if (targetState == STATE_FOCUS) {
-        continuousStillStart = now;
+        appState.continuousStillStart = now;
       }
 
       // Smooth transition: immediately trigger API welcome/fallback query on sit-down
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
       if (wasFirstSitToday || willRollover) {
-        unsigned long overnightBreak = currentBreakDurationMs / 1000UL;
+        unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
         if (overnightBreak >= OVERNIGHT_THRESHOLD_S) {
           triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreak * 1000));
         } else {
@@ -808,7 +720,7 @@ void loop(void) {
         }
       } else {
         if (lastAwaySliceMs >= BREAK_MINIMUM_MS) {
-          String tempBreakDuration = formatTime(currentBreakDurationMs);
+          String tempBreakDuration = formatTime(appState.currentBreakDurationMs);
           messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
         }
       }
@@ -817,15 +729,15 @@ void loop(void) {
       static int candidateState = -1;
       static unsigned long stateConfirmationTime = 0;
       
-      if (targetState != currentPresenceState && targetState != STATE_AWAY) {
+      if (targetState != appState.currentPresenceState && targetState != STATE_AWAY) {
         if (targetState != candidateState) {
           candidateState = targetState;
           stateConfirmationTime = now;
         } else if (now - stateConfirmationTime >= STICKY_CONFIRM_MS) { // 3 minutes
           if (candidateState == STATE_FOCUS) {
-            continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
+            appState.continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
           }
-          currentPresenceState = candidateState;
+          appState.currentPresenceState = candidateState;
           candidateState = -1;
         }
       } else {
@@ -839,24 +751,24 @@ void loop(void) {
     while (true) {
       MessageManager::DueMessage msg = messageManager.getNextDueMessage();
       if (msg.eventType == -1) break;
-      xSemaphoreTake(geminiMutex, portMAX_DELAY);
-      lastTriggeredEventType = msg.eventType;
-      aiResponse = msg.content;
-      lastResponseIsAi = false;
-      hasNewAIResponse = true;
-      xSemaphoreGive(geminiMutex);
+      xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+      appState.lastTriggeredEventType = msg.eventType;
+      appState.aiResponse = msg.content;
+      appState.lastResponseIsAi = false;
+      appState.hasNewAIResponse = true;
+      xSemaphoreGive(appState.geminiMutex);
     }
       
     // Trigger Stretch alert after 45 minutes of continuous presence
-    if (now - lastStretchReminderTime > STRETCH_INTERVAL_MS) {
+    if (now - appState.lastStretchReminderTime > STRETCH_INTERVAL_MS) {
       triggerBehaviour(EVENT_STRETCH);
-      lastStretchReminderTime = now;
+      appState.lastStretchReminderTime = now;
     }
 
     // Trigger Slacker Roast if sitting > 1 hour and score < 35%
     static unsigned long lastSlackerRoastTime = 0;
-    unsigned long continuousSittingTime = now - continuousPresenceStart;
-    if (continuousSittingTime > SLACKER_INTERVAL_MS && productivityScore < 35) {
+    unsigned long continuousSittingTime = now - appState.continuousPresenceStart;
+    if (continuousSittingTime > SLACKER_INTERVAL_MS && appStats.productivityScore < 35) {
       if (now - lastSlackerRoastTime > SLACKER_INTERVAL_MS) {
         triggerBehaviour(EVENT_SLACKER);
         lastSlackerRoastTime = now;
@@ -864,24 +776,24 @@ void loop(void) {
     }
 
     // Evaluate and update longest sitting streak (minimum 15 minutes)
-    unsigned long currentStreak = now - continuousPresenceStart;
-    if (longestSittingStreak >= STREAK_MINIMUM_MS && currentStreak > longestSittingStreak && !streakAlertTriggered) {
-      streakAlertTriggered = true;
-      triggerBehaviour(EVENT_STREAK_BEATEN, formatTime(longestSittingStreak));
+    unsigned long currentStreak = now - appState.continuousPresenceStart;
+    if (appStats.longestSittingStreak >= STREAK_MINIMUM_MS && currentStreak > appStats.longestSittingStreak && !appState.streakAlertTriggered) {
+      appState.streakAlertTriggered = true;
+      triggerBehaviour(EVENT_STREAK_BEATEN, formatTime(appStats.longestSittingStreak));
     }
-    if (currentStreak > longestSittingStreak && currentStreak >= STREAK_MINIMUM_MS) {
-      longestSittingStreak = currentStreak;
+    if (currentStreak > appStats.longestSittingStreak && currentStreak >= STREAK_MINIMUM_MS) {
+      appStats.longestSittingStreak = currentStreak;
     }
   } else {
     // Check if we need to transition from Break to Away (Day Rollover) while the user is absent
     if (currentSessionState == PRESENCE_BREAK) {
       uint32_t currentEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-      uint32_t referenceAwayEpoch = isStopByTracking ? originalLastAwayEpoch : lastAwayEpoch;
+      uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
       if (currentEpoch > 0 && referenceAwayEpoch > 0) {
         int currentDay = timeClient.getDay();
-        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
-          uint32_t tempLastAway = lastAwayEpoch;
-          int mergeDay = (lastNtpDay != -1) ? lastNtpDay : currentDay;
+        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
+          uint32_t tempLastAway = appStats.lastAwayEpoch;
+          int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
           mergeCurrentDayPresence(mergeDay);
           resetDailyStats(tempLastAway, currentDay);
           currentSessionState = PRESENCE_AWAY;
@@ -889,13 +801,13 @@ void loop(void) {
       }
     }
 
-    if (currentPresenceState != STATE_AWAY) {
+    if (appState.currentPresenceState != STATE_AWAY) {
       // Transition: Present -> Away
-      streakAlertTriggered = false;
+      appState.streakAlertTriggered = false;
       
       unsigned long focusSessionDuration = 0;
-      if (currentPresenceState == STATE_FOCUS) {
-        focusSessionDuration = now - continuousStillStart;
+      if (appState.currentPresenceState == STATE_FOCUS) {
+        focusSessionDuration = now - appState.continuousStillStart;
       }
       
       // Trigger Focus session congrats if user focused for > 15s
@@ -903,27 +815,27 @@ void loop(void) {
         triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
       }
       
-      unsigned long presenceDurationMs = now - sitDownTime;
+      unsigned long presenceDurationMs = now - appState.sitDownTime;
       
-      if (isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
+      if (appState.isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
         // This was a STOP-BY!
-        if (breakCount > 0) breakCount--;
-        latestBreakDuration = previousLatestBreakDuration;
+        if (appStats.breakCount > 0) appStats.breakCount--;
+        appStats.latestBreakDuration = appStats.previousLatestBreakDuration;
         
-        totalStopByTimeMs += presenceDurationMs;
-        lastAwayEpoch = originalLastAwayEpoch;
+        appState.totalStopByTimeMs += presenceDurationMs;
+        appStats.lastAwayEpoch = appState.originalLastAwayEpoch;
         
-        currentPresenceState = STATE_AWAY;
-        lastStateTransitionTime = now;
+        appState.currentPresenceState = STATE_AWAY;
+        appState.lastStateTransitionTime = now;
         saveDailyStats();
       } else {
         // This was a REAL presence session (>= 8 minutes) or we weren't tracking stop-bys
-        currentPresenceState = STATE_AWAY;
-        lastStateTransitionTime = now;
-        lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-        isStopByTracking = false;
-        totalStopByTimeMs = 0;
-        originalLastAwayEpoch = lastAwayEpoch; // Save start of this new break session
+        appState.currentPresenceState = STATE_AWAY;
+        appState.lastStateTransitionTime = now;
+        appStats.lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+        appState.isStopByTracking = false;
+        appState.totalStopByTimeMs = 0;
+        appState.originalLastAwayEpoch = appStats.lastAwayEpoch; // Save start of this new break session
         saveDailyStats();
       }
       
@@ -931,49 +843,49 @@ void loop(void) {
     } else {
       // User is Away, and was already Away
       // Accumulate break time
-      totalBreakTime += elapsed;
+      appStats.totalBreakTime += elapsed;
     }
     
     // Clear filters and reset values when user is AWAY
-    rawDetectionDist = 0;
-    filteredDetectionDist = 0.0;
-    sessionDistanceSum = 0;
-    sessionDistanceCount = 0;
-    sessionDistanceAverage = 0.0;
+    appState.rawDetectionDist = 0;
+    appState.filteredDetectionDist = 0.0;
+    appState.sessionDistanceSum = 0;
+    appState.sessionDistanceCount = 0;
+    appState.sessionDistanceAverage = 0.0;
     detectionDistFilter.clear();
     motionFilter.clear();
   }
 
   // Update dynamic productivity score
   uint32_t currentEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-  uint32_t workdayElapsed = (firstSitEpoch > 0 && currentEpoch >= firstSitEpoch) ? (currentEpoch - firstSitEpoch) : 0;
+  uint32_t workdayElapsed = (appStats.firstSitEpoch > 0 && currentEpoch >= appStats.firstSitEpoch) ? (currentEpoch - appStats.firstSitEpoch) : 0;
 
-  if (firstSitToday || workdayElapsed < SCORE_INITIAL_PERIOD_S) {
+  if (appStats.firstSitToday || workdayElapsed < SCORE_INITIAL_PERIOD_S) {
     // Default to 100% initially (first 5 minutes of work)
-    productivityScore = 100;
+    appStats.productivityScore = 100;
   } else {
     float hoursElapsed = (float)workdayElapsed / 3600.0f;
     
     // 1. Break frequency penalty (target: 1 break/hour = 25% penalty)
-    float penalty_breaks = 25.0f * ((float)breakCount / hoursElapsed);
+    float penalty_breaks = 25.0f * ((float)appStats.breakCount / hoursElapsed);
     
     // 2. Break duration penalty (target: 10% of workday in breaks = 25% penalty)
     unsigned long activeBreakMs = 0;
     unsigned long workdayElapsedMs = (unsigned long)workdayElapsed * 1000;
-    if (workdayElapsedMs > totalDeskTime) {
-      activeBreakMs = workdayElapsedMs - totalDeskTime;
+    if (workdayElapsedMs > appStats.totalDeskTime) {
+      activeBreakMs = workdayElapsedMs - appStats.totalDeskTime;
     }
     float breakTimeRatio = (float)(activeBreakMs / 1000.0f) / (float)workdayElapsed;
     float penalty_time = 25.0f * (breakTimeRatio / BREAK_TIME_TARGET);
     
     // 3. Focus bonus (Focus counts 1.5x)
     float bonus_focus = 0.0f;
-    if (totalDeskTime > 0) {
-      bonus_focus = FOCUS_BONUS_MULTIPLIER * (((float)totalFocusTime * 100.0f) / (float)totalDeskTime);
+    if (appStats.totalDeskTime > 0) {
+      bonus_focus = FOCUS_BONUS_MULTIPLIER * (((float)appStats.totalFocusTime * 100.0f) / (float)appStats.totalDeskTime);
     }
     
     float raw_score = 100.0f - penalty_breaks - penalty_time + bonus_focus;
-    productivityScore = (int)constrain(raw_score, 0.0f, 100.0f);
+    appStats.productivityScore = (int)constrain(raw_score, 0.0f, 100.0f);
   }
 
   // Handle NTP Time & Weather Fetch Updates (every 1 hour or until initial NTP sync succeeds)
@@ -988,9 +900,9 @@ void loop(void) {
       DynamicJsonDocument jsonBuffer(1024);
       DeserializationError error = deserializeJson(jsonBuffer, payload);
       if (!error) {
-        temp = (float)(jsonBuffer["main"]["temp"]);
+        appState.temp = (float)(jsonBuffer["main"]["temp"]);
         if (jsonBuffer["weather"].is<JsonArray>() && jsonBuffer["weather"].as<JsonArray>().size() > 0) {
-          weatherDesc = jsonBuffer["weather"][0]["main"].as<String>();
+          appState.weatherDesc = jsonBuffer["weather"][0]["main"].as<String>();
         }
         time_t rawtime = jsonBuffer["dt"];
         rawtime = rawtime + NTP_TIME_OFFSET; // offset is negative -> subtracts 3h
@@ -1023,39 +935,39 @@ void loop(void) {
   static String lastSavedUserName = "";
 
   if (!statsInit) {
-    lastSavedDeskTime = totalDeskTime;
-    lastSavedFocusTime = totalFocusTime;
-    lastSavedBreakTime = totalBreakTime;
-    lastSavedBreakCount = breakCount;
-    lastSavedFirstSitEpoch = firstSitEpoch;
-    lastSavedLongestStreak = longestSittingStreak;
-    lastSavedMotionTime = totalMotionTime;
-    lastSavedMotionCount = motionCount;
-    lastSavedUserName = userName;
+    lastSavedDeskTime = appStats.totalDeskTime;
+    lastSavedFocusTime = appStats.totalFocusTime;
+    lastSavedBreakTime = appStats.totalBreakTime;
+    lastSavedBreakCount = appStats.breakCount;
+    lastSavedFirstSitEpoch = appStats.firstSitEpoch;
+    lastSavedLongestStreak = appStats.longestSittingStreak;
+    lastSavedMotionTime = appStats.totalMotionTime;
+    lastSavedMotionCount = appStats.motionCount;
+    lastSavedUserName = appConfig.userName;
     statsInit = true;
   }
 
   if (now - lastStatsSave > SAVE_INTERVAL_MS) { // Periodically save stats to LittleFS (every 10 minutes)
     lastStatsSave = now;
-    if (totalDeskTime != lastSavedDeskTime || 
-        totalFocusTime != lastSavedFocusTime || 
-        totalBreakTime != lastSavedBreakTime || 
-        breakCount != lastSavedBreakCount ||
-        firstSitEpoch != lastSavedFirstSitEpoch ||
-        longestSittingStreak != lastSavedLongestStreak ||
-        totalMotionTime != lastSavedMotionTime ||
-        motionCount != lastSavedMotionCount ||
-        userName != lastSavedUserName) {
+    if (appStats.totalDeskTime != lastSavedDeskTime || 
+        appStats.totalFocusTime != lastSavedFocusTime || 
+        appStats.totalBreakTime != lastSavedBreakTime || 
+        appStats.breakCount != lastSavedBreakCount ||
+        appStats.firstSitEpoch != lastSavedFirstSitEpoch ||
+        appStats.longestSittingStreak != lastSavedLongestStreak ||
+        appStats.totalMotionTime != lastSavedMotionTime ||
+        appStats.motionCount != lastSavedMotionCount ||
+        appConfig.userName != lastSavedUserName) {
       saveDailyStats();
-      lastSavedDeskTime = totalDeskTime;
-      lastSavedFocusTime = totalFocusTime;
-      lastSavedBreakTime = totalBreakTime;
-      lastSavedBreakCount = breakCount;
-      lastSavedFirstSitEpoch = firstSitEpoch;
-      lastSavedLongestStreak = longestSittingStreak;
-      lastSavedMotionTime = totalMotionTime;
-      lastSavedMotionCount = motionCount;
-      lastSavedUserName = userName;
+      lastSavedDeskTime = appStats.totalDeskTime;
+      lastSavedFocusTime = appStats.totalFocusTime;
+      lastSavedBreakTime = appStats.totalBreakTime;
+      lastSavedBreakCount = appStats.breakCount;
+      lastSavedFirstSitEpoch = appStats.firstSitEpoch;
+      lastSavedLongestStreak = appStats.longestSittingStreak;
+      lastSavedMotionTime = appStats.totalMotionTime;
+      lastSavedMotionCount = appStats.motionCount;
+      lastSavedUserName = appConfig.userName;
     }
   }
 
@@ -1066,8 +978,8 @@ void loop(void) {
     int currentDay = timeClient.getDay();
     int learnedLunch = getLearnedLunchHour(currentDay);
     if (currentHour == learnedLunch && currentMin >= 15) {
-      if (currentPresenceState != STATE_AWAY && !lunchReminderTriggered && totalDeskTime > LUNCH_MIN_DESK_MS) {
-        lunchReminderTriggered = true;
+      if (appState.currentPresenceState != STATE_AWAY && !appStats.lunchReminderTriggered && appStats.totalDeskTime > LUNCH_MIN_DESK_MS) {
+        appStats.lunchReminderTriggered = true;
         saveDailyStats();
         triggerBehaviour(EVENT_LUNCH_REMINDER);
       }

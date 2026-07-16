@@ -6,6 +6,7 @@
 #include "MessageManager.h"
 
 #include "Constants.h"
+#include "State.h"
 
 // Extern instances defined in main.cpp
 extern WiFiClient wifiClient;
@@ -13,40 +14,34 @@ extern PubSubClient mqttClient;
 extern MessageManager messageManager;
 
 // MQTT History Buffer declarations
+#ifndef MQTT_MESSAGE_STRUCT
+#define MQTT_MESSAGE_STRUCT
 struct MqttMessage {
   String topic;
   String payload;
   unsigned long timestamp;
 };
+#endif
 
-extern MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
-extern int mqttHistoryHead;
-extern int mqttHistoryCount;
-extern SemaphoreHandle_t mqttHistoryMutex;
 
 // Safe helper to append messages to history
 inline void addMqttHistory(String topic, String payload) {
-  if (mqttHistoryMutex == NULL) return;
-  xSemaphoreTake(mqttHistoryMutex, portMAX_DELAY);
+  if (appState.mqttHistoryMutex == NULL) return;
+  xSemaphoreTake(appState.mqttHistoryMutex, portMAX_DELAY);
   
-  mqttHistory[mqttHistoryHead].topic = topic;
-  mqttHistory[mqttHistoryHead].payload = payload;
-  mqttHistory[mqttHistoryHead].timestamp = millis();
+  appState.mqttHistory[appState.mqttHistoryHead].topic = topic;
+  appState.mqttHistory[appState.mqttHistoryHead].payload = payload;
+  appState.mqttHistory[appState.mqttHistoryHead].timestamp = millis();
   
-  mqttHistoryHead = (mqttHistoryHead + 1) % MQTT_HISTORY_SIZE;
-  if (mqttHistoryCount < MQTT_HISTORY_SIZE) {
-    mqttHistoryCount++;
+  appState.mqttHistoryHead = (appState.mqttHistoryHead + 1) % MQTT_HISTORY_SIZE;
+  if (appState.mqttHistoryCount < MQTT_HISTORY_SIZE) {
+    appState.mqttHistoryCount++;
   }
   
-  xSemaphoreGive(mqttHistoryMutex);
+  xSemaphoreGive(appState.mqttHistoryMutex);
 }
 
 // Extern variables for triggering display events
-extern SemaphoreHandle_t geminiMutex;
-extern String aiResponse;
-extern volatile bool lastResponseIsAi;
-extern volatile bool hasNewAIResponse;
-extern int lastTriggeredEventType;
 
 // Callback invoked when MQTT messages are received
 inline void mqttCallback(char* topic, byte* payload, unsigned int length) {

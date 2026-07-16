@@ -3,69 +3,44 @@
 
 #include <Arduino.h>
 
-// Extern declarations for daily stats variables defined in main.cpp
-extern bool firstSitToday;
-extern uint32_t firstSitEpoch;
-extern int breakCount;
-extern unsigned long totalDeskTime;
-extern unsigned long totalFocusTime;
-extern unsigned long totalBreakTime;
-extern unsigned long overnightBreakDuration;
-extern uint32_t lastAwayEpoch;
-extern int dailyAiRequestCount;
-extern unsigned long longestSittingStreak;
-extern unsigned long latestBreakDuration;
-extern unsigned long totalMotionTime;
-extern int motionCount;
-extern unsigned long sessionDeskTime;
-extern unsigned long sessionMotionTime;
-extern unsigned long sessionDistanceSum;
-extern unsigned long sessionDistanceCount;
-extern float sessionDistanceAverage;
-extern bool isStopByTracking;
-extern uint32_t originalLastAwayEpoch;
-extern unsigned long totalStopByTimeMs;
-extern unsigned long previousLatestBreakDuration;
-extern bool lunchReminderTriggered;
-extern int lastNtpDay;
+#include "State.h"
 
-// Forward declaration of saveDailyStats defined in main.cpp
 extern void saveDailyStats();
 
 // Resets session-level metrics
 inline void resetSessionStats() {
-  sessionDeskTime = 0;
-  sessionMotionTime = 0;
-  sessionDistanceSum = 0;
-  sessionDistanceCount = 0;
-  sessionDistanceAverage = 0.0;
+  appState.sessionDeskTime = 0;
+  appState.sessionMotionTime = 0;
+  appState.sessionDistanceSum = 0;
+  appState.sessionDistanceCount = 0;
+  appState.sessionDistanceAverage = 0.0;
 }
 
 // Resets daily counts on day session rollover
 inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
-  firstSitToday = true;
-  firstSitEpoch = 0;
-  breakCount = 0;
-  totalDeskTime = 0;
-  totalFocusTime = 0;
-  totalBreakTime = 0;
-  overnightBreakDuration = 0;
-  lastAwayEpoch = tempLastAway; // Preserve for calculation
-  dailyAiRequestCount = 0;
-  longestSittingStreak = 0;
-  latestBreakDuration = 0;
-  totalMotionTime = 0;
-  motionCount = 0;
+  appStats.firstSitToday = true;
+  appStats.firstSitEpoch = 0;
+  appStats.breakCount = 0;
+  appStats.totalDeskTime = 0;
+  appStats.totalFocusTime = 0;
+  appStats.totalBreakTime = 0;
+  appStats.overnightBreakDuration = 0;
+  appStats.lastAwayEpoch = tempLastAway; // Preserve for calculation
+  appStats.dailyAiRequestCount = 0;
+  appStats.longestSittingStreak = 0;
+  appStats.latestBreakDuration = 0;
+  appStats.totalMotionTime = 0;
+  appStats.motionCount = 0;
   
   resetSessionStats();
   
-  isStopByTracking = false;
-  originalLastAwayEpoch = 0;
-  totalStopByTimeMs = 0;
-  previousLatestBreakDuration = 0;
+  appState.isStopByTracking = false;
+  appState.originalLastAwayEpoch = 0;
+  appState.totalStopByTimeMs = 0;
+  appStats.previousLatestBreakDuration = 0;
   
-  lunchReminderTriggered = false;
-  lastNtpDay = currentDay;
+  appStats.lunchReminderTriggered = false;
+  appStats.lastNtpDay = currentDay;
   
   saveDailyStats();
 }
