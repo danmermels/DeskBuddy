@@ -24,7 +24,9 @@ extern int breakCount;
 extern int productivityScore;
 extern volatile bool isAILoading;
 extern unsigned long longestSittingStreak;
-extern int historyDaysCount;
+#include <NTPClient.h>
+extern NTPClient timeClient;
+extern int historyDaysCountWeekly[7];
 extern int currentPresenceState;
 extern volatile uint32_t currentSitDownSessionId;
 extern uint32_t geminiQuerySessionId;
@@ -52,7 +54,8 @@ inline String resolveLocalPlaceholders(String temp, String detail) {
     temp.replace("{breakCount}", String(breakCount));
   }
   temp.replace("{longestStreak}", formatTime(longestSittingStreak));
-  temp.replace("{historyDays}", String(historyDaysCount));
+  int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
+  temp.replace("{historyDays}", String(historyDaysCountWeekly[currentDay]));
   return temp;
 }
 
@@ -62,9 +65,9 @@ inline String resolvePromptPlaceholders(String temp, String detail) {
   extern const char* PROMPT_PREAMBLE_NERD;
   extern const char* PROMPT_PREAMBLE_ZEN;
   extern int aiPersona;
-  extern int getLearnedWorkdayStart();
-  extern int getLearnedWorkdayEnd();
-  extern int getLearnedLunchHour();
+  extern int getLearnedWorkdayStart(int dayIndex);
+  extern int getLearnedWorkdayEnd(int dayIndex);
+  extern int getLearnedLunchHour(int dayIndex);
 
   const char* activePreamble = PROMPT_PREAMBLE_COACH;
   if (aiPersona == 1) activePreamble = PROMPT_PREAMBLE_CRITIC;
@@ -74,27 +77,24 @@ inline String resolvePromptPlaceholders(String temp, String detail) {
   String fullPrompt = String(activePreamble) + "\n\n" + temp;
 
   fullPrompt.replace("{name}", userName);
-  fullPrompt.replace("{detail}", detail);
-  if (lastTriggeredEventType == EVENT_FIRST_SIT) {
-    fullPrompt.replace("{score}", "100");
-    fullPrompt.replace("{deskTime}", "0m");
-    fullPrompt.replace("{focusTime}", "0m");
-    fullPrompt.replace("{breakTime}", "0m");
-    fullPrompt.replace("{breakCount}", "0");
+  if (detail == "") {
+    fullPrompt.replace("{detail}", "a while");
   } else {
-    fullPrompt.replace("{score}", String(productivityScore));
-    fullPrompt.replace("{deskTime}", formatTime(totalDeskTime));
-    fullPrompt.replace("{focusTime}", formatTime(totalFocusTime));
-    fullPrompt.replace("{breakTime}", formatTime(totalBreakTime));
-    fullPrompt.replace("{breakCount}", String(breakCount));
+    fullPrompt.replace("{detail}", detail);
   }
+  fullPrompt.replace("{score}", String(productivityScore));
+  fullPrompt.replace("{deskTime}", formatTime(totalDeskTime));
+  fullPrompt.replace("{focusTime}", formatTime(totalFocusTime));
+  fullPrompt.replace("{breakTime}", formatTime(totalBreakTime));
+  fullPrompt.replace("{breakCount}", String(breakCount));
   fullPrompt.replace("{longestStreak}", formatTime(longestSittingStreak));
-  fullPrompt.replace("{historyDays}", String(historyDaysCount));
+  int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
+  fullPrompt.replace("{historyDays}", String(historyDaysCountWeekly[currentDay]));
   
   char startBuf[10], endBuf[10], lunchBuf[10];
-  snprintf(startBuf, sizeof(startBuf), "%02d:00", getLearnedWorkdayStart());
-  snprintf(endBuf, sizeof(endBuf), "%02d:00", getLearnedWorkdayEnd());
-  snprintf(lunchBuf, sizeof(lunchBuf), "%02d:00", getLearnedLunchHour());
+  snprintf(startBuf, sizeof(startBuf), "%02d:00", getLearnedWorkdayStart(currentDay));
+  snprintf(endBuf, sizeof(endBuf), "%02d:00", getLearnedWorkdayEnd(currentDay));
+  snprintf(lunchBuf, sizeof(lunchBuf), "%02d:00", getLearnedLunchHour(currentDay));
   
   fullPrompt.replace("{learnedStart}", String(startBuf));
   fullPrompt.replace("{learnedEnd}", String(endBuf));

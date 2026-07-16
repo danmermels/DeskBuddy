@@ -127,9 +127,9 @@ bool hasMail = false;
 bool time24h = true;
 
 // Learning and Workday Session variables
-uint8_t hourlyPresenceHistory[24] = {0};
+uint8_t hourlyPresenceHistoryWeekly[7][24] = {0};
 uint32_t presenceMsCurrentDay[24] = {0};
-int historyDaysCount = 0;
+int historyDaysCountWeekly[7] = {0};
 bool lunchReminderTriggered = false;
 
 // Presence state machine variables
@@ -259,11 +259,13 @@ String personalizeQuote(String quote, String name) {
 
 // Save daily statistics to LittleFS using an atomic rename pattern
 void saveDailyStats() {
+  Serial.println("[STATS] saveDailyStats: Opening stats.json.tmp for writing...");
   fs::File file = LittleFS.open("/stats.json.tmp", "w");
   if (!file) {
+    Serial.println("[STATS] ERROR: saveDailyStats failed to open /stats.json.tmp!");
     return;
   }
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(8192);
   doc["firstSitToday"] = firstSitToday;
   doc["firstSitEpoch"] = firstSitEpoch;
   doc["breakCount"] = breakCount;
@@ -276,6 +278,8 @@ void saveDailyStats() {
   doc["lastNtpDay"] = lastNtpDay;
   doc["longestSittingStreak"] = longestSittingStreak;
   doc["latestBreakDuration"] = latestBreakDuration;
+  doc["totalMotionTime"] = totalMotionTime;
+  doc["motionCount"] = motionCount;
   doc["isStopByTracking"] = isStopByTracking;
   doc["originalLastAwayEpoch"] = originalLastAwayEpoch;
   doc["totalStopByTimeMs"] = totalStopByTimeMs;
@@ -288,45 +292,65 @@ void saveDailyStats() {
   doc["hasMail"] = hasMail;
   doc["time24h"] = time24h;
   doc["targetHours"] = targetHours;
-  doc["historyDaysCount"] = historyDaysCount;
+  JsonArray countArray = doc.createNestedArray("historyDaysCountWeekly");
+  for (int d = 0; d < 7; d++) {
+    countArray.add(historyDaysCountWeekly[d]);
+  }
   doc["lunchReminderTriggered"] = lunchReminderTriggered;
   doc["fsWriteCount"] = fsWriteCount + 1; // Anticipate this successful save
   doc["fsReadCount"] = fsReadCount;
 
-  JsonArray historyArray = doc.createNestedArray("hourlyPresenceHistory");
-  for (int h = 0; h < 24; h++) {
-    historyArray.add(hourlyPresenceHistory[h]);
+  JsonArray historyArray = doc.createNestedArray("hourlyPresenceHistoryWeekly");
+  for (int d = 0; d < 7; d++) {
+    JsonArray dayArray = historyArray.createNestedArray();
+    for (int h = 0; h < 24; h++) {
+      dayArray.add(hourlyPresenceHistoryWeekly[d][h]);
+    }
   }
   JsonArray msArray = doc.createNestedArray("presenceMsCurrentDay");
   for (int h = 0; h < 24; h++) {
     msArray.add(presenceMsCurrentDay[h]);
   }
 
+  Serial.println("[STATS] saveDailyStats: Serializing JSON payload...");
   if (serializeJson(doc, file) == 0) {
+    Serial.println("[STATS] ERROR: saveDailyStats failed to serialize JSON!");
     file.close();
     return;
   }
   file.close();
 
   if (LittleFS.exists("/stats.json")) {
+    Serial.println("[STATS] saveDailyStats: Removing old stats.json...");
     LittleFS.remove("/stats.json");
   }
+  
+  Serial.println("[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...");
   if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
     fsWriteCount++;
+    Serial.printf("[STATS] saveDailyStats SUCCESS! Total writes: %d\n", fsWriteCount);
+  } else {
+    Serial.println("[STATS] ERROR: saveDailyStats rename failed!");
   }
 }
 
 // Load daily statistics from LittleFS
 void loadDailyStats() {
   fsReadCount++;
+  Serial.println("[STATS] loadDailyStats: Checking if stats.json exists...");
   if (!LittleFS.exists("/stats.json")) {
+    Serial.println("[STATS] loadDailyStats: No stats.json found, skipping load.");
     return;
   }
+  
+  Serial.println("[STATS] loadDailyStats: Opening stats.json...");
   fs::File file = LittleFS.open("/stats.json", "r");
   if (!file) {
+    Serial.println("[STATS] ERROR: loadDailyStats failed to open /stats.json!");
     return;
   }
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(8192);
+  Serial.println("[STATS] loadDailyStats: Deserializing JSON payload...");
   DeserializationError error = deserializeJson(doc, file);
   if (!error) {
     firstSitToday = doc["firstSitToday"] | true;
@@ -341,29 +365,58 @@ void loadDailyStats() {
     lastNtpDay = doc["lastNtpDay"] | -1;
     longestSittingStreak = doc["longestSittingStreak"] | 0UL;
     latestBreakDuration = doc["latestBreakDuration"] | 0UL;
+    totalMotionTime = doc["totalMotionTime"] | 0UL;
+    motionCount = doc["motionCount"] | 0;
     isStopByTracking = false; // Reset to false on boot to prevent stale stop-by rollback loops
     originalLastAwayEpoch = doc["originalLastAwayEpoch"] | 0;
     totalStopByTimeMs = doc["totalStopByTimeMs"] | 0UL;
     previousLatestBreakDuration = doc["previousLatestBreakDuration"] | 0UL;
     lastMidnightCheckDay = doc["lastMidnightCheckDay"] | -1;
     // Configuration parameters are loaded on boot from Preferences, not stats.json
-    historyDaysCount = doc["historyDaysCount"] | 0;
     lunchReminderTriggered = doc["lunchReminderTriggered"] | false;
     fsWriteCount = doc["fsWriteCount"] | 0;
     fsReadCount = doc["fsReadCount"] | fsReadCount;
 
-    if (doc.containsKey("hourlyPresenceHistory")) {
-      JsonArray historyArray = doc["hourlyPresenceHistory"].as<JsonArray>();
-      for (int h = 0; h < 24 && h < historyArray.size(); h++) {
-        hourlyPresenceHistory[h] = historyArray[h];
+    if (doc.containsKey("historyDaysCountWeekly")) {
+      JsonArray countArray = doc["historyDaysCountWeekly"].as<JsonArray>();
+      for (int d = 0; d < 7 && d < countArray.size(); d++) {
+        historyDaysCountWeekly[d] = countArray[d];
+      }
+    } else {
+      int historyDaysCount = doc["historyDaysCount"] | 0;
+      for (int d = 0; d < 7; d++) {
+        historyDaysCountWeekly[d] = historyDaysCount;
       }
     }
+
+    if (doc.containsKey("hourlyPresenceHistoryWeekly")) {
+      JsonArray historyArray = doc["hourlyPresenceHistoryWeekly"].as<JsonArray>();
+      for (int d = 0; d < 7 && d < historyArray.size(); d++) {
+        JsonArray dayArray = historyArray[d].as<JsonArray>();
+        for (int h = 0; h < 24 && h < dayArray.size(); h++) {
+          hourlyPresenceHistoryWeekly[d][h] = dayArray[h];
+        }
+      }
+    } else if (doc.containsKey("hourlyPresenceHistory")) {
+      // Migrate old 1D history to all 7 days
+      JsonArray historyArray = doc["hourlyPresenceHistory"].as<JsonArray>();
+      for (int h = 0; h < 24 && h < historyArray.size(); h++) {
+        uint8_t val = historyArray[h];
+        for (int d = 0; d < 7; d++) {
+          hourlyPresenceHistoryWeekly[d][h] = val;
+        }
+      }
+    }
+
     if (doc.containsKey("presenceMsCurrentDay")) {
       JsonArray msArray = doc["presenceMsCurrentDay"].as<JsonArray>();
       for (int h = 0; h < 24 && h < msArray.size(); h++) {
         presenceMsCurrentDay[h] = msArray[h];
       }
     }
+    Serial.println("[STATS] loadDailyStats SUCCESS!");
+  } else {
+    Serial.printf("[STATS] ERROR: loadDailyStats deserializeJson failed: %s\n", error.c_str());
   }
   file.close();
 }
@@ -429,8 +482,12 @@ void setup(void) {
   preferences.end();
 
   // Initialize LittleFS & load daily stats
+  Serial.println("[SYSTEM] Mounting LittleFS...");
   if (LittleFS.begin(true)) {
+    Serial.println("[SYSTEM] LittleFS mounted successfully.");
     loadDailyStats();
+  } else {
+    Serial.println("[SYSTEM] ERROR: LittleFS mount failed!");
   }
 
   // Initialize TFT Display & show splash screen
@@ -507,6 +564,10 @@ void loop(void) {
   if (timeClient.isTimeSet()) {
     if (sitDownEpoch == 0) {
       sitDownEpoch = timeClient.getEpochTime();
+    }
+    if (firstSitEpoch == 0 && !firstSitToday) {
+      firstSitEpoch = (sitDownEpoch > 0) ? sitDownEpoch : timeClient.getEpochTime();
+      saveDailyStats();
     }
     static bool bootStateEvaluated = false;
     if (!bootStateEvaluated) {
@@ -631,11 +692,9 @@ void loop(void) {
   // Handle Presence State Machine Transitions
   if (targetPresent) {
     accumulatePresence(ts.tm_hour, elapsed);
-    // Accumulate desk time if static presence is detected
-    if (sensorStaticPresenceDetected) {
-      totalDeskTime += elapsed;
-      sessionDeskTime += elapsed;
-    }
+    // Accumulate desk time if present
+    totalDeskTime += elapsed;
+    sessionDeskTime += elapsed;
     
     // Accumulate focus time
     if (currentPresenceState == STATE_FOCUS) {
@@ -693,12 +752,13 @@ void loop(void) {
           willRollover = true;
           isFirstSit = true;
           uint32_t tempLastAway = lastAwayEpoch;
-          mergeCurrentDayPresence();
+          int mergeDay = (lastNtpDay != -1) ? lastNtpDay : currentDay;
+          mergeCurrentDayPresence(mergeDay);
           resetDailyStats(tempLastAway, currentDay);
         }
       }
 
-      if (isFirstSit || firstSitToday) {
+      if (firstSitToday) {
         firstSitToday = false;
         firstSitEpoch = sitDownEpoch;
         if (lastAwayEpoch > 0 && firstSitEpoch >= lastAwayEpoch) {
@@ -739,7 +799,7 @@ void loop(void) {
 
       // Smooth transition: immediately trigger API welcome/fallback query on sit-down
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
-      if (isFirstSit || wasFirstSitToday || willRollover) {
+      if (wasFirstSitToday || willRollover) {
         unsigned long overnightBreak = currentBreakDurationMs / 1000UL;
         if (overnightBreak >= OVERNIGHT_THRESHOLD_S) {
           triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreak * 1000));
@@ -821,7 +881,8 @@ void loop(void) {
         int currentDay = timeClient.getDay();
         if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, lastNtpDay)) {
           uint32_t tempLastAway = lastAwayEpoch;
-          mergeCurrentDayPresence();
+          int mergeDay = (lastNtpDay != -1) ? lastNtpDay : currentDay;
+          mergeCurrentDayPresence(mergeDay);
           resetDailyStats(tempLastAway, currentDay);
           currentSessionState = PRESENCE_AWAY;
         }
@@ -957,6 +1018,8 @@ void loop(void) {
   static int lastSavedBreakCount = 0;
   static uint32_t lastSavedFirstSitEpoch = 0;
   static unsigned long lastSavedLongestStreak = 0;
+  static unsigned long lastSavedMotionTime = 0;
+  static int lastSavedMotionCount = 0;
   static String lastSavedUserName = "";
 
   if (!statsInit) {
@@ -966,6 +1029,8 @@ void loop(void) {
     lastSavedBreakCount = breakCount;
     lastSavedFirstSitEpoch = firstSitEpoch;
     lastSavedLongestStreak = longestSittingStreak;
+    lastSavedMotionTime = totalMotionTime;
+    lastSavedMotionCount = motionCount;
     lastSavedUserName = userName;
     statsInit = true;
   }
@@ -978,6 +1043,8 @@ void loop(void) {
         breakCount != lastSavedBreakCount ||
         firstSitEpoch != lastSavedFirstSitEpoch ||
         longestSittingStreak != lastSavedLongestStreak ||
+        totalMotionTime != lastSavedMotionTime ||
+        motionCount != lastSavedMotionCount ||
         userName != lastSavedUserName) {
       saveDailyStats();
       lastSavedDeskTime = totalDeskTime;
@@ -986,6 +1053,8 @@ void loop(void) {
       lastSavedBreakCount = breakCount;
       lastSavedFirstSitEpoch = firstSitEpoch;
       lastSavedLongestStreak = longestSittingStreak;
+      lastSavedMotionTime = totalMotionTime;
+      lastSavedMotionCount = motionCount;
       lastSavedUserName = userName;
     }
   }
@@ -994,7 +1063,8 @@ void loop(void) {
   if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     int currentHour = ts.tm_hour;
     int currentMin = ts.tm_min;
-    int learnedLunch = getLearnedLunchHour();
+    int currentDay = timeClient.getDay();
+    int learnedLunch = getLearnedLunchHour(currentDay);
     if (currentHour == learnedLunch && currentMin >= 15) {
       if (currentPresenceState != STATE_AWAY && !lunchReminderTriggered && totalDeskTime > LUNCH_MIN_DESK_MS) {
         lunchReminderTriggered = true;

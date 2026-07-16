@@ -6,7 +6,6 @@
 // Presence Analysis Functions (formerly in Learning.h)
 
 inline void accumulatePresence(int hour, unsigned long elapsedMs) {
-  extern uint8_t hourlyPresenceHistory[24];
   extern uint32_t presenceMsCurrentDay[24];
   if (hour >= 0 && hour < 24) {
     presenceMsCurrentDay[hour] += elapsedMs;
@@ -34,11 +33,14 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t lastAwayEpoch,
   if (departureHour < 0 || departureHour >= 24) departureHour = 0;
 
   // Forward declarations (defined in Learning.h)
-  extern uint8_t getEffectivePresence(int h);
+  extern uint8_t getEffectivePresence(int dayIndex, int h);
   int learnedStart = 8; // Fallback (actual implementation in Learning.h)
 
+  int departureDay = depTime.tm_wday;
+  if (departureDay < 0 || departureDay >= 7) departureDay = 1;
+
   // Work hours: occupancy history probability >= 15%
-  bool departedDuringWork = (getEffectivePresence(departureHour) >= 15);
+  bool departedDuringWork = (getEffectivePresence(departureDay, departureHour) >= 15);
 
   // Dynamic threshold: 7 hours if departing during workday, 3 hours if departing during sleep/off hours
   uint32_t threshold = departedDuringWork ? 25200UL : 10800UL;
@@ -72,27 +74,30 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t lastAwayEpoch,
   return false;
 }
 
-inline void mergeCurrentDayPresence() {
-  extern uint8_t hourlyPresenceHistory[24];
+inline void mergeCurrentDayPresence(int dayIndex) {
+  extern uint8_t hourlyPresenceHistoryWeekly[7][24];
   extern uint32_t presenceMsCurrentDay[24];
-  extern int historyDaysCount;
+  extern int historyDaysCountWeekly[7];
   
+  if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
+  
+  int count = historyDaysCountWeekly[dayIndex];
   for (int h = 0; h < 24; h++) {
     uint32_t todayMs = presenceMsCurrentDay[h];
     // Maximum milliseconds in an hour is 3,600,000
     uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
 
-    if (historyDaysCount == 0) {
-      hourlyPresenceHistory[h] = todayPct;
+    if (count == 0) {
+      hourlyPresenceHistoryWeekly[dayIndex][h] = todayPct;
     } else {
       // Exponential moving average: 80% history weight, 20% today weight
-      hourlyPresenceHistory[h] = (uint8_t)((hourlyPresenceHistory[h] * 4 + todayPct) / 5);
+      hourlyPresenceHistoryWeekly[dayIndex][h] = (uint8_t)((hourlyPresenceHistoryWeekly[dayIndex][h] * 4 + todayPct) / 5);
     }
     presenceMsCurrentDay[h] = 0; // Clear accumulator for the new session
   }
   
-  if (historyDaysCount < 30) {
-    historyDaysCount++;
+  if (historyDaysCountWeekly[dayIndex] < 30) {
+    historyDaysCountWeekly[dayIndex]++;
   }
 }
 

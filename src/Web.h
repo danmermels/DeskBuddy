@@ -58,17 +58,19 @@ extern uint32_t lastAwayEpoch;
 extern int dailyAiRequestCount;
 extern unsigned long sessionDistanceSum;
 extern unsigned long sessionDistanceCount;
-extern uint8_t hourlyPresenceHistory[24];
+#include <NTPClient.h>
+extern NTPClient timeClient;
+extern uint8_t hourlyPresenceHistoryWeekly[7][24];
 extern uint32_t presenceMsCurrentDay[24];
-extern int historyDaysCount;
-extern uint8_t getEffectivePresence(int h);
+extern int historyDaysCountWeekly[7];
+extern uint8_t getEffectivePresence(int dayIndex, int h);
 extern uint32_t fsWriteCount;
 extern uint32_t fsReadCount;
-extern int getLearnedWorkdayStart();
+extern int getLearnedWorkdayStart(int dayIndex);
 extern int getLearnedWorkdayStart(const uint8_t* history);
-extern int getLearnedWorkdayEnd();
+extern int getLearnedWorkdayEnd(int dayIndex);
 extern int getLearnedWorkdayEnd(const uint8_t* history);
-extern int getLearnedLunchHour();
+extern int getLearnedLunchHour(int dayIndex);
 extern int getLearnedLunchHour(const uint8_t* history);
 
 // Extern functions defined in main.cpp
@@ -172,11 +174,19 @@ inline void handleRoot() {
 <body>
   <div class="header">
     <h1>DeskBuddy Dashboard</h1>
-    <a href="/settings" class="cog-btn" title="Settings & Calibration">
-      <svg viewBox="0 0 24 24">
-        <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-      </svg>
-    </a>
+    <div style="display: flex; gap: 15px; align-items: center;">
+      <a href="/todo" style="color: #94a3b8; text-decoration: none; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 4px; transition: color 0.2s;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'" title="Task List">
+        <svg style="width: 18px; height: 18px; fill: currentColor;" viewBox="0 0 24 24">
+          <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+        </svg>
+        TODO
+      </a>
+      <a href="/settings" class="cog-btn" title="Settings & Calibration">
+        <svg viewBox="0 0 24 24">
+          <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+        </svg>
+      </a>
+    </div>
   </div>
 
   <div class="card ai-card">
@@ -283,11 +293,15 @@ inline void handleRoot() {
     <h1>MQTT Terminal</h1>
     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
       <input type="text" id="mqttTopic" placeholder="topic" class="settings-input" style="flex: 1; min-width: 140px; text-align: left; box-sizing: border-box;" value="deskbuddy/message">
+      <button class="btn" onclick="switchToDisplayTopic()" style="padding: 6px 10px; font-size: 0.8rem; background: #8b5cf6;">Display</button>
       <input type="text" id="mqttPayload" placeholder="Type message..." class="settings-input" style="flex: 2; min-width: 180px; text-align: left; box-sizing: border-box;" onkeydown="if(event.key === 'Enter') sendMqttMessage()">
       <button class="btn" onclick="sendMqttMessage()" style="padding: 6px 15px;">Send</button>
     </div>
     <div id="mqttConsole" style="background: #0f172a; border-radius: 8px; border: 1px solid #334155; height: 180px; overflow-y: auto; padding: 10px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
       <div style="color: #64748b; font-style: italic;">Console initialized. Awaiting MQTT updates...</div>
+    </div>
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+      <button class="btn" onclick="clearMqttHistory()" style="padding: 5px 12px; font-size: 0.85rem; background: #334155;">Clear History</button>
     </div>
   </div>
 
@@ -432,11 +446,227 @@ inline void handleRoot() {
         alert('Error publishing: ' + err);
       });
     }
+
+    function switchToDisplayTopic() {
+      document.getElementById('mqttTopic').value = 'deskbuddy/display';
+    }
+
+    function clearMqttHistory() {
+      fetch('/mqtt-clear', { method: 'POST' })
+        .then(() => {
+          lastMqttCount = -1;
+        })
+        .catch(err => console.error('Failed to clear MQTT history:', err));
+    }
   </script>
 </body>
 </html>
   )rawhtml";
   server.send(200, "text/html", html);
+}
+
+inline void handleTodo() {
+  String html = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeskBuddy TODO</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .header { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 600px; margin-bottom: 20px; padding: 0 10px; box-sizing: border-box; }
+    .header h1 { margin: 0; font-size: 1.6rem; color: #38bdf8; font-weight: 800; letter-spacing: -0.025em; }
+    .back-btn {
+      color: #94a3b8;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: color 0.2s;
+    }
+    .back-btn:hover { color: #38bdf8; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px 0; width: 100%; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; box-sizing: border-box; }
+    h2 { font-size: 1.25rem; color: #38bdf8; margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+    .input-group { display: flex; gap: 8px; margin-bottom: 15px; }
+    input[type="text"] { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #f8fafc; font-size: 0.95rem; outline: none; }
+    input[type="text"]:focus { border-color: #38bdf8; }
+    button { background: #38bdf8; color: #0f172a; border: none; border-radius: 6px; padding: 8px 16px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.9; }
+    .task-list { display: flex; flex-direction: column; gap: 4px; height: 364px; overflow-y: auto; padding: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; box-sizing: border-box; margin-bottom: 15px; }
+    .task-list::-webkit-scrollbar { width: 6px; }
+    .task-list::-webkit-scrollbar-track { background: #0f172a; }
+    .task-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .task-list::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+    .task-item { height: 40px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; background: none; border-bottom: 1px solid #1e293b; padding: 0 8px; gap: 8px; flex-shrink: 0; }
+    .task-item:last-child { border-bottom: none; }
+    .task-item.completed { opacity: 0.5; }
+    .task-item.completed span { text-decoration: line-through; }
+    .task-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+    .task-left input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #38bdf8; flex-shrink: 0; }
+    .task-text { font-size: 0.95rem; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .delete-btn { background: none; border: none; color: #f87171; cursor: pointer; padding: 4px; display: flex; align-items: center; transition: color 0.2s; flex-shrink: 0; }
+    .delete-btn:hover { color: #ef4444; }
+    .delete-btn svg { width: 18px; height: 18px; fill: currentColor; }
+    .empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="/" class="back-btn">
+      <svg style="width: 18px; height: 18px; fill: currentColor;" viewBox="0 0 24 24">
+        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+      </svg>
+      Dashboard
+    </a>
+    <h1>TODO Tasks</h1>
+  </div>
+
+  <div class="card">
+    <h2>Recurring Daily Tasks</h2>
+    <div class="task-list" id="dailyList"></div>
+    <div class="input-group">
+      <input type="text" id="dailyInput" placeholder="Add recurring daily task...">
+      <button onclick="addTask('daily')">Add</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Monthly Tasks</h2>
+    <div class="task-list" id="monthlyList"></div>
+    <div class="input-group">
+      <input type="text" id="monthlyInput" placeholder="Add monthly task...">
+      <button onclick="addTask('monthly')">Add</button>
+    </div>
+  </div>
+
+  <script>
+    let tasks = { daily: [], monthly: [] };
+
+    async function loadTasks() {
+      try {
+        const response = await fetch('/api/tasks');
+        if (response.ok) {
+          tasks = await response.json();
+          renderLists();
+        }
+      } catch (err) {
+        console.error('Error loading tasks:', err);
+      }
+    }
+
+    async function saveTasks() {
+      try {
+        await fetch('/api/tasks/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(tasks)
+        });
+      } catch (err) {
+        console.error('Error saving tasks:', err);
+      }
+    }
+
+    function renderLists() {
+      renderList('daily', 'dailyList');
+      renderList('monthly', 'monthlyList');
+    }
+
+    function renderList(type, elementId) {
+      const container = document.getElementById(elementId);
+      container.innerHTML = '';
+      
+      const list = tasks[type] || [];
+      if (list.length === 0) {
+        container.innerHTML = '<div class="empty-state">No tasks here yet. Add one above!</div>';
+        return;
+      }
+
+      list.forEach((task, index) => {
+        const item = document.createElement('div');
+        item.className = `task-item ${task.completed ? 'completed' : ''}`;
+        item.innerHTML = `
+          <div class="task-left">
+            <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${type}', ${index})">
+            <span class="task-text">${escapeHtml(task.text)}</span>
+          </div>
+          <button class="delete-btn" onclick="deleteTask('${type}', ${index})" title="Delete task">
+            <svg viewBox="0 0 24 24">
+              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+          </button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function addTask(type) {
+      const input = document.getElementById(`${type}Input`);
+      const text = input.value.trim();
+      if (!text) return;
+      
+      if (!tasks[type]) tasks[type] = [];
+      tasks[type].push({ text: text, completed: false });
+      input.value = '';
+      
+      renderLists();
+      saveTasks();
+    }
+
+    function toggleTask(type, index) {
+      tasks[type][index].completed = !tasks[type][index].completed;
+      renderLists();
+      saveTasks();
+    }
+
+    function deleteTask(type, index) {
+      tasks[type].splice(index, 1);
+      renderLists();
+      saveTasks();
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    window.onload = loadTasks;
+  </script>
+</body>
+</html>
+  )rawhtml";
+  server.send(200, "text/html", html);
+}
+
+inline void handleGetTasks() {
+  if (LittleFS.exists("/todo.json")) {
+    fs::File file = LittleFS.open("/todo.json", "r");
+    server.streamFile(file, "application/json");
+    file.close();
+  } else {
+    server.send(200, "application/json", "{\"daily\":[],\"monthly\":[]}");
+  }
+}
+
+inline void handleSaveTasks() {
+  if (server.hasArg("plain")) {
+    String payload = server.arg("plain");
+    fs::File file = LittleFS.open("/todo.json", "w");
+    if (file) {
+      file.print(payload);
+      file.close();
+      server.send(200, "application/json", "{\"status\":\"success\"}");
+    } else {
+      server.send(500, "text/plain", "Failed to open todo.json for writing");
+    }
+  } else {
+    server.send(400, "text/plain", "Bad Request: No payload");
+  }
 }
 
 inline void handleSettings() {
@@ -1062,7 +1292,6 @@ inline void handleSettings() {
       if (confirm("Are you sure you want to reset your daily stats? This will clear all recorded times and break counts.")) {
         fetch('/reset-stats')
           .then(response => {
-            alert("Daily stats have been reset.");
             location.reload();
           })
           .catch(err => alert("Failed to reset daily stats."));
@@ -1073,7 +1302,6 @@ inline void handleSettings() {
       if (confirm("Are you sure you want to reboot DeskBuddy?")) {
         fetch('/reset-esp')
           .then(response => {
-            alert("DeskBuddy is rebooting... You will be redirected in 5 seconds.");
             setTimeout(() => { window.location.href = "/"; }, 5000);
           })
           .catch(err => alert("Failed to trigger reboot."));
@@ -1084,7 +1312,6 @@ inline void handleSettings() {
       if (confirm("WARNING: This will clear all settings, configurations, and historical daily stats. Are you sure you want to perform a factory reset?")) {
         fetch('/factory-reset')
           .then(response => {
-            alert("Factory reset complete. DeskBuddy is rebooting... You will be redirected in 5 seconds.");
             setTimeout(() => { window.location.href = "/"; }, 5000);
           })
           .catch(err => alert("Failed to trigger factory reset."));
@@ -1154,7 +1381,8 @@ inline void handleRadarData() {
   doc["filterWindow"] = filterWindow;
   
   // Learned occupancy metrics
-  doc["historyDays"] = historyDaysCount;
+  int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
+  doc["historyDays"] = historyDaysCountWeekly[currentDay];
   
   // Combine history with today's real-time accumulated presence
   uint8_t blendedHistory[24];
@@ -1162,7 +1390,7 @@ inline void handleRadarData() {
     uint32_t todayMs = presenceMsCurrentDay[h];
     uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
     // Blend the effective history (incorporating predefined routine) with today's real-time presence
-    blendedHistory[h] = (uint8_t)((getEffectivePresence(h) * 4 + todayPct) / 5);
+    blendedHistory[h] = (uint8_t)((getEffectivePresence(currentDay, h) * 4 + todayPct) / 5);
   }
   
   doc["lunchHour"] = getLearnedLunchHour(blendedHistory);
@@ -1402,6 +1630,16 @@ inline void handleMqttPublish() {
   }
 }
 
+inline void handleMqttClear() {
+  if (mqttHistoryMutex != NULL) {
+    xSemaphoreTake(mqttHistoryMutex, portMAX_DELAY);
+    mqttHistoryHead = 0;
+    mqttHistoryCount = 0;
+    xSemaphoreGive(mqttHistoryMutex);
+  }
+  server.send(200, "text/plain", "Cleared");
+}
+
 inline void handleTriggerEvent() {
   if (server.hasArg("type")) {
     int eventType = server.arg("type").toInt();
@@ -1439,6 +1677,7 @@ inline void handleFactoryReset() {
 
   server.send(200, "text/plain", "Factory Reset Complete. Rebooting...");
   delay(1000);
+  LittleFS.end();
   ESP.restart();
 }
 
@@ -1913,6 +2152,9 @@ inline void handleFileManager() {
 
 inline void setupWebServer() {
   server.on("/", handleRoot);
+  server.on("/todo", handleTodo);
+  server.on("/api/tasks", HTTP_GET, handleGetTasks);
+  server.on("/api/tasks/save", HTTP_POST, handleSaveTasks);
   server.on("/settings", handleSettings);
   server.on("/radar-data", handleRadarData);
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
@@ -1921,9 +2163,11 @@ inline void setupWebServer() {
   server.on("/trigger-event", handleTriggerEvent);
   server.on("/mqtt-history", handleMqttHistory);
   server.on("/mqtt-publish", handleMqttPublish);
+  server.on("/mqtt-clear", HTTP_POST, handleMqttClear);
   server.on("/reset-esp", []() {
     server.send(200, "text/plain", "Rebooting");
     delay(500);
+    LittleFS.end();
     ESP.restart();
   });
   server.on("/files", HTTP_GET, handleFilesList);

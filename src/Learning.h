@@ -4,9 +4,9 @@
 #include <Arduino.h>
 
 // Learning and Day Session Rollover Variables (extern declarations, defined in main.cpp)
-extern uint8_t hourlyPresenceHistory[24];
+extern uint8_t hourlyPresenceHistoryWeekly[7][24];
 extern uint32_t presenceMsCurrentDay[24];
-extern int historyDaysCount;
+extern int historyDaysCountWeekly[7];
 extern bool lunchReminderTriggered;
 
 // Predefined occupancy pattern (simulating a standard 9-to-6 workday with lunch break)
@@ -22,23 +22,21 @@ const uint8_t PREDEFINED_PATTERN[24] = {
   0, 0, 0, 0               // 8 PM - 11 PM
 };
 
-inline uint8_t getEffectivePresence(int h) {
+inline uint8_t getEffectivePresence(int dayIndex, int h) {
+  if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
   if (h < 0 || h >= 24) return 0;
-  if (historyDaysCount <= 0) {
+  
+  int count = historyDaysCountWeekly[dayIndex];
+  if (count <= 0) {
     return PREDEFINED_PATTERN[h];
-  } else if (historyDaysCount == 1) {
-    return (uint8_t)((2 * (uint16_t)PREDEFINED_PATTERN[h] + hourlyPresenceHistory[h]) / 3);
-  } else if (historyDaysCount == 2) {
-    return (uint8_t)(((uint16_t)PREDEFINED_PATTERN[h] + 2 * hourlyPresenceHistory[h]) / 3);
+  } else if (count == 1) {
+    return (uint8_t)((2 * (uint16_t)PREDEFINED_PATTERN[h] + hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
+  } else if (count == 2) {
+    return (uint8_t)(((uint16_t)PREDEFINED_PATTERN[h] + 2 * hourlyPresenceHistoryWeekly[dayIndex][h]) / 3);
   } else {
-    return hourlyPresenceHistory[h];
+    return hourlyPresenceHistoryWeekly[dayIndex][h];
   }
 }
-
-// Forward declarations
-inline int getLearnedWorkdayStart();
-inline int getLearnedWorkdayEnd();
-inline int getLearnedLunchHour();
 
 // Scans for the typical start of the workday (first hour >= 15% presence between 4 AM and 12 PM)
 inline int getLearnedWorkdayStart(const uint8_t* history) {
@@ -50,10 +48,10 @@ inline int getLearnedWorkdayStart(const uint8_t* history) {
   return 8; // Fallback to 8 AM
 }
 
-inline int getLearnedWorkdayStart() {
+inline int getLearnedWorkdayStart(int dayIndex) {
   uint8_t eff[24];
   for (int h = 0; h < 24; h++) {
-    eff[h] = getEffectivePresence(h);
+    eff[h] = getEffectivePresence(dayIndex, h);
   }
   return getLearnedWorkdayStart(eff);
 }
@@ -70,10 +68,10 @@ inline int getLearnedWorkdayEnd(const uint8_t* history) {
   return lastActive;
 }
 
-inline int getLearnedWorkdayEnd() {
+inline int getLearnedWorkdayEnd(int dayIndex) {
   uint8_t eff[24];
   for (int h = 0; h < 24; h++) {
-    eff[h] = getEffectivePresence(h);
+    eff[h] = getEffectivePresence(dayIndex, h);
   }
   return getLearnedWorkdayEnd(eff);
 }
@@ -92,10 +90,10 @@ inline int getLearnedLunchHour(const uint8_t* history) {
   return bestHour;
 }
 
-inline int getLearnedLunchHour() {
+inline int getLearnedLunchHour(int dayIndex) {
   uint8_t eff[24];
   for (int h = 0; h < 24; h++) {
-    eff[h] = getEffectivePresence(h);
+    eff[h] = getEffectivePresence(dayIndex, h);
   }
   return getLearnedLunchHour(eff);
 }
