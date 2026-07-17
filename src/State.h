@@ -102,6 +102,7 @@ struct StatsState {
   unsigned long previousLatestBreakDuration = 0;
   uint32_t fsWriteCount = 0;
   uint32_t fsReadCount = 0;
+  uint32_t fsWritesToday = 0;
 };
 
 struct RuntimeState {

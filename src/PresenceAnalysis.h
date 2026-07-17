@@ -14,8 +14,6 @@ inline void accumulatePresence(int hour, unsigned long elapsedMs) {
 }
 
 inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayEpoch, int currentDay, int referenceNtpDay) {
-  
-
   if (referenceAwayEpoch == 0) {
     return true; // Fresh startup / no prior departure, perform reset
   }
@@ -43,17 +41,19 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
   uint32_t threshold = departedDuringWork ? 10800UL : 25200UL;
 
   if (currentDay == referenceNtpDay) {
-    // If it is the same calendar day, we only rollover if:
-    // 1. The previous session today was very short (less than 15 minutes of desk time)
-    // 2. The absence duration is greater than or equal to the threshold
+    // SAME CALENDAR DAY ROLLOVER CRITERIA:
+    // We only reset the session on the same day if:
+    // 1. The previous session today was very short (less than 15 minutes / 900,000ms of desk time).
+    // 2. The absence duration is long enough (greater than or equal to the dynamic threshold).
+    // This preserves the session if the user takes a long lunch/break after a productive morning.
     if (appStats.totalDeskTime < 900000UL && absenceDuration >= threshold) {
       return true;
     }
     return false; // Same calendar day, continue current session
   }
   
-  // Different calendar day:
-  // Use a lower threshold (4 hours = 14400s) to catch short sleep windows (like 1 AM to 6 AM)
+  // DIFFERENT CALENDAR DAY ROLLOVER CRITERIA:
+  // We use a lower threshold (4 hours = 14,400s) to catch short sleep windows (like 1 AM to 6 AM).
   if (absenceDuration >= 14400UL) {
     time_t rawCurrent = (time_t)currentEpoch;
     struct tm curTime;
@@ -61,14 +61,19 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
     int currentHour = curTime.tm_hour;
     if (currentHour < 0 || currentHour >= 24) currentHour = 0;
 
+    // Retrieve learned workday start hour for today (default 8 AM).
     int learnedStart = getLearnedWorkdayStart(currentDay);
+    
+    // Set a limit window (typically 3 hours before learned start, bounded to 3 AM minimum).
     int limit = learnedStart - 3;
     if (limit < 3) limit = 3;
 
-    if (currentHour < limit && absenceDuration < 36000UL) { // < 10 hours absence
+    // If we are before the limit hour and the absence was less than 10 hours (36,000s):
+    // Treat this as a temporary night interruption (e.g. bathroom visit) and do not roll over.
+    if (currentHour < limit && absenceDuration < 36000UL) {
       return false; // Treat as night interruption, do not rollover yet
     }
-    return true; // Valid rollover
+    return true; // Valid workday rollover
   }
   return false;
 }

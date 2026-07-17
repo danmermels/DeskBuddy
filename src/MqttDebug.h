@@ -641,7 +641,22 @@ static void handleSys(const String& args) {
 }
 
 // ---- Main debug command dispatcher ----
-
+// Parses and dispatches plain-text MQTT commands received from the web terminal or debug broker.
+// Protocol Format: [COMMAND] [arguments...] (e.g. "GET state", "SET config.userName \"alex\"", "SIM away")
+// Supported Commands:
+// - GET <target>: Queries internal system values. Options include:
+//                 'state'   (presence evaluation),
+//                 'radar'   (raw radar detections),
+//                 'filters' (median filter status),
+//                 'stats'   (daily performance accumulated statistics),
+//                 'config'  (all user configurable variables),
+//                 'session' (current sitting session stats),
+//                 'time'    (epoch and NTP time client settings),
+//                 'system'  (free heap memory, RSSI signal, uptime).
+//                 Also accepts generic variable names.
+// - SET <key> <val>: Updates config values in Preferences or overrides metrics in memory.
+// - SIM <scenario>: Controls the radar simulation mode (e.g. 'away', 'sit', 'focus', 'stop').
+// - SYS <action>: Executes administrative tasks ('reboot', 'reset_stats', 'factory_reset').
 void handleDebugCommand(const String& payload) {
   String trimmed = payload;
   trimmed.trim();

@@ -14,6 +14,7 @@
 #include <LittleFS.h>
 #include <PubSubClient.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
 
 // ============================================================
 // Named Constants (Imported from Constants.h)
@@ -64,45 +65,25 @@ MessageManager messageManager;
 RollingMedianFilter detectionDistFilter(DIST_FILTER_SIZE);
 RollingMedianFilter motionFilter(MOTION_FILTER_SIZE);
 
-// Configuration limits
-
-// Productivity & Timing Metrics
+// Productivity & Session Timing Metrics
 volatile uint32_t currentSitDownSessionId = 0;
 uint32_t geminiQuerySessionId = 0;
 
-
-// Asynchronous Gemini AI Variables
-
-// MQTT Globals
+// Network & MQTT Service Instances
 WiFiClient wifiClient;
 PubSubClient mqttClient;
 
-// MQTT History Buffer
-
-// Persistent Preferences & Settings
+// Persistent Settings (NVS Preferences)
 Preferences preferences;
 
-// Learning and Workday Session variables
-
-// Presence state machine variables
-
+// Presence Session States (Daily Workday Tracking)
 enum PresenceState {
-  PRESENCE_AWAY,
-  PRESENCE_SITTING,
-  PRESENCE_BREAK
+  PRESENCE_AWAY,     // User has left or has not checked in today
+  PRESENCE_SITTING,  // User is actively present at the desk
+  PRESENCE_BREAK     // User is away for a short break
 };
 
 PresenceState currentSessionState = PRESENCE_AWAY;
-
-// File system access counters (to estimate flash lifecycles)
-
-// Radar Gate Sensitivity Thresholds (0-100)
-
-// Raw radar values
-
-// Session-specific and cumulative motion tracking
-
-// Session-specific distance tracking
 
 // Animated Ring Colors & Parameters
 const RGBColor stateColors[] = {
@@ -214,6 +195,7 @@ void saveDailyStats() {
   doc["lunchReminderTriggered"] = appStats.lunchReminderTriggered;
   doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
   doc["fsReadCount"] = appStats.fsReadCount;
+  doc["fsWritesToday"] = appStats.fsWritesToday;
 
   JsonArray historyArray = doc.createNestedArray("hourlyPresenceHistoryWeekly");
   for (int d = 0; d < 7; d++) {
@@ -243,6 +225,7 @@ void saveDailyStats() {
   Serial.println("[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...");
   if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
     appStats.fsWriteCount++;
+    appStats.fsWritesToday++;
     Serial.printf("[STATS] saveDailyStats SUCCESS! Total writes: %d\n", appStats.fsWriteCount);
   } else {
     Serial.println("[STATS] ERROR: saveDailyStats rename failed!");
@@ -297,6 +280,7 @@ void loadDailyStats() {
     appStats.lunchReminderTriggered = doc["lunchReminderTriggered"] | false;
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
     appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
+    appStats.fsWritesToday = doc["fsWritesToday"] | 0;
 
     if (doc.containsKey("historyDaysCountWeekly")) {
       JsonArray countArray = doc["historyDaysCountWeekly"].as<JsonArray>();
@@ -448,12 +432,13 @@ void setup(void) {
   setupRadar();
 
   // Set Hostname & Configure WiFi
-  WiFi.setHostname("DeskBuddy");
+  WiFi.mode(WIFI_STA);
   if (appConfig.wifiStaticEnabled) {
     WiFi.config(parseIP(appConfig.wifiIp), parseIP(appConfig.wifiGw), 
                 parseIP(appConfig.wifiSubnet), parseIP(appConfig.wifiDns1), 
                 parseIP(appConfig.wifiDns2));
   }
+  WiFi.setHostname("deskbuddy");
   WiFi.begin(appConfig.wifiSsid.c_str(), appConfig.wifiPass.c_str());
 
   unsigned long wifiStart = millis();
@@ -472,6 +457,10 @@ void setup(void) {
     Serial.printf("[AP] Started: %s — IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
   } else {
     Serial.printf("[WIFI] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
+    if (MDNS.begin("deskbuddy")) {
+      MDNS.addService("http", "tcp", 80);
+      Serial.println("[MDNS] Started: http://deskbuddy.local");
+    }
   }
 
   // Setup MQTT client
@@ -538,6 +527,8 @@ void loop(void) {
       appStats.firstSitEpoch = (appState.sitDownEpoch > 0) ? appState.sitDownEpoch : timeClient.getEpochTime();
       saveDailyStats();
     }
+    // Evaluate initial session state on first NTP sync after reboot/boot.
+    // This performs crash recovery or day rollover if the device booted across days.
     static bool bootStateEvaluated = false;
     if (!bootStateEvaluated) {
       bootStateEvaluated = true;
@@ -546,11 +537,17 @@ void loop(void) {
         int currentDay = timeClient.getDay();
         uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
         if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
+          // A day rollover is verified (e.g. overnight absence or timezone transition).
+          // Merge accumulated presence statistics from the prior day into history before clearing.
+          int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
+          mergeCurrentDayPresence(mergeDay);
           resetDailyStats(appStats.lastAwayEpoch, currentDay);
           currentSessionState = PRESENCE_AWAY;
         } else {
+          // Resume current day's active session (crash recovery during workday).
+          // Transition to PRESENCE_BREAK to allow session continuity.
           currentSessionState = PRESENCE_BREAK;
-          // Reset lastAwayEpoch to now so break duration isn't inflated by pre-reboot sitting time
+          // Set lastAwayEpoch to now so the offline period isn't counted as an inflated break.
           appStats.lastAwayEpoch = currentEpoch;
           appState.originalLastAwayEpoch = currentEpoch;
           appState.totalStopByTimeMs = 0;
@@ -578,8 +575,10 @@ void loop(void) {
     if (appStats.lastMidnightCheckDay == -1) {
       appStats.lastMidnightCheckDay = currentDay;
     } else if (currentDay != appStats.lastMidnightCheckDay) {
-      appStats.fsReadCount = 0;
-      appStats.fsWriteCount = 0;
+      // Midnight: merge current day's presence before resetting
+      int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
+      mergeCurrentDayPresence(mergeDay);
+
       appStats.lastMidnightCheckDay = currentDay;
       saveDailyStats();
     }
@@ -738,8 +737,6 @@ void loop(void) {
           willRollover = true;
           isFirstSit = true;
           uint32_t tempLastAway = appStats.lastAwayEpoch;
-          int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
-          mergeCurrentDayPresence(mergeDay);
           resetDailyStats(tempLastAway, currentDay);
         }
       }
@@ -859,22 +856,6 @@ void loop(void) {
       appStats.longestSittingStreak = currentStreak;
     }
   } else {
-    // Check if we need to transition from Break to Away (Day Rollover) while the user is absent
-    if (currentSessionState == PRESENCE_BREAK) {
-      uint32_t currentEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-      uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
-      if (currentEpoch > 0 && referenceAwayEpoch > 0) {
-        int currentDay = timeClient.getDay();
-        if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
-          uint32_t tempLastAway = appStats.lastAwayEpoch;
-          int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
-          mergeCurrentDayPresence(mergeDay);
-          resetDailyStats(tempLastAway, currentDay);
-          currentSessionState = PRESENCE_AWAY;
-        }
-      }
-    }
-
     if (appState.currentPresenceState != STATE_AWAY) {
       // Transition: Present -> Away
       appState.streakAlertTriggered = false;

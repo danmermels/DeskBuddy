@@ -155,9 +155,6 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
   }
 
   if (isAi) {
-    // Draw a prominent AI GENERATED badge at the top
-    //tft.fillRoundRect(65, 20, 110, 20, 10, tft.color565(15, 23, 42)); // Dark background
-    //tft.drawRoundRect(65, 20, 110, 20, 10, tft.color565(56, 189, 248)); // Blue border
     tft.setTextColor(tft.color565(45, 152, 200), tft.color565(15, 23, 42));
     tft.drawString("AI GENERATED", 120, 210, 2);
   }

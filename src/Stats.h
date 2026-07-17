@@ -41,6 +41,7 @@ inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
   
   appStats.lunchReminderTriggered = false;
   appStats.lastNtpDay = currentDay;
+  appStats.fsWritesToday = 0;
   
   saveDailyStats();
 }

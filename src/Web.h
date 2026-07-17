@@ -38,6 +38,7 @@ inline void handleRoot() {
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="icon" href="/favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DeskBuddy Radar Dashboard</title>
   <style>
@@ -635,6 +636,7 @@ inline void handleTodo() {
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="icon" href="/favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DeskBuddy TODO</title>
   <style>
@@ -839,6 +841,7 @@ inline void handleSettings() {
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="icon" href="/favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DeskBuddy Settings</title>
   <style>
@@ -1181,8 +1184,23 @@ inline void handleSettings() {
       <span class="value" id="fsReads">0</span>
     </div>
     <div class="metric">
-      <span class="label">Writes</span>
+      <span class="label">Total Writes</span>
       <span class="value" id="fsWrites">0</span>
+    </div>
+    <div class="metric">
+      <span class="label">Writes Today</span>
+      <span class="value" id="fsWritesToday">0</span>
+    </div>
+    <div class="metric">
+      <span class="label">Storage Used</span>
+      <span class="value" id="fsStorage">—</span>
+    </div>
+    <div style="width: 100%; background: #334155; height: 6px; border-radius: 3px; margin-top: 4px; overflow: hidden;">
+      <div id="fsStorageBar" style="width: 0%; background: #38bdf8; height: 100%; transition: width 0.3s ease;"></div>
+    </div>
+    <div class="metric" style="margin-top: 8px;">
+      <span class="label">Free Space</span>
+      <span class="value" id="fsFree">—</span>
     </div>
     <div class="metric">
       <span class="label">Estimated Lifespan</span>
@@ -1343,25 +1361,37 @@ inline void handleSettings() {
           let writes = data.fsWriteCount !== undefined ? data.fsWriteCount : 0;
           setTxt('fsReads', reads);
           setTxt('fsWrites', writes);
-          
+          setTxt('fsWritesToday', data.fsWritesToday || 0);
+
           let totalBytes = data.fsTotalBytes || 1048576;
-          let uptimeSec = data.uptimeSeconds || 1;
-          let historyDays = data.historyDays || 0;
-          
+          let usedBytes = data.fsUsedBytes || 0;
+          let freeBytes = totalBytes - usedBytes;
+
+          function fmtFS(b) { return b < 1024 ? b + ' B' : (b / 1024).toFixed(1) + ' KB'; }
+          setTxt('fsStorage', fmtFS(usedBytes) + ' / ' + fmtFS(totalBytes));
+          setTxt('fsFree', fmtFS(freeBytes) + ' free');
+          let storagePct = totalBytes > 0 ? (usedBytes / totalBytes * 100) : 0;
+          let sBar = document.getElementById('fsStorageBar');
+          if (sBar) sBar.style.width = storagePct + '%';
+
+          let writesToday = data.fsWritesToday || 0;
+          let minutesElapsed = data.todayMinutesElapsed || 0;
+
           let writesPerDay = 10;
-          if (historyDays > 0) {
-            writesPerDay = writes / historyDays;
-          } else if (uptimeSec > 60) {
-            writesPerDay = (writes * 86400) / uptimeSec;
+          if (minutesElapsed > 0) {
+            writesPerDay = writesToday * 1440 / minutesElapsed;
           }
           if (writesPerDay < 10) writesPerDay = 10;
-          
-          let totalSectors = totalBytes / 4096;
-          let totalLifetimeWrites = totalSectors * 100000;
-          let remainingWrites = totalLifetimeWrites - writes;
+
+          let physicalWritesPerDay = writesPerDay * 2;
+          let totalPhysicalWrites = writes * 2;
+
+          let freeBlocks = Math.max(1, Math.floor(freeBytes / 4096));
+          let totalLifetimeWrites = freeBlocks * 100000;
+          let remainingWrites = totalLifetimeWrites - totalPhysicalWrites;
           if (remainingWrites < 0) remainingWrites = 0;
-          
-          let remainingDays = remainingWrites / writesPerDay;
+
+          let remainingDays = remainingWrites / physicalWritesPerDay;
           let years = remainingDays / 365.25;
           let lifespanText = "";
           if (years > 100) {
@@ -1369,9 +1399,9 @@ inline void handleSettings() {
           } else {
             lifespanText = years.toFixed(1) + " Years";
           }
-          setTxt('fsLifespan', lifespanText + ' (' + writesPerDay.toFixed(1) + ' writes/day)');
-          
-          let healthPercent = (remainingWrites / totalLifetimeWrites) * 100;
+          setTxt('fsLifespan', lifespanText + ' (' + physicalWritesPerDay.toFixed(1) + ' phys. writes/day)');
+
+          let healthPercent = totalLifetimeWrites > 0 ? (remainingWrites / totalLifetimeWrites) * 100 : 100;
           setTxt('fsHealth', healthPercent.toFixed(2) + '%');
           let healthBar = document.getElementById('fsHealthBar');
           if (healthBar) {
@@ -1517,6 +1547,7 @@ inline void handleCredentials() {
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="icon" href="/favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DeskBuddy Credentials</title>
   <style>
@@ -1809,6 +1840,7 @@ inline void handleSetup() {
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="icon" href="/favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DeskBuddy Setup</title>
   <style>
@@ -1992,6 +2024,7 @@ inline void handleRadarData() {
   doc["latestBreak"] = formatTime(appStats.latestBreakDuration);
   doc["longestStreak"] = formatTime(appStats.longestSittingStreak);
   doc["firstSitTime"] = formatEpochTime(appStats.firstSitEpoch);
+  doc["firstSitEpoch"] = (uint32_t)appStats.firstSitEpoch;
   doc["score"] = appStats.productivityScore;
   doc["aiMode"] = appConfig.aiMode;
   doc["aiPersona"] = appConfig.aiPersona;
@@ -1999,6 +2032,9 @@ inline void handleRadarData() {
   doc["fsReadCount"] = appStats.fsReadCount;
   doc["fsWriteCount"] = appStats.fsWriteCount;
   doc["fsTotalBytes"] = (uint32_t)LittleFS.totalBytes();
+  doc["fsUsedBytes"] = (uint32_t)LittleFS.usedBytes();
+  doc["fsWritesToday"] = appStats.fsWritesToday;
+  doc["todayMinutesElapsed"] = timeClient.isTimeSet() ? (timeClient.getHours() * 60 + timeClient.getMinutes()) : 0;
   doc["uptimeSeconds"] = (uint32_t)(millis() / 1000);
   doc["clockFace"] = appConfig.clockFace;
   doc["targetHours"] = appConfig.targetHours;
@@ -2347,6 +2383,7 @@ inline void handleFactoryReset() {
 
   if (LittleFS.exists("/stats.json")) {
     appStats.fsWriteCount++;
+    appStats.fsWritesToday++;
     LittleFS.remove("/stats.json");
   }
 
@@ -2431,6 +2468,7 @@ inline void handleDeleteFile() {
     }
     if (LittleFS.exists(path)) {
       appStats.fsWriteCount++;
+      appStats.fsWritesToday++;
       LittleFS.remove(path);
       server.send(200, "text/plain", "File deleted successfully");
     } else {
@@ -2454,6 +2492,7 @@ inline void handleFileUpload() {
     }
     // Open the file for writing in LittleFS
     appStats.fsWriteCount++;
+    appStats.fsWritesToday++;
     uploadFile = LittleFS.open(filename, "w");
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) {
@@ -2471,6 +2510,7 @@ inline void handleFileManager() {
 <!DOCTYPE html>
 <html>
 <head>
+  <link rel="icon" href="/favicon.ico">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DeskBuddy File Manager</title>
   <style>
@@ -2865,6 +2905,8 @@ inline void setupWebServer() {
   server.on("/download", HTTP_GET, handleDownloadFile);
   server.on("/delete-file", HTTP_GET, handleDeleteFile);
   server.on("/upload", HTTP_POST, handleUploadResponse, handleFileUpload);
+
+  server.serveStatic("/favicon.ico", LittleFS, "/favicon.ico");
 
   server.onNotFound([]() {
     if (appState.captivePortalMode) {
