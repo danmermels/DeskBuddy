@@ -351,6 +351,23 @@ inline void handleRoot() {
   </div>
 
   <div class="card">
+    <h1 style="margin: 0 0 15px 0; text-align: left;">Average Sitting Time</h1>
+    <div style="display: flex; align-items: flex-end; justify-content: space-between; height: 120px; padding: 10px 5px; background: #0f172a; border-radius: 8px; border: 1px solid #334155; margin-bottom: 5px;">
+      <div id="sittingTimeChart" style="display: flex; align-items: flex-end; justify-content: space-around; width: 100%; height: 100%; gap: 4px;">
+      </div>
+    </div>
+    <div style="display: flex; justify-content: space-around; font-size: 0.7rem; color: #64748b; padding: 4px 5px 0;">
+      <span style="flex: 1; text-align: center;">Mon</span>
+      <span style="flex: 1; text-align: center;">Tue</span>
+      <span style="flex: 1; text-align: center;">Wed</span>
+      <span style="flex: 1; text-align: center;">Thu</span>
+      <span style="flex: 1; text-align: center;">Fri</span>
+      <span style="flex: 1; text-align: center;">Sat</span>
+      <span style="flex: 1; text-align: center;">Sun</span>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="panel-header-row">
       <h1 style="margin: 0; font-size: 1.5rem; color: #38bdf8;">MQTT Terminal</h1>
       <div class="mqtt-status" id="mqttStatus">
@@ -359,9 +376,11 @@ inline void handleRoot() {
       </div>
     </div>
     <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-      <input type="text" id="mqttTopic" placeholder="topic" class="settings-input" style="flex: 1; min-width: 140px; text-align: left; box-sizing: border-box;" value="deskbuddy/message">
-      <button class="btn btn-purple" onclick="switchToDisplayTopic()" style="padding: 6px 10px; font-size: 0.8rem; height: 38px;">Display</button>
-      <input type="text" id="mqttPayload" placeholder="Type message..." class="settings-input" style="flex: 2; min-width: 180px; text-align: left; box-sizing: border-box;" onkeydown="if(event.key === 'Enter') sendMqttMessage()">
+      <select id="mqttTopic" class="settings-input" style="flex: 1; min-width: 140px; text-align: left; box-sizing: border-box; height: 38px; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 0 8px;">
+        <option value="deskbuddy/debug/cmd">deskbuddy/debug/cmd</option>
+        <option value="deskbuddy/message">deskbuddy/message</option>
+      </select>
+      <input type="text" id="mqttPayload" placeholder="Type command..." class="settings-input" style="flex: 2; min-width: 180px; text-align: left; box-sizing: border-box;" onkeydown="if(event.key === 'Enter') sendMqttMessage()">
       <button class="btn" onclick="sendMqttMessage()" style="padding: 6px 15px; height: 38px;">Send</button>
     </div>
     <div id="mqttConsole" style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid #334155; height: 180px; overflow-y: auto; padding: 10px; font-family: 'Fira Code', monospace; font-size: 0.85rem; color: #38bdf8; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
@@ -445,6 +464,58 @@ inline void handleRoot() {
                 bar.style.transition = 'height 0.3s ease';
                 bar.title = 'Hour ' + idx + ': ' + val + '%';
                 chartContainer.appendChild(bar);
+              });
+            }
+          }
+
+          // Update Average Sitting Time chart
+          let sittingChart = document.getElementById('sittingTimeChart');
+          if (sittingChart && data.avgSittingTimeWeekly) {
+            let dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            let maxMin = Math.max(...data.avgSittingTimeWeekly, 1);
+            let existingBars = sittingChart.children;
+            if (existingBars.length === 7) {
+              data.avgSittingTimeWeekly.forEach((val, idx) => {
+                let pct = Math.round((val / maxMin) * 100);
+                let h = Math.floor(val / 60);
+                let m = val % 60;
+                let label = h > 0 ? h + 'h ' + (m > 0 ? m + 'm' : '') : m + 'm';
+                let bar = existingBars[idx];
+                bar.style.height = pct + '%';
+                bar.querySelector('.sitLabel').innerText = label.trim();
+                bar.title = dayLabels[idx] + ': ' + label.trim();
+              });
+            } else {
+              sittingChart.innerHTML = '';
+              data.avgSittingTimeWeekly.forEach((val, idx) => {
+                let pct = Math.round((val / maxMin) * 100);
+                let h = Math.floor(val / 60);
+                let m = val % 60;
+                let label = h > 0 ? h + 'h ' + (m > 0 ? m + 'm' : '') : m + 'm';
+                let wrapper = document.createElement('div');
+                wrapper.style.flex = '1';
+                wrapper.style.display = 'flex';
+                wrapper.style.flexDirection = 'column';
+                wrapper.style.alignItems = 'center';
+                wrapper.style.justifyContent = 'flex-end';
+                wrapper.style.height = '100%';
+                wrapper.title = dayLabels[idx] + ': ' + label.trim();
+                let lbl = document.createElement('div');
+                lbl.className = 'sitLabel';
+                lbl.style.fontSize = '0.65rem';
+                lbl.style.color = '#f8fafc';
+                lbl.style.marginBottom = '3px';
+                lbl.style.whiteSpace = 'nowrap';
+                lbl.innerText = label.trim();
+                let bar = document.createElement('div');
+                bar.style.width = '70%';
+                bar.style.height = pct + '%';
+                bar.style.background = 'linear-gradient(to top, #38bdf8, #f472b6)';
+                bar.style.borderRadius = '2px 2px 0 0';
+                bar.style.transition = 'height 0.3s ease';
+                wrapper.appendChild(lbl);
+                wrapper.appendChild(bar);
+                sittingChart.appendChild(wrapper);
               });
             }
           }
@@ -543,10 +614,6 @@ inline void handleRoot() {
       .catch(err => {
         alert('Error publishing: ' + err);
       });
-    }
-
-    function switchToDisplayTopic() {
-      document.getElementById('mqttTopic').value = 'deskbuddy/display';
     }
 
     function clearMqttHistory() {
@@ -1140,6 +1207,14 @@ inline void handleSettings() {
         Open File Manager
       </a>
     </div>
+    <div style="margin-bottom: 15px;">
+      <a href="/credentials" class="btn" style="background: #6366f1; color: white; display: inline-flex; width: 100%; box-sizing: border-box; justify-content: center; align-items: center; gap: 6px; padding: 10px 12px; text-decoration: none;">
+        <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;">
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+        </svg>
+        Network & Credentials
+      </a>
+    </div>
     <div style="border-top: 1px solid #334155; padding-top: 15px;">
       <div style="display: flex; gap: 10px; justify-content: center;">
         <button class="btn" style="background: #eab308; color: #0f172a; flex: 1; font-size: 0.95rem; padding: 10px 12px;" onclick="resetStats()">Reset Daily Stats</button>
@@ -1437,6 +1512,463 @@ inline void handleSettings() {
   server.send(200, "text/html", html);
 }
 
+inline void handleCredentials() {
+  String html = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeskBuddy Credentials</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .settings-header { display: flex; align-items: center; width: 100%; max-width: 650px; margin-bottom: 15px; gap: 15px; padding: 0 10px; box-sizing: border-box; }
+    .settings-header h1 { margin: 0; font-size: 1.6rem; color: #38bdf8; font-weight: 800; }
+    .back-btn { color: #94a3b8; cursor: pointer; transition: color 0.2s, transform 0.2s; display: flex; align-items: center; justify-content: center; }
+    .back-btn:hover { color: #38bdf8; transform: translateX(-3px); }
+    .back-btn svg { width: 24px; height: 24px; fill: currentColor; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px; width: 100%; max-width: 650px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; box-sizing: border-box; }
+    h1 { font-size: 1.5rem; color: #38bdf8; text-align: center; margin-bottom: 20px; }
+    .metric { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; align-items: center; }
+    .metric:last-child { border: none; }
+    .label { color: #94a3b8; }
+    .settings-input { background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px 10px; border-radius: 6px; width: 100%; text-align: left; font-family: inherit; font-size: 0.95rem; box-sizing: border-box; }
+    .settings-input-short { background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 6px 10px; border-radius: 6px; width: 120px; text-align: right; font-family: inherit; font-size: 0.95rem; }
+    .btn { background: #38bdf8; color: #0f172a; font-weight: bold; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 0.95rem; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .btn-scan { background: #6366f1; color: white; padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-family: inherit; font-size: 0.85rem; font-weight: bold; white-space: nowrap; transition: opacity 0.2s; }
+    .btn-scan:hover { opacity: 0.85; }
+    .btn-scan:disabled { opacity: 0.5; cursor: wait; }
+    .field-group { padding: 10px 0; border-bottom: 1px solid #334155; }
+    .field-group:last-child { border: none; }
+    .field-label { color: #94a3b8; font-size: 0.9rem; margin-bottom: 4px; display: block; }
+    .field-help { color: #64748b; font-size: 0.75rem; margin-top: 3px; display: block; }
+    .notice { background: #1e3a5f; border: 1px solid #38bdf8; border-radius: 8px; padding: 10px 15px; margin: 10px; width: 100%; max-width: 650px; box-sizing: border-box; font-size: 0.85rem; color: #38bdf8; text-align: center; }
+    .ssid-row { display: flex; gap: 8px; align-items: flex-end; }
+    .ssid-row input { flex: 1; }
+    #apList { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; margin-top: 0; }
+    #apList.open { max-height: 260px; overflow-y: auto; margin-top: 8px; border: 1px solid #334155; border-radius: 6px; background: #0f172a; }
+    .ap-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #1e293b; font-size: 0.9rem; transition: background 0.15s; }
+    .ap-item:last-child { border: none; }
+    .ap-item:hover { background: #1e293b; }
+    .ap-item .ap-name { color: #f8fafc; }
+    .ap-item .ap-rssi { color: #64748b; font-size: 0.8rem; }
+    .ap-item .ap-locked { color: #f59e0b; font-size: 0.75rem; margin-left: 6px; }
+  </style>
+</head>
+<body>
+  <div class="settings-header">
+    <a href="/settings" class="back-btn" title="Back to Settings">
+      <svg viewBox="0 0 24 24">
+        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+      </svg>
+    </a>
+    <h1>Network & Credentials</h1>
+  </div>
+
+  <div class="notice">
+    WiFi &amp; MQTT changes require a reboot to take effect.
+  </div>
+
+  <form action="/save-credentials" method="POST">
+    <div class="card">
+      <h1>WiFi</h1>
+      <div class="field-group">
+        <label class="field-label">Network Name (SSID)</label>
+        <div class="ssid-row">
+          <input type="text" name="wifiSsid" id="wifiSsid" class="settings-input" placeholder="WiFi SSID" autocomplete="off">
+          <button type="button" class="btn-scan" id="scanBtn" onclick="scanWifi()">Scan</button>
+        </div>
+        <div id="apList"></div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <input type="password" name="wifiPass" id="wifiPass" class="settings-input" placeholder="WiFi Password">
+      </div>
+      <div class="field-group">
+        <div class="metric" style="border: none; padding: 4px 0;">
+          <span class="label">Use Static IP</span>
+          <select name="wifiStatic" id="wifiStaticSelect" class="settings-input-short" style="width: 80px;" onchange="toggleStaticFields()">
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+        <div id="staticFields">
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <div style="flex: 1;">
+              <label class="field-label">IP Address</label>
+              <input type="text" name="wifiIp" id="wifiIp" class="settings-input" placeholder="192.168.15.160">
+            </div>
+            <div style="flex: 1;">
+              <label class="field-label">Gateway</label>
+              <input type="text" name="wifiGw" id="wifiGw" class="settings-input" placeholder="192.168.15.1">
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <div style="flex: 1;">
+              <label class="field-label">Subnet</label>
+              <input type="text" name="wifiSubnet" id="wifiSubnet" class="settings-input" placeholder="255.255.255.0">
+            </div>
+            <div style="flex: 1;">
+              <label class="field-label">Primary DNS</label>
+              <input type="text" name="wifiDns1" id="wifiDns1" class="settings-input" placeholder="1.1.1.1">
+            </div>
+          </div>
+          <div style="margin-top: 8px;">
+            <label class="field-label">Secondary DNS</label>
+            <input type="text" name="wifiDns2" id="wifiDns2" class="settings-input" placeholder="8.8.8.8">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>MQTT Broker</h1>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 2;">
+          <label class="field-label">Broker IP</label>
+          <input type="text" name="mqttBroker" id="mqttBroker" class="settings-input" placeholder="192.168.15.18">
+        </div>
+        <div style="flex: 1;">
+          <label class="field-label">Port</label>
+          <input type="number" name="mqttPort" id="mqttPort" class="settings-input" placeholder="1883">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>AI API Keys</h1>
+      <div class="field-group">
+        <label class="field-label">Groq API Key <span style="color: #10b981; font-size: 0.75rem;">(Free tier available)</span></label>
+        <input type="password" name="groqKey" id="groqKey" class="settings-input" placeholder="gsk_...">
+        <span class="field-help">Used for AI messages. Get yours at <a href="https://console.groq.com" target="_blank" style="color: #38bdf8;">console.groq.com</a></span>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Gemini API Key</label>
+        <input type="password" name="geminiKey" id="geminiKey" class="settings-input" placeholder="AIza...">
+      </div>
+      <div class="field-group">
+        <label class="field-label">DeepSeek API Key</label>
+        <input type="password" name="deepseekKey" id="deepseekKey" class="settings-input" placeholder="sk-...">
+      </div>
+    </div>
+
+    <div class="card">
+      <h1>OpenWeather</h1>
+      <div class="field-group">
+        <label class="field-label">API Key</label>
+        <input type="password" name="owKey" id="owKey" class="settings-input" placeholder="Your OpenWeather API key">
+        <span class="field-help">Free tier available at <a href="https://openweathermap.org/api" target="_blank" style="color: #38bdf8;">openweathermap.org</a></span>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <div style="flex: 1;">
+          <label class="field-label">Latitude</label>
+          <input type="text" name="owLat" id="owLat" class="settings-input" placeholder="-23.11">
+        </div>
+        <div style="flex: 1;">
+          <label class="field-label">Longitude</label>
+          <input type="text" name="owLon" id="owLon" class="settings-input" placeholder="-46.53">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="text-align: center;">
+      <button type="submit" class="btn" style="width: 100%; padding: 12px;">Save &amp; Reboot</button>
+    </div>
+  </form>
+
+  <script>
+    function toggleStaticFields() {
+      var sel = document.getElementById('wifiStaticSelect');
+      var sf = document.getElementById('staticFields');
+      sf.style.display = (sel.value === '1') ? 'block' : 'none';
+    }
+
+    function rssiToPercent(rssi) {
+      if (rssi <= -100) return 0;
+      if (rssi >= -50) return 100;
+      return 2 * (rssi + 100);
+    }
+
+    function signalBars(pct) {
+      if (pct > 75) return '&#9650;&#9650;&#9650;';
+      if (pct > 50) return '&#9650;&#9650;';
+      if (pct > 25) return '&#9650;';
+      return '';
+    }
+
+    function scanWifi() {
+      var btn = document.getElementById('scanBtn');
+      var list = document.getElementById('apList');
+      btn.disabled = true;
+      btn.textContent = 'Scanning...';
+      list.innerHTML = '';
+      list.classList.add('open');
+
+      fetch('/wifi-scan')
+        .then(function(r) { return r.json(); })
+        .then(function(aps) {
+          btn.disabled = false;
+          btn.textContent = 'Scan';
+          if (aps.length === 0) {
+            list.innerHTML = '<div class="ap-item"><span class="ap-name" style="color:#64748b;">No networks found</span></div>';
+            return;
+          }
+          var html = '';
+          for (var i = 0; i < aps.length; i++) {
+            var pct = rssiToPercent(aps[i].rssi);
+            var bars = signalBars(pct);
+            var lock = aps[i].secure ? '<span class="ap-locked">&#128274;</span>' : '';
+            html += '<div class="ap-item" onclick="selectAP(this)" data-ssid="' + aps[i].ssid.replace(/"/g, '&quot;') + '" data-secure="' + aps[i].secure + '">';
+            html += '<span class="ap-name">' + aps[i].ssid + lock + '</span>';
+            html += '<span class="ap-rssi">' + bars + ' ' + pct + '%</span>';
+            html += '</div>';
+          }
+          list.innerHTML = html;
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.textContent = 'Scan';
+          list.innerHTML = '<div class="ap-item"><span class="ap-name" style="color:#ef4444;">Scan failed</span></div>';
+        });
+    }
+
+    function selectAP(el) {
+      document.getElementById('wifiSsid').value = el.dataset.ssid;
+      var list = document.getElementById('apList');
+      list.classList.remove('open');
+      if (el.dataset.secure === '0') {
+        document.getElementById('wifiPass').value = '';
+        document.getElementById('wifiPass').placeholder = 'Open network - no password needed';
+      } else {
+        document.getElementById('wifiPass').placeholder = 'WiFi Password';
+      }
+    }
+  </script>
+
+  <script>
+    fetch('/radar-data')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('wifiSsid').value = data.wifiSsid || '';
+        document.getElementById('wifiPass').value = data.wifiPass || '';
+        document.getElementById('wifiStaticSelect').value = data.wifiStatic ? '1' : '0';
+        document.getElementById('wifiIp').value = data.wifiIp || '';
+        document.getElementById('wifiGw').value = data.wifiGw || '';
+        document.getElementById('wifiSubnet').value = data.wifiSubnet || '';
+        document.getElementById('wifiDns1').value = data.wifiDns1 || '';
+        document.getElementById('wifiDns2').value = data.wifiDns2 || '';
+        toggleStaticFields();
+        document.getElementById('mqttBroker').value = data.mqttBroker || '';
+        document.getElementById('mqttPort').value = data.mqttPort || 1883;
+        if (data.hasGroqKey) document.getElementById('groqKey').placeholder = '*** configured ***';
+        if (data.hasGeminiKey) document.getElementById('geminiKey').placeholder = '*** configured ***';
+        if (data.hasDeepseekKey) document.getElementById('deepseekKey').placeholder = '*** configured ***';
+        if (data.hasOwKey) document.getElementById('owKey').placeholder = '*** configured ***';
+        document.getElementById('owLat').value = data.owLat || '';
+        document.getElementById('owLon').value = data.owLon || '';
+      })
+      .catch(function(err) { console.error("Error loading credentials:", err); });
+
+    document.querySelector('form').addEventListener('submit', function(e) {
+      if (!confirm('Save credentials and reboot DeskBuddy?')) {
+        e.preventDefault();
+      }
+    });
+  </script>
+</body>
+</html>
+  )rawhtml";
+  server.send(200, "text/html", html);
+}
+
+inline void handleWifiScan() {
+  int n = WiFi.scanNetworks();
+  String json = "[";
+  for (int i = 0; i < n; i++) {
+    if (i > 0) json += ",";
+    json += "{";
+    json += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+    json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+    json += "\"secure\":" + String(WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? 0 : 1);
+    json += "}";
+  }
+  json += "]";
+  WiFi.scanDelete();
+  server.send(200, "application/json", json);
+}
+
+// Captive portal: redirect all OS detection probes to /setup
+inline void handleCaptiveRedirect() {
+  server.sendHeader("Location", "/setup", true);
+  server.send(302, "text/plain", "");
+}
+
+// Captive portal: simplified WiFi provisioning page
+inline void handleSetup() {
+  String html = R"rawhtml(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeskBuddy Setup</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px; width: 100%; max-width: 420px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; box-sizing: border-box; }
+    h1 { font-size: 1.4rem; color: #38bdf8; text-align: center; margin: 0 0 6px 0; }
+    .subtitle { color: #94a3b8; text-align: center; font-size: 0.9rem; margin-bottom: 20px; }
+    .field-label { color: #94a3b8; font-size: 0.9rem; margin-bottom: 4px; display: block; }
+    .settings-input { background: #0f172a; color: #f8fafc; border: 1px solid #334155; padding: 8px 10px; border-radius: 6px; width: 100%; text-align: left; font-family: inherit; font-size: 0.95rem; box-sizing: border-box; }
+    .btn { background: #38bdf8; color: #0f172a; font-weight: bold; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 1rem; transition: opacity 0.2s; width: 100%; }
+    .btn:hover { opacity: 0.9; }
+    .btn-scan { background: #6366f1; color: white; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-family: inherit; font-size: 0.85rem; font-weight: bold; white-space: nowrap; transition: opacity 0.2s; }
+    .btn-scan:hover { opacity: 0.85; }
+    .btn-scan:disabled { opacity: 0.5; cursor: wait; }
+    .ssid-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
+    .ssid-row input { flex: 1; }
+    .field-group { margin-bottom: 12px; }
+    #apList { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; margin-top: 0; }
+    #apList.open { max-height: 260px; overflow-y: auto; margin-top: 8px; border: 1px solid #334155; border-radius: 6px; background: #0f172a; }
+    .ap-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #1e293b; font-size: 0.9rem; transition: background 0.15s; }
+    .ap-item:last-child { border: none; }
+    .ap-item:hover { background: #1e293b; }
+    .ap-item .ap-name { color: #f8fafc; }
+    .ap-item .ap-rssi { color: #64748b; font-size: 0.8rem; }
+    .ap-item .ap-locked { color: #f59e0b; font-size: 0.75rem; margin-left: 6px; }
+    .help { color: #64748b; font-size: 0.8rem; text-align: center; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>DeskBuddy Setup</h1>
+    <p class="subtitle">Connect your device to a WiFi network</p>
+
+    <form action="/save-credentials" method="POST">
+      <div class="field-group">
+        <label class="field-label">Network Name (SSID)</label>
+        <div class="ssid-row">
+          <input type="text" name="wifiSsid" id="wifiSsid" class="settings-input" placeholder="WiFi SSID" autocomplete="off">
+          <button type="button" class="btn-scan" id="scanBtn" onclick="scanWifi()">Scan</button>
+        </div>
+        <div id="apList"></div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">Password</label>
+        <input type="password" name="wifiPass" id="wifiPass" class="settings-input" placeholder="WiFi Password">
+      </div>
+      <button type="submit" class="btn">Save &amp; Connect</button>
+    </form>
+
+    <p class="help">After connecting, visit your device's IP address for full settings.</p>
+  </div>
+
+  <script>
+    function rssiToPercent(rssi) {
+      if (rssi <= -100) return 0;
+      if (rssi >= -50) return 100;
+      return 2 * (rssi + 100);
+    }
+    function signalBars(pct) {
+      if (pct > 75) return '&#9650;&#9650;&#9650;';
+      if (pct > 50) return '&#9650;&#9650;';
+      if (pct > 25) return '&#9650;';
+      return '';
+    }
+    function scanWifi() {
+      var btn = document.getElementById('scanBtn');
+      var list = document.getElementById('apList');
+      btn.disabled = true;
+      btn.textContent = 'Scanning...';
+      list.innerHTML = '';
+      list.classList.add('open');
+      fetch('/wifi-scan')
+        .then(function(r) { return r.json(); })
+        .then(function(aps) {
+          btn.disabled = false;
+          btn.textContent = 'Scan';
+          if (aps.length === 0) {
+            list.innerHTML = '<div class="ap-item"><span class="ap-name" style="color:#64748b;">No networks found</span></div>';
+            return;
+          }
+          var html = '';
+          for (var i = 0; i < aps.length; i++) {
+            var pct = rssiToPercent(aps[i].rssi);
+            var bars = signalBars(pct);
+            var lock = aps[i].secure ? '<span class="ap-locked">&#128274;</span>' : '';
+            html += '<div class="ap-item" onclick="selectAP(this)" data-ssid="' + aps[i].ssid.replace(/"/g, '&quot;') + '" data-secure="' + aps[i].secure + '">';
+            html += '<span class="ap-name">' + aps[i].ssid + lock + '</span>';
+            html += '<span class="ap-rssi">' + bars + ' ' + pct + '%</span>';
+            html += '</div>';
+          }
+          list.innerHTML = html;
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.textContent = 'Scan';
+          list.innerHTML = '<div class="ap-item"><span class="ap-name" style="color:#ef4444;">Scan failed</span></div>';
+        });
+    }
+    function selectAP(el) {
+      document.getElementById('wifiSsid').value = el.dataset.ssid;
+      document.getElementById('apList').classList.remove('open');
+      if (el.dataset.secure === '0') {
+        document.getElementById('wifiPass').value = '';
+        document.getElementById('wifiPass').placeholder = 'Open network - no password needed';
+      } else {
+        document.getElementById('wifiPass').placeholder = 'WiFi Password';
+      }
+    }
+  </script>
+</body>
+</html>
+  )rawhtml";
+  server.send(200, "text/html", html);
+}
+
+inline void handleSaveCredentials() {
+  preferences.begin("deskbuddy", false);
+
+  if (server.hasArg("wifiSsid")) { appConfig.wifiSsid = server.arg("wifiSsid"); preferences.putString("wifiSsid", appConfig.wifiSsid.c_str()); }
+  if (server.hasArg("wifiPass")) { appConfig.wifiPass = server.arg("wifiPass"); preferences.putString("wifiPass", appConfig.wifiPass.c_str()); }
+  if (server.hasArg("wifiStatic")) { appConfig.wifiStaticEnabled = (server.arg("wifiStatic").toInt() == 1); preferences.putBool("wifiStatic", appConfig.wifiStaticEnabled); }
+  if (server.hasArg("wifiIp")) { appConfig.wifiIp = server.arg("wifiIp"); preferences.putString("wifiIp", appConfig.wifiIp.c_str()); }
+  if (server.hasArg("wifiGw")) { appConfig.wifiGw = server.arg("wifiGw"); preferences.putString("wifiGw", appConfig.wifiGw.c_str()); }
+  if (server.hasArg("wifiSubnet")) { appConfig.wifiSubnet = server.arg("wifiSubnet"); preferences.putString("wifiSubnet", appConfig.wifiSubnet.c_str()); }
+  if (server.hasArg("wifiDns1")) { appConfig.wifiDns1 = server.arg("wifiDns1"); preferences.putString("wifiDns1", appConfig.wifiDns1.c_str()); }
+  if (server.hasArg("wifiDns2")) { appConfig.wifiDns2 = server.arg("wifiDns2"); preferences.putString("wifiDns2", appConfig.wifiDns2.c_str()); }
+
+  if (server.hasArg("mqttBroker")) { appConfig.mqttBroker = server.arg("mqttBroker"); preferences.putString("mqttBroker", appConfig.mqttBroker.c_str()); }
+  if (server.hasArg("mqttPort")) { appConfig.mqttPort = server.arg("mqttPort").toInt(); preferences.putInt("mqttPort", appConfig.mqttPort); }
+
+  if (server.hasArg("groqKey")) {
+    String val = server.arg("groqKey");
+    if (val.length() > 0) { appConfig.groqApiKey = val; preferences.putString("groqKey", appConfig.groqApiKey.c_str()); }
+  }
+  if (server.hasArg("geminiKey")) {
+    String val = server.arg("geminiKey");
+    if (val.length() > 0) { appConfig.geminiApiKey = val; preferences.putString("geminiKey", appConfig.geminiApiKey.c_str()); }
+  }
+  if (server.hasArg("deepseekKey")) {
+    String val = server.arg("deepseekKey");
+    if (val.length() > 0) { appConfig.deepseekApiKey = val; preferences.putString("deepseekKey", appConfig.deepseekApiKey.c_str()); }
+  }
+
+  if (server.hasArg("owKey")) {
+    String val = server.arg("owKey");
+    if (val.length() > 0) { appConfig.openWeatherKey = val; preferences.putString("owKey", appConfig.openWeatherKey.c_str()); }
+  }
+  if (server.hasArg("owLat")) { appConfig.openWeatherLat = server.arg("owLat").toFloat(); preferences.putFloat("owLat", appConfig.openWeatherLat); }
+  if (server.hasArg("owLon")) { appConfig.openWeatherLon = server.arg("owLon").toFloat(); preferences.putFloat("owLon", appConfig.openWeatherLon); }
+
+  preferences.end();
+
+  // Reboot after save
+  server.sendHeader("Location", "/");
+  server.send(303, "text/plain", "Credentials Saved, Rebooting...");
+  delay(500);
+  LittleFS.end();
+  ESP.restart();
+}
+
 inline void handleRadarData() {
   DynamicJsonDocument doc(4096);
   doc["presence"] = (appState.currentPresenceState != STATE_AWAY);
@@ -1444,7 +1976,8 @@ inline void handleRadarData() {
   doc["presenceDetected"] = appState.sensorPresenceDetected;
   doc["movingTargetDetected"] = appState.sensorMovingTargetDetected;
   doc["mqttConnected"] = mqttClient.connected();
-  doc["mqttBroker"] = MQTT_BROKER_IP;
+  doc["mqttBroker"] = appConfig.mqttBroker;
+  doc["mqttPort"] = appConfig.mqttPort;
   
   // Distance metrics (always return current stored values to avoid single-frame connection dropouts)
   doc["detectionDist"] = (int)appState.filteredDetectionDist;
@@ -1495,6 +2028,23 @@ inline void handleRadarData() {
   }
   doc["historyDays"] = showRawToday ? 1 : appStats.historyDaysCountWeekly[targetDay];
   
+  // Credential fields for /credentials page
+  doc["wifiSsid"] = appConfig.wifiSsid;
+  doc["wifiPass"] = appConfig.wifiPass;
+  doc["wifiStatic"] = appConfig.wifiStaticEnabled;
+  doc["wifiIp"] = appConfig.wifiIp;
+  doc["wifiGw"] = appConfig.wifiGw;
+  doc["wifiSubnet"] = appConfig.wifiSubnet;
+  doc["wifiDns1"] = appConfig.wifiDns1;
+  doc["wifiDns2"] = appConfig.wifiDns2;
+  doc["mqttPort"] = appConfig.mqttPort;
+  doc["hasGroqKey"] = (appConfig.groqApiKey.length() > 0);
+  doc["hasGeminiKey"] = (appConfig.geminiApiKey.length() > 0);
+  doc["hasDeepseekKey"] = (appConfig.deepseekApiKey.length() > 0);
+  doc["hasOwKey"] = (appConfig.openWeatherKey.length() > 0);
+  doc["owLat"] = appConfig.openWeatherLat;
+  doc["owLon"] = appConfig.openWeatherLon;
+  
   // Combine history with today's real-time accumulated presence if targetDay matches today
   uint8_t blendedHistory[24];
   for (int h = 0; h < 24; h++) {
@@ -1513,6 +2063,18 @@ inline void handleRadarData() {
   JsonArray historyArray = doc.createNestedArray("occupancyHistory");
   for (int h = 0; h < 24; h++) {
     historyArray.add(blendedHistory[h]);
+  }
+
+  // Average sitting time per day-of-week (Mon-Sun order, computed from hourly presence averages)
+  int dayOrder[] = {1, 2, 3, 4, 5, 6, 0}; // Mon-Sun
+  JsonArray sittingTimeArray = doc.createNestedArray("avgSittingTimeWeekly");
+  for (int i = 0; i < 7; i++) {
+    int d = dayOrder[i];
+    int totalPct = 0;
+    for (int h = 0; h < 24; h++) {
+      totalPct += getEffectivePresence(d, h);
+    }
+    sittingTimeArray.add((totalPct * 60) / 100); // convert to minutes
   }
   
   // Gate sensitivities (always report current synced variables)
@@ -2264,6 +2826,18 @@ inline void handleFileManager() {
 
 
 inline void setupWebServer() {
+  // Captive portal detection routes (redirect to /setup)
+  server.on("/generate_204", handleCaptiveRedirect);
+  server.on("/hotspot-detect.html", handleCaptiveRedirect);
+  server.on("/connecttest.txt", handleCaptiveRedirect);
+  server.on("/ncsi.txt", handleCaptiveRedirect);
+  server.on("/success.txt", handleCaptiveRedirect);
+  server.on("/redirect", handleCaptiveRedirect);
+  server.on("/canonical.html", handleCaptiveRedirect);
+
+  // Captive portal setup page (always registered; only used in AP mode)
+  server.on("/setup", HTTP_GET, handleSetup);
+
   server.on("/", handleRoot);
   server.on("/todo", handleTodo);
   server.on("/api/tasks", HTTP_GET, handleGetTasks);
@@ -2271,6 +2845,9 @@ inline void setupWebServer() {
   server.on("/settings", handleSettings);
   server.on("/radar-data", handleRadarData);
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
+  server.on("/credentials", HTTP_GET, handleCredentials);
+  server.on("/save-credentials", HTTP_POST, handleSaveCredentials);
+  server.on("/wifi-scan", HTTP_GET, handleWifiScan);
   server.on("/reset-stats", handleResetStats);
   server.on("/factory-reset", handleFactoryReset);
   server.on("/trigger-event", handleTriggerEvent);
@@ -2290,7 +2867,11 @@ inline void setupWebServer() {
   server.on("/upload", HTTP_POST, handleUploadResponse, handleFileUpload);
 
   server.onNotFound([]() {
-    server.send(404, "text/plain", "Not Found");
+    if (appState.captivePortalMode) {
+      handleCaptiveRedirect();
+    } else {
+      server.send(404, "text/plain", "Not Found");
+    }
   });
 
   server.begin();

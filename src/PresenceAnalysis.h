@@ -39,8 +39,8 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
   // Work hours: occupancy history probability >= 15%
   bool departedDuringWork = (getEffectivePresence(departureDay, departureHour) >= 15);
 
-  // Dynamic threshold: 7 hours if departing during workday, 3 hours if departing during sleep/off hours
-  uint32_t threshold = departedDuringWork ? 25200UL : 10800UL;
+  // Dynamic threshold: 3 hours if departing during workday (known off-hours), 7 hours default (unknown/work hours)
+  uint32_t threshold = departedDuringWork ? 10800UL : 25200UL;
 
   if (currentDay == referenceNtpDay) {
     // If it is the same calendar day, we only rollover if:
@@ -81,26 +81,9 @@ inline void mergeCurrentDayPresence(int dayIndex) {
     // Maximum milliseconds in an hour is 3,600,000
     uint8_t todayPct = (uint8_t)constrain((todayMs * 100UL) / 3600000UL, 0UL, 100UL);
 
-    // Calculate group average (Weekday average or Weekend average)
-    uint8_t groupAvg = 0;
-    if (dayIndex >= 1 && dayIndex <= 5) {
-      // Weekday average (Mon-Fri)
-      int sum = 0;
-      for (int d = 1; d <= 5; d++) {
-        sum += appStats.hourlyPresenceHistoryWeekly[d][h];
-      }
-      groupAvg = sum / 5;
-    } else {
-      // Weekend average (Sat-Sun)
-      groupAvg = (appStats.hourlyPresenceHistoryWeekly[0][h] + appStats.hourlyPresenceHistoryWeekly[6][h]) / 2;
-    }
-
-    // Today-scaled group average: (groupAvg * todayPct) / 100
-    uint16_t scaledGroupAvg = ((uint16_t)groupAvg * todayPct) / 100;
-
-    // Blend: 50% specific day history, 40% today's percentage, 10% today-scaled group average
+    // Blend: 60% existing history, 40% today's percentage
     appStats.hourlyPresenceHistoryWeekly[dayIndex][h] = 
-      (uint8_t)((appStats.hourlyPresenceHistoryWeekly[dayIndex][h] * 5 + todayPct * 4 + scaledGroupAvg) / 10);
+      (uint8_t)((appStats.hourlyPresenceHistoryWeekly[dayIndex][h] * 3 + todayPct * 2) / 5);
 
     appStats.presenceMsCurrentDay[h] = 0; // Clear accumulator for the new session
   }

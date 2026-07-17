@@ -92,7 +92,7 @@ inline void queryGeminiTask(void * parameter) {
 
   bool success = false;
   
-  static ESP32_AI_Connect ai("openai-compatible", GroqApiKey, "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions");
+  static ESP32_AI_Connect ai("openai-compatible", appConfig.groqApiKey.c_str(), "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions");
   ai.setChatTemperature(0.5);
   ai.setChatMaxTokens(AI_RESPONSE_MAX_CHARS * 2 + 10);
   

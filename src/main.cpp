@@ -13,6 +13,7 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include <PubSubClient.h>
+#include <DNSServer.h>
 
 // ============================================================
 // Named Constants (Imported from Constants.h)
@@ -32,6 +33,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 13;
 #include "MessageManager.h"
 #include "../Credentials.h"
 #include "MqttService.h"
+#include "MqttDebug.h"
 #include "Display.h"
 #include "Radar.h"
 #include "Stats.h"
@@ -53,6 +55,7 @@ TodoState appTodo;
 TFT_eSPI tft = TFT_eSPI();
 ld2410 radar;
 WebServer server(80);
+DNSServer dnsServer;
 
 // MessageManager instance
 MessageManager messageManager;
@@ -118,15 +121,15 @@ unsigned long lastHourlyUpdate = 0;
 struct tm ts;
 char buf[80];
 
-// Static IP Configuration
-IPAddress local_IP(192, 168, 15, 160);  // Static IP for DeskBuddy
-IPAddress gateway(192, 168, 15, 1);     // Gateway
-IPAddress subnet(255, 255, 255, 0);     // Subnet Mask
-IPAddress primaryDNS(1, 1, 1, 1);       // Primary DNS
-IPAddress secondaryDNS(8, 8, 8, 8);     // Secondary DNS
-
 // UI Pages
 int uiPage = 0;
+
+// Helper to parse dotted-quad IP string to IPAddress
+IPAddress parseIP(const String& s) {
+  IPAddress ip;
+  ip.fromString(s);
+  return ip;
+}
 
 // Formatting helper for durations
 String formatTime(unsigned long ms) {
@@ -251,14 +254,10 @@ void loadDailyStats() {
   appStats.fsReadCount++;
   Serial.println("[STATS] loadDailyStats: Checking if stats.json exists...");
   if (!LittleFS.exists("/stats.json")) {
-    Serial.println("[STATS] loadDailyStats: No stats.json found, initializing with default patterns.");
+    Serial.println("[STATS] loadDailyStats: No stats.json found, initializing with empty history.");
     for (int d = 0; d < 7; d++) {
       for (int h = 0; h < 24; h++) {
-        if (d >= 1 && d <= 5) {
-          appStats.hourlyPresenceHistoryWeekly[d][h] = PREDEFINED_PATTERN[h];
-        } else {
-          appStats.hourlyPresenceHistoryWeekly[d][h] = 0;
-        }
+        appStats.hourlyPresenceHistoryWeekly[d][h] = 0;
       }
     }
     saveDailyStats();
@@ -350,8 +349,12 @@ void checkWiFiConnection() {
     lastWiFiCheck = millis();
     if (WiFi.status() != WL_CONNECTED) {
       WiFi.disconnect();
-      WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
-      WiFi.begin(SSID, PASS);
+      if (appConfig.wifiStaticEnabled) {
+        WiFi.config(parseIP(appConfig.wifiIp), parseIP(appConfig.wifiGw), 
+                    parseIP(appConfig.wifiSubnet), parseIP(appConfig.wifiDns1), 
+                    parseIP(appConfig.wifiDns2));
+      }
+      WiFi.begin(appConfig.wifiSsid.c_str(), appConfig.wifiPass.c_str());
     }
   }
 }
@@ -401,6 +404,28 @@ void setup(void) {
   appConfig.g5sSens = preferences.getInt("g5sSens", 40);
   appConfig.g6mSens = preferences.getInt("g6mSens", 50);
   appConfig.g6sSens = preferences.getInt("g6sSens", 40);
+
+  // Load WiFi credentials
+  appConfig.wifiSsid = preferences.getString("wifiSsid", DEFAULT_SSID);
+  appConfig.wifiPass = preferences.getString("wifiPass", DEFAULT_PASS);
+  appConfig.wifiStaticEnabled = preferences.getBool("wifiStatic", true);
+  appConfig.wifiIp = preferences.getString("wifiIp", "192.168.15.160");
+  appConfig.wifiGw = preferences.getString("wifiGw", "192.168.15.1");
+  appConfig.wifiSubnet = preferences.getString("wifiSubnet", "255.255.255.0");
+  appConfig.wifiDns1 = preferences.getString("wifiDns1", "1.1.1.1");
+  appConfig.wifiDns2 = preferences.getString("wifiDns2", "8.8.8.8");
+
+  // Load MQTT broker
+  appConfig.mqttBroker = preferences.getString("mqttBroker", MQTT_BROKER_IP);
+  appConfig.mqttPort = preferences.getInt("mqttPort", MQTT_BROKER_PORT);
+
+  // Load API keys
+  appConfig.groqApiKey = preferences.getString("groqKey", GroqApiKey);
+  appConfig.geminiApiKey = preferences.getString("geminiKey", GeminiApiKey);
+  appConfig.deepseekApiKey = preferences.getString("deepseekKey", DeepSeekApiKey);
+  appConfig.openWeatherKey = preferences.getString("owKey", OpenWeatherKey);
+  appConfig.openWeatherLat = preferences.getFloat("owLat", -23.11);
+  appConfig.openWeatherLon = preferences.getFloat("owLon", -46.53);
   preferences.end();
 
   // Initialize LittleFS & load daily stats
@@ -422,14 +447,31 @@ void setup(void) {
   // Initialize Radar Sensor Subsystem
   setupRadar();
 
-  // Set Hostname & Configure static IP
+  // Set Hostname & Configure WiFi
   WiFi.setHostname("DeskBuddy");
-  WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS);
-  WiFi.begin(SSID, PASS);
+  if (appConfig.wifiStaticEnabled) {
+    WiFi.config(parseIP(appConfig.wifiIp), parseIP(appConfig.wifiGw), 
+                parseIP(appConfig.wifiSubnet), parseIP(appConfig.wifiDns1), 
+                parseIP(appConfig.wifiDns2));
+  }
+  WiFi.begin(appConfig.wifiSsid.c_str(), appConfig.wifiPass.c_str());
 
   unsigned long wifiStart = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < WIFI_TIMEOUT_MS) {
     delay(100);
+  }
+
+  // WiFi failed — start captive portal AP mode
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[WIFI] Connection failed — starting captive portal AP mode");
+    WiFi.disconnect();
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(AP_SSID);
+    dnsServer.start(53, "*", WiFi.softAPIP());
+    appState.captivePortalMode = true;
+    Serial.printf("[AP] Started: %s — IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+  } else {
+    Serial.printf("[WIFI] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
   }
 
   // Setup MQTT client
@@ -475,8 +517,13 @@ void loop(void) {
     delay(50);
     return;
   }
+  if (appState.captivePortalMode) {
+    dnsServer.processNextRequest();
+  }
   server.handleClient();
-  checkWiFiConnection();
+  if (!appState.captivePortalMode) {
+    checkWiFiConnection();
+  }
 
   unsigned long now = millis();
   unsigned long elapsed = now - appState.lastLoopTime;
@@ -499,9 +546,15 @@ void loop(void) {
         int currentDay = timeClient.getDay();
         uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
         if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
+          resetDailyStats(appStats.lastAwayEpoch, currentDay);
           currentSessionState = PRESENCE_AWAY;
         } else {
           currentSessionState = PRESENCE_BREAK;
+          // Reset lastAwayEpoch to now so break duration isn't inflated by pre-reboot sitting time
+          appStats.lastAwayEpoch = currentEpoch;
+          appState.originalLastAwayEpoch = currentEpoch;
+          appState.totalStopByTimeMs = 0;
+          appState.isStopByTracking = false;
         }
       }
     }
@@ -541,7 +594,17 @@ void loop(void) {
   appState.sensorMovingTargetDetected = false;
   appState.sensorStaticPresenceDetected = false;
 
-  // Read from the physical radar sensor
+  // Read from the physical radar sensor (or use simulated values)
+  if (appState.simulationMode) {
+    appState.sensorPresenceDetected = appState.simulatedPresent;
+    appState.sensorMovingTargetDetected = appState.simulatedMoving;
+    appState.sensorStaticPresenceDetected = appState.simulatedMoving;
+    appState.rawDetectionDist = appState.simulatedPresent ? appState.simulatedDistance : 0;
+
+    if (!appState.simulationContinuous) {
+      appState.simulationMode = false;
+    }
+  } else {
   radar.read();
   if (radar.isConnected()) {
     appState.sensorPresenceDetected = radar.presenceDetected();
@@ -580,6 +643,7 @@ void loop(void) {
     
     appState.sensorMovingTargetDetected = filteredMovingTarget;
   }
+  } // end else (non-simulation)
 
   rawPresent = appState.sensorPresenceDetected;
   if (rawPresent) {
@@ -828,12 +892,14 @@ void loop(void) {
       unsigned long presenceDurationMs = now - appState.sitDownTime;
       
       if (appState.isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
-        // This was a STOP-BY!
+        // This was a STOP-BY! Roll back the break but start fresh from now.
         if (appStats.breakCount > 0) appStats.breakCount--;
         appStats.latestBreakDuration = appStats.previousLatestBreakDuration;
         
-        appState.totalStopByTimeMs += presenceDurationMs;
-        appStats.lastAwayEpoch = appState.originalLastAwayEpoch;
+        appStats.lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+        appState.isStopByTracking = false;
+        appState.totalStopByTimeMs = 0;
+        appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
         
         appState.currentPresenceState = STATE_AWAY;
         appState.lastStateTransitionTime = now;
@@ -903,7 +969,11 @@ void loop(void) {
   if (WiFi.status() == WL_CONNECTED && now - lastHourlyUpdate > ntpUpdateInterval) {
     timeClient.update();
     HTTPClient http;
-    http.begin(String(OpenWeatherCall) + OpenWeatherKey);
+    String weatherUrl = "https://api.openweathermap.org/data/2.5/weather?lat=" + 
+                        String(appConfig.openWeatherLat, 4) + "&units=metric&lon=" + 
+                        String(appConfig.openWeatherLon, 4) + "&leng=fr&appid=" + 
+                        appConfig.openWeatherKey;
+    http.begin(weatherUrl);
     int httpCode = http.GET();
     if (httpCode > 0) {
       String payload = http.getString();

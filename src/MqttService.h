@@ -8,6 +8,9 @@
 #include "Constants.h"
 #include "State.h"
 
+// Debug platform forward declaration (defined in MqttDebug.h)
+void handleDebugCommand(const String& payload);
+
 // Extern instances defined in main.cpp
 extern WiFiClient wifiClient;
 extern PubSubClient mqttClient;
@@ -54,14 +57,17 @@ inline void mqttCallback(char* topic, byte* payload, unsigned int length) {
   addMqttHistory(t, p);
   
   // Route MQTT messages through MessageManager for proper queueing
-  if (t == MQTT_DISPLAY_TOPIC) {
+  if (t == MQTT_DISPLAY_TOPIC || t == MQTT_PUBLISH_TOPIC) {
     messageManager.scheduleMessage(EVENT_MQTT_MESSAGE, p, MSG_PRIORITY_HIGH, 0, MSG_RELEVANCE_URGENT);
+  }
+  else if (t == MQTT_DEBUG_CMD_TOPIC) {
+    handleDebugCommand(p);
   }
 }
 
 // Configure connection settings to MQTT broker
 inline void setupMqtt() {
-  mqttClient.setServer(MQTT_BROKER_IP, MQTT_BROKER_PORT);
+  mqttClient.setServer(appConfig.mqttBroker.c_str(), appConfig.mqttPort);
   mqttClient.setCallback(mqttCallback);
 }
 
@@ -85,10 +91,10 @@ inline void loopMqtt() {
   }
 }
 
-// Publish display alerts to MQTT broker
+// Publish display alerts to MQTT echo topic (separate from input topics to avoid loops)
 inline void publishMqttMessage(String msg) {
   if (mqttClient.connected()) {
-    mqttClient.publish(MQTT_PUBLISH_TOPIC, msg.c_str());
+    mqttClient.publish(MQTT_ECHO_TOPIC, msg.c_str());
   }
 }
 

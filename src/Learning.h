@@ -5,28 +5,12 @@
 
 #include "State.h"
 
-const uint8_t PREDEFINED_PATTERN[24] = {
-  0, 0, 0, 0, 0, 0, 0, 0,  // 12 AM - 7 AM
-  10,                      // 8 AM
-  60, 75, 80,              // 9 AM - 11 AM
-  15,                      // 12 PM (lunch)
-  45, 70, 75, 65,          // 1 PM - 4 PM
-  50,                      // 5 PM
-  20,                      // 6 PM (wrap-up / overtime)
-  5,                       // 7 PM
-  0, 0, 0, 0               // 8 PM - 11 PM
-};
-
 inline uint8_t getEffectivePresence(int dayIndex, int h) {
   if (dayIndex < 0 || dayIndex >= 7) dayIndex = 1; // Default to Monday
   if (h < 0 || h >= 24) return 0;
   
   if (appStats.historyDaysCountWeekly[dayIndex] == 0) {
-    if (dayIndex >= 1 && dayIndex <= 5) {
-      return PREDEFINED_PATTERN[h];
-    } else {
-      return 0; // Weekends are empty by default
-    }
+    return 0; // No data yet — no assumed pattern
   }
   return appStats.hourlyPresenceHistoryWeekly[dayIndex][h];
 }

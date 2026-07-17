@@ -80,6 +80,14 @@
 #define MQTT_SUBSCRIBE_TOPIC         "deskbuddy/#"
 #define MQTT_DISPLAY_TOPIC     "deskbuddy/display"
 #define MQTT_PUBLISH_TOPIC     "deskbuddy/message"
+#define MQTT_ECHO_TOPIC        "deskbuddy/echo"
 #define MQTT_HISTORY_SIZE                   50
+
+// --- MQTT Debug Platform Topics ---
+#define MQTT_DEBUG_CMD_TOPIC      "deskbuddy/debug/cmd"
+#define MQTT_DEBUG_RESP_TOPIC     "deskbuddy/debug/resp"
+
+// --- Captive Portal ---
+#define AP_SSID                 "DeskBuddy-Setup"
 
 #endif // CONSTANTS_H

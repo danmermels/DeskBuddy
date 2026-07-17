@@ -52,6 +52,28 @@ struct ConfigState {
   int g5sSens = 40;
   int g6mSens = 50;
   int g6sSens = 40;
+
+  // WiFi credentials
+  String wifiSsid = "";
+  String wifiPass = "";
+  bool wifiStaticEnabled = true;
+  String wifiIp = "192.168.15.160";
+  String wifiGw = "192.168.15.1";
+  String wifiSubnet = "255.255.255.0";
+  String wifiDns1 = "1.1.1.1";
+  String wifiDns2 = "8.8.8.8";
+
+  // MQTT broker
+  String mqttBroker = "192.168.15.18";
+  int mqttPort = 1883;
+
+  // API keys
+  String groqApiKey = "";
+  String geminiApiKey = "";
+  String deepseekApiKey = "";
+  String openWeatherKey = "";
+  float openWeatherLat = -23.11;
+  float openWeatherLon = -46.53;
 };
 
 struct StatsState {
@@ -139,6 +161,18 @@ struct RuntimeState {
   int mqttHistoryHead = 0;
   int mqttHistoryCount = 0;
   SemaphoreHandle_t mqttHistoryMutex = NULL;
+
+  // Debug Simulation
+  bool simulationMode = false;
+  bool simulationContinuous = false;
+  int simulatedDistance = 0;
+  bool simulatedMoving = false;
+  bool simulatedPresent = false;
+  int simulatedStateOverride = -1;
+  unsigned long simulatedEpoch = 0;
+
+  // Captive Portal
+  bool captivePortalMode = false;
 };
 
 struct TodoState {
