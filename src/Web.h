@@ -673,8 +673,8 @@ inline void handleTodo() {
     .task-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
     .task-left input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #38bdf8; flex-shrink: 0; }
     .task-text { font-size: 0.95rem; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .delete-btn { background: none; border: none; color: #f87171; cursor: pointer; padding: 4px; display: flex; align-items: center; transition: color 0.2s; flex-shrink: 0; }
-    .delete-btn:hover { color: #ef4444; }
+    .delete-btn { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 4px; display: flex; align-items: center; transition: color 0.2s; flex-shrink: 0; }
+    .delete-btn:hover { color: #6b7280; }
     .delete-btn svg { width: 18px; height: 18px; fill: currentColor; }
     .empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 0.9rem; }
   </style>
@@ -691,27 +691,91 @@ inline void handleTodo() {
   </div>
 
   <div class="card">
-    <h2>Recurring Daily Tasks</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
+      <h2 style="margin: 0; border: none; padding: 0;">Daily Tasks</h2>
+      <select id="dayHistorySelect" onchange="renderLists()" style="background: #0f172a; border: 1px solid #334155; color: #38bdf8; border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; font-weight: bold; outline: none; cursor: pointer;"></select>
+    </div>
     <div class="task-list" id="dailyList"></div>
-    <div class="input-group">
-      <input type="text" id="dailyInput" placeholder="Add recurring daily task...">
+    <div class="input-group" style="flex-wrap: wrap; gap: 8px;">
+      <input type="text" id="dailyInput" placeholder="Add daily task..." style="flex: 1; min-width: 150px;">
+      <select id="dailyHour" style="background: #0f172a; border: 1px solid #334155; color: #f8fafc; border-radius: 6px; padding: 8px; font-size: 0.85rem; outline: none;" title="Due Hour"></select>
+      <select id="dailyMinute" style="background: #0f172a; border: 1px solid #334155; color: #f8fafc; border-radius: 6px; padding: 8px; font-size: 0.85rem; outline: none;" title="Due Minute"></select>
+      <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; user-select: none;">
+        <input type="checkbox" id="dailyRecurrent" style="accent-color: #38bdf8; width: 16px; height: 16px; cursor: pointer;">
+        Recurrent
+      </label>
       <button onclick="addTask('daily')">Add</button>
     </div>
   </div>
 
   <div class="card">
-    <h2>Monthly Tasks</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
+      <h2 style="margin: 0; border: none; padding: 0;">Monthly Tasks</h2>
+      <select id="monthHistorySelect" onchange="renderLists()" style="background: #0f172a; border: 1px solid #334155; color: #38bdf8; border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; font-weight: bold; outline: none; cursor: pointer;"></select>
+    </div>
     <div class="task-list" id="monthlyList"></div>
-    <div class="input-group">
-      <input type="text" id="monthlyInput" placeholder="Add monthly task...">
+    <div class="input-group" style="flex-wrap: wrap; gap: 8px;">
+      <input type="text" id="monthlyInput" placeholder="Add monthly task..." style="flex: 1; min-width: 150px;">
+      <select id="monthlyDay" style="background: #0f172a; border: 1px solid #334155; color: #f8fafc; border-radius: 6px; padding: 8px; font-size: 0.85rem; outline: none;" title="Day of Month"></select>
+      <select id="monthlyMonth" style="background: #0f172a; border: 1px solid #334155; color: #f8fafc; border-radius: 6px; padding: 8px; font-size: 0.85rem; outline: none;" title="Target Month"></select>
+      <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #cbd5e1; cursor: pointer; user-select: none;">
+        <input type="checkbox" id="monthlyRecurrent" style="accent-color: #38bdf8; width: 16px; height: 16px; cursor: pointer;">
+        Recurrent
+      </label>
       <button onclick="addTask('monthly')">Add</button>
     </div>
   </div>
 
   <script>
     let tasks = { daily: [], monthly: [] };
+    let time24h = true;
+
+    function formatHour(h) {
+      if (time24h) {
+        return String(h).padStart(2, '0');
+      } else {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 === 0 ? 12 : h % 12;
+        return `${displayH} ${ampm}`;
+      }
+    }
+
+    function formatTimeDeadline(h, m) {
+      const minStr = String(m).padStart(2, '0');
+      if (time24h) {
+        return `${String(h).padStart(2, '0')}:${minStr}`;
+      } else {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 === 0 ? 12 : h % 12;
+        return `${displayH}:${minStr} ${ampm}`;
+      }
+    }
+
+    function populateHourDropdown() {
+      const dailyHourSel = document.getElementById('dailyHour');
+      if (!dailyHourSel) return;
+      dailyHourSel.innerHTML = '';
+      for (let h = 0; h < 24; h++) {
+        let opt = document.createElement('option');
+        opt.value = h;
+        opt.innerText = formatHour(h);
+        dailyHourSel.appendChild(opt);
+      }
+      dailyHourSel.value = 12; // default to midday
+    }
 
     async function loadTasks() {
+      try {
+        const statsRes = await fetch('/radar-data');
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          time24h = stats.time24h !== undefined ? stats.time24h : true;
+        }
+      } catch (err) {
+        console.error('Error loading stats:', err);
+      }
+      populateHourDropdown();
+
       try {
         const response = await fetch('/api/tasks');
         if (response.ok) {
@@ -745,27 +809,176 @@ inline void handleTodo() {
       container.innerHTML = '';
       
       const list = tasks[type] || [];
-      if (list.length === 0) {
-        container.innerHTML = '<div class="empty-state">No tasks here yet. Add one above!</div>';
-        return;
-      }
+      
+      if (type === 'daily') {
+        const selectedDateStr = document.getElementById('dayHistorySelect').value;
+        
+        let activeTasks = [];
+        list.forEach((task, index) => {
+          let isActive = false;
+          let isCompleted = false;
+          
+          if (task.recurrent) {
+            const startD = task.startDate || "";
+            const endD = task.endDate || "";
+            isActive = (selectedDateStr >= startD) && (!endD || selectedDateStr < endD);
+            isCompleted = task.completedDates && task.completedDates.includes(selectedDateStr);
+          } else {
+            isActive = (!task.targetDate || task.targetDate === selectedDateStr);
+            isCompleted = task.completed;
+          }
+          
+          if (isActive) {
+            activeTasks.push({ task: task, originalIndex: index, isCompleted: isCompleted });
+          }
+        });
+        
+        // Sort active tasks: uncompleted first, then completed. Secondary sort by hour and minute.
+        activeTasks.sort((a, b) => {
+          if (a.isCompleted !== b.isCompleted) {
+            return a.isCompleted ? 1 : -1;
+          }
+          if (a.task.hour !== b.task.hour) {
+            return a.task.hour - b.task.hour;
+          }
+          return (a.task.minute || 0) - (b.task.minute || 0);
+        });
 
-      list.forEach((task, index) => {
-        const item = document.createElement('div');
-        item.className = `task-item ${task.completed ? 'completed' : ''}`;
-        item.innerHTML = `
-          <div class="task-left">
-            <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTask('${type}', ${index})">
-            <span class="task-text">${escapeHtml(task.text)}</span>
-          </div>
-          <button class="delete-btn" onclick="deleteTask('${type}', ${index})" title="Delete task">
-            <svg viewBox="0 0 24 24">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-          </button>
-        `;
-        container.appendChild(item);
-      });
+        if (activeTasks.length === 0) {
+          container.innerHTML = '<div class="empty-state">No tasks scheduled for this day.</div>';
+          return;
+        }
+
+        activeTasks.forEach(itemInfo => {
+          const task = itemInfo.task;
+          const index = itemInfo.originalIndex;
+          const isCompleted = itemInfo.isCompleted;
+          const tMin = task.minute || 0;
+          
+          const now = new Date();
+          const curDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const currentHour = now.getHours();
+          const currentMinute = now.getMinutes();
+          
+          let isOverdue = false;
+          if (!isCompleted) {
+            if (selectedDateStr < curDateStr) {
+              isOverdue = true;
+            } else if (selectedDateStr === curDateStr) {
+              if (task.hour < currentHour || (task.hour === currentHour && tMin < currentMinute)) {
+                isOverdue = true;
+              }
+            }
+          }
+          
+          const badgeColor = isOverdue ? '#f43f5e' : '#9ca3af';
+          const recurrentIndicator = task.recurrent ? `<span style="color: #3b82f6; font-weight: bold; font-size: 0.85rem; margin-right: 8px;" title="Recurrent">R</span>` : '';
+          
+          const item = document.createElement('div');
+          item.className = `task-item ${isCompleted ? 'completed' : ''}`;
+          
+          let deadlineHtml = `<span class="task-deadline" style="font-size: 0.75rem; color: ${badgeColor}; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px;">Due: ${formatTimeDeadline(task.hour, tMin)}</span>`;
+
+          item.innerHTML = `
+            <div class="task-left">
+              <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTask('${type}', ${index})">
+              <span class="task-text">${escapeHtml(task.text)}</span>
+              ${deadlineHtml}
+            </div>
+            <div style="display: flex; align-items: center;">
+              ${recurrentIndicator}
+              <button class="delete-btn" onclick="deleteTask('${type}', ${index})" title="Delete task">
+                <svg viewBox="0 0 24 24">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+              </button>
+            </div>
+          `;
+          container.appendChild(item);
+        });
+      } else {
+        const selectedMonthStr = document.getElementById('monthHistorySelect').value;
+        const [selYear, selMonth] = selectedMonthStr.split('-').map(Number);
+        
+        let activeTasks = [];
+        list.forEach((task, index) => {
+          let isActive = false;
+          let isCompleted = false;
+          
+          if (task.recurrent) {
+            const startM = task.startMonth || "";
+            const endM = task.endMonth || "";
+            isActive = (selectedMonthStr >= startM) && (!endM || selectedMonthStr < endM);
+            isCompleted = task.completedMonths && task.completedMonths.includes(selectedMonthStr);
+          } else {
+            isActive = (!task.year || (task.year === selYear && task.month === selMonth));
+            isCompleted = task.completed;
+          }
+          
+          if (isActive) {
+            activeTasks.push({ task: task, originalIndex: index, isCompleted: isCompleted });
+          }
+        });
+        
+        // Sort active tasks: uncompleted first, then completed. Secondary sort by day.
+        activeTasks.sort((a, b) => {
+          if (a.isCompleted !== b.isCompleted) {
+            return a.isCompleted ? 1 : -1;
+          }
+          return a.task.day - b.task.day;
+        });
+
+        if (activeTasks.length === 0) {
+          container.innerHTML = '<div class="empty-state">No tasks scheduled for this month.</div>';
+          return;
+        }
+        
+        activeTasks.forEach(itemInfo => {
+          const task = itemInfo.task;
+          const index = itemInfo.originalIndex;
+          const isCompleted = itemInfo.isCompleted;
+          
+          const now = new Date();
+          const curMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const currentDay = now.getDate();
+          
+          let isOverdue = false;
+          if (!isCompleted) {
+            if (selectedMonthStr < curMonthStr) {
+              isOverdue = true;
+            } else if (selectedMonthStr === curMonthStr) {
+              if (task.day < currentDay) {
+                isOverdue = true;
+              }
+            }
+          }
+          
+          const badgeColor = isOverdue ? '#f43f5e' : '#9ca3af';
+          const recurrentIndicator = task.recurrent ? `<span style="color: #3b82f6; font-weight: bold; font-size: 0.85rem; margin-right: 8px;" title="Recurrent">R</span>` : '';
+          
+          const item = document.createElement('div');
+          item.className = `task-item ${isCompleted ? 'completed' : ''}`;
+          
+          let deadlineHtml = `<span class="task-deadline" style="font-size: 0.75rem; color: ${badgeColor}; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px;">Due: Day ${task.day}</span>`;
+
+          item.innerHTML = `
+            <div class="task-left">
+              <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTask('${type}', ${index})">
+              <span class="task-text">${escapeHtml(task.text)}</span>
+              ${deadlineHtml}
+            </div>
+            <div style="display: flex; align-items: center;">
+              ${recurrentIndicator}
+              <button class="delete-btn" onclick="deleteTask('${type}', ${index})" title="Delete task">
+                <svg viewBox="0 0 24 24">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+              </button>
+            </div>
+          `;
+          container.appendChild(item);
+        });
+      }
     }
 
     function addTask(type) {
@@ -774,7 +987,72 @@ inline void handleTodo() {
       if (!text) return;
       
       if (!tasks[type]) tasks[type] = [];
-      tasks[type].push({ text: text, completed: false });
+      
+      if (type === 'daily') {
+        const hour = parseInt(document.getElementById('dailyHour').value);
+        const minute = parseInt(document.getElementById('dailyMinute').value);
+        const isRecurrent = document.getElementById('dailyRecurrent').checked;
+        const selectedDateStr = document.getElementById('dayHistorySelect').value;
+        const now = new Date();
+        const curDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        
+        if (isRecurrent) {
+          tasks[type].push({
+            text: text,
+            hour: hour,
+            minute: minute,
+            recurrent: true,
+            startDate: selectedDateStr,
+            completedDates: []
+          });
+        } else {
+          tasks[type].push({
+            text: text,
+            hour: hour,
+            minute: minute,
+            recurrent: false,
+            targetDate: selectedDateStr,
+            completed: false
+          });
+        }
+        document.getElementById('dailyRecurrent').checked = false;
+      } else if (type === 'monthly') {
+        const day = parseInt(document.getElementById('monthlyDay').value);
+        const selectedMonth = parseInt(document.getElementById('monthlyMonth').value);
+        const isRecurrent = document.getElementById('monthlyRecurrent').checked;
+        
+        if (isRecurrent) {
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth() + 1; // 1-12
+          const year = (selectedMonth < currentMonth) ? currentYear + 1 : currentYear;
+          const startMonthStr = `${year}-${String(selectedMonth).padStart(2, '0')}`;
+          
+          tasks[type].push({
+            text: text,
+            day: day,
+            recurrent: true,
+            startMonth: startMonthStr,
+            completedMonths: []
+          });
+        } else {
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth() + 1; // 1-12
+          const year = (selectedMonth < currentMonth) ? currentYear + 1 : currentYear;
+          
+          tasks[type].push({
+            text: text,
+            day: day,
+            month: selectedMonth,
+            year: year,
+            recurrent: false,
+            completed: false
+          });
+        }
+        document.getElementById('monthlyRecurrent').checked = false;
+      }
+      
       input.value = '';
       
       renderLists();
@@ -782,13 +1060,65 @@ inline void handleTodo() {
     }
 
     function toggleTask(type, index) {
-      tasks[type][index].completed = !tasks[type][index].completed;
+      if (type === 'daily') {
+        const task = tasks[type][index];
+        const selectedDateStr = document.getElementById('dayHistorySelect').value;
+        if (task.recurrent) {
+          if (!task.completedDates) task.completedDates = [];
+          const idx = task.completedDates.indexOf(selectedDateStr);
+          if (idx > -1) {
+            task.completedDates.splice(idx, 1);
+          } else {
+            task.completedDates.push(selectedDateStr);
+          }
+        } else {
+          task.completed = !task.completed;
+        }
+      } else {
+        const task = tasks[type][index];
+        const selectedMonthStr = document.getElementById('monthHistorySelect').value;
+        if (task.recurrent) {
+          if (!task.completedMonths) task.completedMonths = [];
+          const idx = task.completedMonths.indexOf(selectedMonthStr);
+          if (idx > -1) {
+            task.completedMonths.splice(idx, 1);
+          } else {
+            task.completedMonths.push(selectedMonthStr);
+          }
+        } else {
+          task.completed = !task.completed;
+        }
+      }
       renderLists();
       saveTasks();
     }
 
     function deleteTask(type, index) {
-      tasks[type].splice(index, 1);
+      if (type === 'daily') {
+        const task = tasks[type][index];
+        const selectedDateStr = document.getElementById('dayHistorySelect').value;
+        if (task.recurrent) {
+          if (!task.completedDates || task.completedDates.length === 0 || task.startDate === selectedDateStr) {
+            tasks[type].splice(index, 1);
+          } else {
+            task.endDate = selectedDateStr;
+          }
+        } else {
+          tasks[type].splice(index, 1);
+        }
+      } else if (type === 'monthly') {
+        const task = tasks[type][index];
+        const selectedMonthStr = document.getElementById('monthHistorySelect').value;
+        if (task.recurrent) {
+          if (!task.completedMonths || task.completedMonths.length === 0 || task.startMonth === selectedMonthStr) {
+            tasks[type].splice(index, 1);
+          } else {
+            task.endMonth = selectedMonthStr;
+          }
+        } else {
+          tasks[type].splice(index, 1);
+        }
+      }
       renderLists();
       saveTasks();
     }
@@ -802,7 +1132,109 @@ inline void handleTodo() {
         .replace(/'/g, "&#039;");
     }
 
-    window.onload = loadTasks;
+    function populateMonthSelect() {
+      const select = document.getElementById('monthHistorySelect');
+      select.innerHTML = '';
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const now = new Date();
+      let year = now.getFullYear();
+      let month = now.getMonth(); // 0-11
+      
+      for (let i = 0; i < 12; i++) {
+        let mStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+        let label = `${monthNames[month]} ${year}`;
+        let opt = document.createElement('option');
+        opt.value = mStr;
+        opt.innerText = label;
+        select.appendChild(opt);
+        
+        month--;
+        if (month < 0) {
+          month = 11;
+          year--;
+        }
+      }
+    }
+
+    function populateDaySelect() {
+      const select = document.getElementById('dayHistorySelect');
+      select.innerHTML = '';
+      const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const now = new Date();
+      
+      // Sliding 15-day window: 7 future days, today, and 7 past days
+      for (let i = -7; i <= 7; i++) {
+        let tempDate = new Date();
+        tempDate.setDate(now.getDate() - i);
+        let y = tempDate.getFullYear();
+        let m = String(tempDate.getMonth() + 1).padStart(2, '0');
+        let d = String(tempDate.getDate()).padStart(2, '0');
+        let dStr = `${y}-${m}-${d}`;
+        
+        let label = "";
+        if (i === 0) label = "Today";
+        else if (i === 1) label = "Yesterday";
+        else if (i === -1) label = "Tomorrow";
+        else {
+          label = `${daysOfWeek[tempDate.getDay()]} (${tempDate.getDate()}/${tempDate.getMonth() + 1})`;
+          if (i < 0) {
+            label += " [Future]";
+          }
+        }
+        
+        let opt = document.createElement('option');
+        opt.value = dStr;
+        opt.innerText = label;
+        select.appendChild(opt);
+      }
+      
+      // Set default value to Today
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      select.value = todayStr;
+    }
+
+    function initUi() {
+      const dailyMinSel = document.getElementById('dailyMinute');
+      dailyMinSel.innerHTML = '';
+      for (let m = 0; m < 60; m += 5) {
+        let opt = document.createElement('option');
+        opt.value = m;
+        opt.innerText = String(m).padStart(2, '0');
+        dailyMinSel.appendChild(opt);
+      }
+      
+      const daySel = document.getElementById('monthlyDay');
+      daySel.innerHTML = '';
+      for (let i = 1; i <= 31; i++) {
+        let opt = document.createElement('option');
+        opt.value = i;
+        opt.innerText = `Day ${i}`;
+        daySel.appendChild(opt);
+      }
+      
+      const monthSel = document.getElementById('monthlyMonth');
+      monthSel.innerHTML = '';
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      monthNames.forEach((name, idx) => {
+        let opt = document.createElement('option');
+        opt.value = idx + 1; // 1-12
+        opt.innerText = name;
+        monthSel.appendChild(opt);
+      });
+      
+      const now = new Date();
+      dailyMinSel.value = 0;
+      daySel.value = now.getDate();
+      monthSel.value = now.getMonth() + 1;
+      
+      populateMonthSelect();
+      populateDaySelect();
+    }
+
+    window.onload = function() {
+      initUi();
+      loadTasks();
+    };
   </script>
 </body>
 </html>
@@ -1253,6 +1685,11 @@ inline void handleSettings() {
           <option value="4">Slacker Roast (4)</option>
           <option value="5">Streak Beaten (5)</option>
           <option value="6">Lunch Reminder (6)</option>
+          <option value="8">Excessive Breaks (8)</option>
+          <option value="9">Goal Completed (9)</option>
+          <option value="10">Journal Task Overview (10)</option>
+          <option value="11">Nagging Overdue Alert (11)</option>
+          <option value="12">Task Due Reminder (12)</option>
         </select>
         <select id="debugMsgMode" style="width: 110px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px; padding: 8px; font-size: 0.9rem;">
           <option value="ai">AI Msg</option>
@@ -1526,8 +1963,9 @@ inline void handleSettings() {
       let mode = document.getElementById('debugMsgMode').value;
       let detail = "";
       if (type === "0" || type === "5") detail = "45m";
-      if (type === "1") detail = "15m";
+      if (type === "1" || type === "8") detail = "15m";
       if (type === "3") detail = "25m";
+      if (type === "12") detail = "Drink Water";
       
       fetch('/trigger-event?type=' + type + '&detail=' + encodeURIComponent(detail) + '&mode=' + mode)
         .then(response => {

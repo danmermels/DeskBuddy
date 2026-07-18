@@ -167,7 +167,6 @@ inline void updateTFTDisplay(unsigned long now) {
   static String activeAlertMessage = "";
   static bool activeAlertIsAi = false;
 
-  static bool pendingWelcomeAlert = false;
   static String welcomeAlertMessage = "";
   static bool welcomeAlertIsAi = false;
 
@@ -183,7 +182,7 @@ inline void updateTFTDisplay(unsigned long now) {
     publishMqttMessage(msg);
 
     if (appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_FIRST_SIT) {
-      pendingWelcomeAlert = true;
+      appState.pendingWelcomeAlert = true;
       welcomeAlertMessage = msg;
       welcomeAlertIsAi = isAi;
     } else {
@@ -194,8 +193,8 @@ inline void updateTFTDisplay(unsigned long now) {
     }
   }
 
-  if (pendingWelcomeAlert && (now - appState.sitDownTime >= 15000UL)) {
-    pendingWelcomeAlert = false;
+  if (appState.pendingWelcomeAlert && (now - appState.sitDownTime >= 15000UL)) {
+    appState.pendingWelcomeAlert = false;
     activeAlertMessage = welcomeAlertMessage;
     activeAlertIsAi = welcomeAlertIsAi;
     appState.aiScreenEndTime = now + 8000;
@@ -205,7 +204,7 @@ inline void updateTFTDisplay(unsigned long now) {
   bool isAlertActive = (now < appState.aiScreenEndTime);
   int targetPage = -1;
   if (appState.currentPresenceState == STATE_AWAY) {
-    pendingWelcomeAlert = false;
+    appState.pendingWelcomeAlert = false;
     welcomeAlertMessage = "";
     if (appState.hasNewAIResponse) {
       if (appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_FIRST_SIT) {

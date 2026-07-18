@@ -97,6 +97,12 @@ struct StatsState {
   int historyDaysCountWeekly[7] = {0};
   
   bool lunchReminderTriggered = false;
+  bool excessiveBreaksTriggered = false;
+  bool goalCompletedTriggered = false;
+  bool morningJournalTriggered = false;
+  bool preLunchJournalTriggered = false;
+  bool endOfDayJournalTriggered = false;
+  bool naggingTriggeredToday = false;
   int lastNtpDay = -1;
   int lastMidnightCheckDay = -1;
   unsigned long previousLatestBreakDuration = 0;
@@ -139,6 +145,7 @@ struct RuntimeState {
   int lastTriggeredEventType = 0; // EVENT_FIRST_SIT
   
   volatile bool isAILoading = false;
+  volatile bool pendingWelcomeAlert = false;
   String aiResponse = "";
   volatile bool hasNewAIResponse = false;
   volatile bool lastResponseIsAi = false;

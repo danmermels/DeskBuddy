@@ -38,8 +38,13 @@ inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
   appState.originalLastAwayEpoch = 0;
   appState.totalStopByTimeMs = 0;
   appStats.previousLatestBreakDuration = 0;
-  
   appStats.lunchReminderTriggered = false;
+  appStats.excessiveBreaksTriggered = false;
+  appStats.goalCompletedTriggered = false;
+  appStats.morningJournalTriggered = false;
+  appStats.preLunchJournalTriggered = false;
+  appStats.endOfDayJournalTriggered = false;
+  appStats.naggingTriggeredToday = false;
   appStats.lastNtpDay = currentDay;
   appStats.fsWritesToday = 0;
   

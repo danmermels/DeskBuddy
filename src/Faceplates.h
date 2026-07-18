@@ -31,7 +31,7 @@ extern String formatTime(unsigned long ms);
 
 #define MSG_FONT_DEFAULT 4
 #define FONT_DEFAULT_WEATHER 4
-#define FONT_DEFAULT_CLOCK 7
+#define FONT_DEFAULT_CLOCK 6
 #define FONT_DEFAULT_DATE 2
 #define FONT_DEFAULT_STATS 4
 /**
@@ -39,13 +39,13 @@ extern String formatTime(unsigned long ms);
  * Draws the default digital clock face.
  * Layout:
  * - Top: Temperature and weather description.
- * - Center: Large digital clock (using built-in 7-segment Font 7).
+ * - Center: Large digital clock (using built-in Font 6).
  * - Below Center: Date string.
  * - Bottom: Rotational statistics (productivity score, desk time, focus duration, etc.).
  * - Outermost Bezel: Smooth round color ring matching the active presence state.
  */
 void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
-  // 1. Mood Ring Animation & Drawing
+  // 1. Mood Ring Animation & Concentric Drawing
   RGBColor targetColor = stateColors[appState.currentPresenceState];
   if (targetColor != appState.targetRingColor) {
     appState.startRingColor = appState.currentRingColor;
@@ -57,6 +57,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   bool isTransitioning = (appState.currentRingColor != appState.targetRingColor);
   bool ringRedrawn = false;
 
+  // Redraw rings when transitioning or forced
   if (forceRedraw || (isTransitioning && (now - lastRingUpdate > 50))) {
     if (isTransitioning) {
       unsigned long elapsed = now - appState.ringTransitionStart;
@@ -70,8 +71,20 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
         appState.currentRingColor.b = appState.startRingColor.b + t * (appState.targetRingColor.b - appState.startRingColor.b);
       }
     }
-    uint16_t color565 = tft.color565(appState.currentRingColor.r, appState.currentRingColor.g, appState.currentRingColor.b);
-    tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
+    
+    // Scale colors to create triple ring glow/depth effect (100%, 60%, 25%)
+    uint8_t r = appState.currentRingColor.r;
+    uint8_t g = appState.currentRingColor.g;
+    uint8_t b = appState.currentRingColor.b;
+    uint16_t outerColor  = tft.color565(r, g, b);
+    uint16_t middleColor = tft.color565(r * 60 / 100, g * 60 / 100, b * 60 / 100);
+    uint16_t innerColor  = tft.color565(r * 25 / 100, g * 25 / 100, b * 25 / 100);
+
+    // Draw three concentric rings for anti-aliased visual depth
+    tft.drawSmoothRoundRect(2, 2, 118, 115, 0, 0, outerColor, TFT_BLACK);
+    tft.drawSmoothRoundRect(8, 8, 112, 110, 0, 0, middleColor, TFT_BLACK);
+    tft.drawSmoothRoundRect(14, 14, 106, 104, 0, 0, innerColor, TFT_BLACK);
+    
     lastRingUpdate = now;
     ringRedrawn = true;
   }
@@ -80,9 +93,18 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   if (showEvent) {
     if (forceRedraw || ringRedrawn) {
       drawFaceplateMessage("/msg_default.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY);
-      // Redraw bezel ring on top of the alert background
-      uint16_t color565 = tft.color565(appState.currentRingColor.r, appState.currentRingColor.g, appState.currentRingColor.b);
-      tft.drawSmoothRoundRect(2, 2, 118, 116, 0, 0, color565, TFT_BLACK);
+      
+      // Redraw bezel rings on top of the alert background
+      uint8_t r = appState.currentRingColor.r;
+      uint8_t g = appState.currentRingColor.g;
+      uint8_t b = appState.currentRingColor.b;
+      uint16_t outerColor  = tft.color565(r, g, b);
+      uint16_t middleColor = tft.color565(r * 60 / 100, g * 60 / 100, b * 60 / 100);
+      uint16_t innerColor  = tft.color565(r * 25 / 100, g * 25 / 100, b * 25 / 100);
+      
+      tft.drawSmoothRoundRect(2, 2, 118, 115, 0, 0, outerColor, TFT_BLACK);
+      tft.drawSmoothRoundRect(8, 8, 112, 110, 0, 0, middleColor, TFT_BLACK);
+      tft.drawSmoothRoundRect(14, 14, 106, 104, 0, 0, innerColor, TFT_BLACK);
     }
     return;
   }
@@ -96,17 +118,19 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
   static String lastMetricText = "";
   static uint16_t lastMetricColor = 0;
-
   static unsigned long lastMetricSwitch = 0;
   static int metricIndex = 0;
 
   tft.setTextDatum(MC_DATUM);
 
   // Weather section (top)
+  tft.setTextColor(tft.color565(120, 130, 140), TFT_BLACK);
+  tft.drawString("WEATHER", 120, 42, FONT_DEFAULT_DATE); // Faint label in font 2
+  
   tft.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-  tft.drawString(String(appState.temp) + "C | " + appState.weatherDesc, 120, 50, FONT_DEFAULT_WEATHER);
+  tft.drawString(String(appState.temp) + "C  |  " + appState.weatherDesc, 120, 58, FONT_DEFAULT_WEATHER);
 
-  // Draw Mail Indicator on Default Clock Face
+  // Draw Mail Indicator
   static bool lastHasMailDefault = false;
   if (forceRedraw || (appConfig.hasMail != lastHasMailDefault)) {
     if (appConfig.hasMail) {
@@ -121,7 +145,6 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   }
 
   // Time section (center)
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
   int h = timeClient.getHours();
   int m = timeClient.getMinutes();
   int display_h = h;
@@ -131,21 +154,25 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   }
   char timeStrBuf[6];
   snprintf(timeStrBuf, sizeof(timeStrBuf), "%02d:%02d", display_h, m);
-  tft.drawString(String(timeStrBuf), 120, 105, FONT_DEFAULT_CLOCK); // Large digital font
+  
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.drawString(String(timeStrBuf), 120, 102, FONT_DEFAULT_CLOCK);
 
   // Date section (below time)
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-  tft.drawString(buf, 120, 150, FONT_DEFAULT_DATE);
+  tft.drawString(buf, 120, 134, FONT_DEFAULT_DATE);
 
-  // Cycle through metrics at the bottom (Y=190) every 15 seconds
+  // Glass divider line (Y=146)
+  tft.drawFastHLine(50, 146, 140, tft.color565(80, 80, 80));   // Highlight edge
+  tft.drawFastHLine(50, 147, 140, tft.color565(30, 30, 30));   // Shadow edge
+
+  // Cycle through metrics at the bottom every 15 seconds
   if (now - lastMetricSwitch > 15000) {
     metricIndex = (metricIndex + 1) % 5;
     lastMetricSwitch = now;
   }
 
   String metricText = "";
-  uint16_t metricColor = tft.color565(100, 100, 100);
-
   switch (metricIndex) {
     case 0: {
       int pct = 0;
@@ -153,27 +180,33 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
         pct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
       }
       if (pct > 100) pct = 100;
-      metricText = "Day: " + String(pct) + "%";
+      metricText = "DAY: " + String(pct) + "%";
       break;
     }
     case 1:
-      metricText = "Score: " + String(appStats.productivityScore) + "%";
+      metricText = "SCORE: " + String(appStats.productivityScore) + "%";
       break;
     case 2:
-      metricText = "At Desk: " + formatTime(now - appState.continuousPresenceStart);
+      metricText = "AT DESK: " + formatTime(now - appState.continuousPresenceStart);
       break;
     case 3:
-      metricText = "Breaks: " + String(appStats.breakCount);
+      metricText = "BREAKS: " + String(appStats.breakCount);
       break;
     case 4:
-      metricText = "Focus: " + formatTime(appStats.totalFocusTime);
+      metricText = "FOCUS: " + formatTime(appStats.totalFocusTime);
       break;
   }
 
+  // Tint metrics text according to current active mood ring color
+  uint8_t ringR = appState.currentRingColor.r;
+  uint8_t ringG = appState.currentRingColor.g;
+  uint8_t ringB = appState.currentRingColor.b;
+  uint16_t metricColor = tft.color565(ringR * 75 / 100, ringG * 75 / 100, ringB * 75 / 100);
+
   if (metricText != lastMetricText || metricColor != lastMetricColor || forceRedraw || ringRedrawn) {
-    tft.fillRect(42, 176, 156, 28, TFT_BLACK); // Clear text area safely without clipping bezel ring
+    tft.fillRect(40, 156, 160, 30, TFT_BLACK); // Clear text area safely
     tft.setTextColor(metricColor, TFT_BLACK);
-    tft.drawString(metricText, 120, 190, FONT_DEFAULT_STATS);
+    tft.drawString(metricText, 120, 172, FONT_DEFAULT_STATS);
     lastMetricText = metricText;
     lastMetricColor = metricColor;
   }

@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <ESP32_AI_Connect.h>
 #include "Behaviour.h"
+#include "Curation.h"
+#include "MqttService.h"
 
 #include "State.h"
 #include <NTPClient.h>
@@ -40,12 +42,12 @@ inline String resolveLocalPlaceholders(String templateStr, String detail) {
   return templateStr;
 }
 
-inline String resolvePromptPlaceholders(String templateStr, String detail) {
+inline String resolvePromptPlaceholders(int eventType, String templateStr, String detail) {
   extern const char* PROMPT_PREAMBLE_COACH;
   extern const char* PROMPT_PREAMBLE_CRITIC;
   extern const char* PROMPT_PREAMBLE_NERD;
   extern const char* PROMPT_PREAMBLE_ZEN;
-    extern int getLearnedWorkdayStart(int dayIndex);
+  extern int getLearnedWorkdayStart(int dayIndex);
   extern int getLearnedWorkdayEnd(int dayIndex);
   extern int getLearnedLunchHour(int dayIndex);
 
@@ -54,31 +56,63 @@ inline String resolvePromptPlaceholders(String templateStr, String detail) {
   else if (appConfig.aiPersona == 2) activePreamble = PROMPT_PREAMBLE_NERD;
   else if (appConfig.aiPersona == 3) activePreamble = PROMPT_PREAMBLE_ZEN;
 
-  String fullPrompt = String(activePreamble) + "\n\n" + appState.temp;
-
-  fullPrompt.replace("{name}", appConfig.userName);
-  if (detail == "") {
-    fullPrompt.replace("{detail}", "a while");
-  } else {
-    fullPrompt.replace("{detail}", detail);
+  // 1. Get current time and day of week
+  String timeOfDayStr = "Unknown Time";
+  String dayOfWeekStr = "Unknown Day";
+  if (timeClient.isTimeSet()) {
+    time_t epochTime = timeClient.getEpochTime();
+    struct tm *ptm = localtime(&epochTime);
+    if (ptm != nullptr) {
+      char timeBuf[10];
+      strftime(timeBuf, sizeof(timeBuf), "%H:%M", ptm);
+      timeOfDayStr = String(timeBuf);
+      
+      char dayBuf[15];
+      strftime(dayBuf, sizeof(dayBuf), "%A", ptm);
+      dayOfWeekStr = String(dayBuf);
+    }
   }
-  fullPrompt.replace("{score}", String(appStats.productivityScore));
-  fullPrompt.replace("{deskTime}", formatTime(appStats.totalDeskTime));
-  fullPrompt.replace("{focusTime}", formatTime(appStats.totalFocusTime));
-  fullPrompt.replace("{breakTime}", formatTime(appStats.totalBreakTime));
-  fullPrompt.replace("{breakCount}", String(appStats.breakCount));
-  fullPrompt.replace("{longestStreak}", formatTime(appStats.longestSittingStreak));
-  int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
-  fullPrompt.replace("{historyDays}", String(appStats.historyDaysCountWeekly[currentDay]));
+
+  // 2. Goal progress calculation
+  int goalProgressPct = 0;
+  if (appConfig.targetHours > 0.0f) {
+    goalProgressPct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
+  }
+  if (goalProgressPct > 100) goalProgressPct = 100;
+
+  // 3. Observations/Discrepancies
+  String discrepancies = getCurationObservations(eventType, detail);
+  if (discrepancies == "") {
+    discrepancies = "- No unusual deviations from daily work routines detected.";
+  }
+
+  // 4. Resolve placeholders inside the templateStr
+  String resolvedTemplate = templateStr;
+  resolvedTemplate.replace("{name}", appConfig.userName);
+  if (detail == "") {
+    resolvedTemplate.replace("{detail}", "a while");
+  } else {
+    resolvedTemplate.replace("{detail}", detail);
+  }
+
+  // 5. Build structured prompt
+  String fullPrompt = "[ROLE]\n";
+  fullPrompt += String(activePreamble) + "\n";
+  fullPrompt += "CRITICAL CONSTRAINT: Respond with exactly ONE short sentence in English. Keep it between 60-70 characters total (maximum 75, including spaces/punctuation). Output ONLY the raw response. Do not wrap in quotes.\n\n";
   
-  char startBuf[10], endBuf[10], lunchBuf[10];
-  snprintf(startBuf, sizeof(startBuf), "%02d:00", getLearnedWorkdayStart(currentDay));
-  snprintf(endBuf, sizeof(endBuf), "%02d:00", getLearnedWorkdayEnd(currentDay));
-  snprintf(lunchBuf, sizeof(lunchBuf), "%02d:00", getLearnedLunchHour(currentDay));
-  
-  fullPrompt.replace("{learnedStart}", String(startBuf));
-  fullPrompt.replace("{learnedEnd}", String(endBuf));
-  fullPrompt.replace("{learnedLunch}", String(lunchBuf));
+  fullPrompt += "[LIVE TELEMETRY]\n";
+  fullPrompt += "User: " + appConfig.userName + "\n";
+  fullPrompt += "Time: " + timeOfDayStr + " (" + dayOfWeekStr + ")\n";
+  fullPrompt += "Weather: " + String(appState.temp) + "C, " + appState.weatherDesc + "\n";
+  fullPrompt += "Desk Time Today: " + formatTime(appStats.totalDeskTime) + " (Goal Progress: " + String(goalProgressPct) + "%)\n";
+  fullPrompt += "Focus Time: " + formatTime(appStats.totalFocusTime) + "\n";
+  fullPrompt += "Productivity: " + String(appStats.productivityScore) + "%\n\n";
+
+  fullPrompt += "[OBSERVATIONS]\n";
+  fullPrompt += discrepancies + "\n\n";
+
+  fullPrompt += "[ACTION REQUIRED]\n";
+  fullPrompt += resolvedTemplate;
 
   return fullPrompt;
 }
@@ -89,6 +123,11 @@ inline void queryGeminiTask(void * parameter) {
   String prompt = appState.currentPrompt;
   uint32_t querySessionId = geminiQuerySessionId;
   xSemaphoreGive(appState.geminiMutex);
+
+  Serial.println("[AI REQUEST] Prompt:\n" + prompt);
+  if (mqttClient.connected()) {
+    mqttClient.publish("deskbuddy/debug/ai/request", prompt.c_str());
+  }
 
   bool success = false;
   
@@ -104,6 +143,11 @@ inline void queryGeminiTask(void * parameter) {
     
     if (response.startsWith("\"") && response.endsWith("\"")) {
       response = response.substring(1, response.length() - 1);
+    }
+    
+    Serial.println("[AI RESPONSE] Success:\n" + response);
+    if (mqttClient.connected()) {
+      mqttClient.publish("deskbuddy/debug/ai/response", response.c_str());
     }
     
     bool discard = false;
@@ -125,6 +169,11 @@ inline void queryGeminiTask(void * parameter) {
 
   // Graceful fallback: If Gemini query fails, load a local fallback quote immediately
   if (!success) {
+    Serial.println("[AI RESPONSE] Failed (HTTP Code: " + String(httpCode) + ")");
+    if (mqttClient.connected()) {
+      mqttClient.publish("deskbuddy/debug/ai/response", "ERROR: AI query failed or returned empty response");
+    }
+    
     const char* quote = "";
     int randIdx = random(20);
     switch (appState.lastTriggeredEventType) {
@@ -183,8 +232,8 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       // Frequent mode: all events can trigger AI
       useAI = true;
     } else if (appConfig.aiMode == 1) {
-      // Balanced mode: AI triggers for FIRST_SIT, STRETCH, WELCOME_BACK, and LUNCH_REMINDER
-      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LUNCH_REMINDER) {
+      // Balanced mode: AI triggers for tasks, focus, and notifications
+      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LUNCH_REMINDER || eventType == EVENT_EXCESSIVE_BREAKS || eventType == EVENT_GOAL_COMPLETED || eventType == EVENT_JOURNAL || eventType == EVENT_NAGGING || eventType == EVENT_TASK_DUE) {
         useAI = true;
       }
     }
@@ -197,13 +246,18 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   if (useAI) {
     String basePrompt = "";
     switch (eventType) {
-      case EVENT_FIRST_SIT:     basePrompt = resolvePromptPlaceholders(PROMPT_FIRST_SIT_OF_DAY, detail); break;
-      case EVENT_WELCOME_BACK:  basePrompt = resolvePromptPlaceholders(PROMPT_WELCOME_BACK, detail); break;
-      case EVENT_STRETCH:       basePrompt = resolvePromptPlaceholders(PROMPT_STRETCH_REMINDER, detail); break;
-      case EVENT_FOCUS_END:     basePrompt = resolvePromptPlaceholders(PROMPT_FOCUS_CONGRATS, detail); break;
-      case EVENT_SLACKER:       basePrompt = resolvePromptPlaceholders(PROMPT_SLACKER_ROAST, detail); break;
-      case EVENT_STREAK_BEATEN: basePrompt = resolvePromptPlaceholders(PROMPT_STREAK_BEATEN, detail); break;
-      case EVENT_LUNCH_REMINDER: basePrompt = resolvePromptPlaceholders(PROMPT_LUNCH_REMINDER, detail); break;
+      case EVENT_FIRST_SIT:     basePrompt = resolvePromptPlaceholders(eventType, PROMPT_FIRST_SIT_OF_DAY, detail); break;
+      case EVENT_WELCOME_BACK:  basePrompt = resolvePromptPlaceholders(eventType, PROMPT_WELCOME_BACK, detail); break;
+      case EVENT_STRETCH:       basePrompt = resolvePromptPlaceholders(eventType, PROMPT_STRETCH_REMINDER, detail); break;
+      case EVENT_FOCUS_END:     basePrompt = resolvePromptPlaceholders(eventType, PROMPT_FOCUS_CONGRATS, detail); break;
+      case EVENT_SLACKER:       basePrompt = resolvePromptPlaceholders(eventType, PROMPT_SLACKER_ROAST, detail); break;
+      case EVENT_STREAK_BEATEN: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_STREAK_BEATEN, detail); break;
+      case EVENT_LUNCH_REMINDER: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_LUNCH_REMINDER, detail); break;
+      case EVENT_EXCESSIVE_BREAKS: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_EXCESSIVE_BREAKS, detail); break;
+      case EVENT_GOAL_COMPLETED:   basePrompt = resolvePromptPlaceholders(eventType, PROMPT_GOAL_COMPLETED, detail); break;
+      case EVENT_JOURNAL:          basePrompt = resolvePromptPlaceholders(eventType, PROMPT_JOURNAL, detail); break;
+      case EVENT_NAGGING:          basePrompt = resolvePromptPlaceholders(eventType, PROMPT_NAGGING, detail); break;
+      case EVENT_TASK_DUE:         basePrompt = resolvePromptPlaceholders(eventType, PROMPT_TASK_DUE, detail); break;
     }
 
     if (!appState.isAILoading) {
@@ -237,6 +291,11 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_SLACKER:       quote = localSlacker[randIdx]; break;
       case EVENT_STREAK_BEATEN: quote = localStreakBeaten[randIdx]; break;
       case EVENT_LUNCH_REMINDER: quote = localLunchReminder[randIdx]; break;
+      case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[randIdx]; break;
+      case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[randIdx]; break;
+      case EVENT_JOURNAL:          quote = localJournal[randIdx]; break;
+      case EVENT_NAGGING:          quote = localNagging[randIdx]; break;
+      case EVENT_TASK_DUE:         quote = localTaskDue[randIdx]; break;
     }
 
     String personalQuote = resolveLocalPlaceholders(String(quote), detail);

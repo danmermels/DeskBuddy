@@ -70,6 +70,15 @@
 #define MSG_RELEVANCE_NORMAL           1800000UL  // 30 min
 #define MSG_RELEVANCE_LOW              3600000UL  // 1 hr
 
+// --- Journal & Curation Constants ---
+#define MORNING_JOURNAL_DELAY_MS        300000UL  // 5 minutes sitting delay for morning kickoff
+#define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
+#define END_OF_DAY_JOURNAL_HOURS_BEFORE       1   // Hours before workday end to trigger end-of-day journal
+#define MIDDAY_TASK_CHECK_HOUR               12   // 12:00 PM midday threshold for task check observations
+#define NAGGING_TRIGGER_DELAY_MS       7200000UL  // 2 hours sitting delay for nagging trigger
+#define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
+#define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
+
 // --- MQTT Service Constants ---
 #define MQTT_BROKER_IP             "192.168.15.18"
 #define MQTT_BROKER_PORT                  1883

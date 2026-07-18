@@ -97,7 +97,7 @@ void MessageManager::triggerSmartEvent(int eventType, const String& content,
 void MessageManager::scheduleWelcomeBackMessage(const String& breakDuration) {
   scheduleMessageWithPriority(
     EVENT_WELCOME_BACK,
-    "Welcome back! Away for " + breakDuration,
+    breakDuration,
     P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
   );
 }
@@ -105,7 +105,7 @@ void MessageManager::scheduleWelcomeBackMessage(const String& breakDuration) {
 void MessageManager::scheduleFocusSessionCongrats(const String& focusDuration) {
   scheduleMessageWithPriority(
     EVENT_FOCUS_END,
-    "Focus session: " + focusDuration + ". Great work!",
+    focusDuration,
     P_HIGH, 0, R_NORMAL
   );
 }
@@ -113,7 +113,7 @@ void MessageManager::scheduleFocusSessionCongrats(const String& focusDuration) {
 void MessageManager::scheduleProductivityHints() {
   scheduleMessageWithPriority(
     EVENT_STREAK_BEATEN,
-    "Take a moment to reset. Small breaks boost focus.",
+    "",
     P_NORMAL, 0, R_NORMAL
   );
 }
@@ -122,7 +122,7 @@ void MessageManager::scheduleStretchReminder(unsigned long continuousTime) {
   if (continuousTime >= STRETCH_INTERVAL_MS) {
     scheduleMessageWithPriority(
       EVENT_STRETCH,
-      "Time to stretch! Move a bit.",
+      "",
       P_NORMAL, 0, R_NORMAL
     );
   }
@@ -131,7 +131,7 @@ void MessageManager::scheduleStretchReminder(unsigned long continuousTime) {
 void MessageManager::scheduleLunchReminder() {
   scheduleMessageWithPriority(
     EVENT_LUNCH_REMINDER,
-    "Time to refuel! Take a lunch break.",
+    "",
     P_NORMAL, LUNCH_REMINDER_DELAY_MS, R_BRIEF
   );
 }

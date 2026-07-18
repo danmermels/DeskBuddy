@@ -193,6 +193,12 @@ void saveDailyStats() {
     countArray.add(appStats.historyDaysCountWeekly[d]);
   }
   doc["lunchReminderTriggered"] = appStats.lunchReminderTriggered;
+  doc["excessiveBreaksTriggered"] = appStats.excessiveBreaksTriggered;
+  doc["goalCompletedTriggered"] = appStats.goalCompletedTriggered;
+  doc["morningJournalTriggered"] = appStats.morningJournalTriggered;
+  doc["preLunchJournalTriggered"] = appStats.preLunchJournalTriggered;
+  doc["endOfDayJournalTriggered"] = appStats.endOfDayJournalTriggered;
+  doc["naggingTriggeredToday"] = appStats.naggingTriggeredToday;
   doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
   doc["fsReadCount"] = appStats.fsReadCount;
   doc["fsWritesToday"] = appStats.fsWritesToday;
@@ -278,6 +284,12 @@ void loadDailyStats() {
     appStats.lastMidnightCheckDay = doc["lastMidnightCheckDay"] | -1;
     // Configuration parameters are loaded on boot from Preferences, not stats.json
     appStats.lunchReminderTriggered = doc["lunchReminderTriggered"] | false;
+    appStats.excessiveBreaksTriggered = doc["excessiveBreaksTriggered"] | false;
+    appStats.goalCompletedTriggered = doc["goalCompletedTriggered"] | false;
+    appStats.morningJournalTriggered = doc["morningJournalTriggered"] | false;
+    appStats.preLunchJournalTriggered = doc["preLunchJournalTriggered"] | false;
+    appStats.endOfDayJournalTriggered = doc["endOfDayJournalTriggered"] | false;
+    appStats.naggingTriggeredToday = doc["naggingTriggeredToday"] | false;
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
     appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
     appStats.fsWritesToday = doc["fsWritesToday"] | 0;
@@ -497,6 +509,131 @@ void setup(void) {
   if (elapsedBoot < BOOT_SPLASH_MS) {
     delay(BOOT_SPLASH_MS - elapsedBoot);
   }
+}
+
+extern int dateToDays(String dateStr);
+
+inline void checkDueTasks(int currentHour, int currentMin, String currentDayString) {
+  if (!LittleFS.exists("/todo.json")) return;
+  fs::File file = LittleFS.open("/todo.json", "r");
+  if (!file) return;
+  DynamicJsonDocument doc(2048);
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return;
+  
+  if (doc.containsKey("daily")) {
+    JsonArray daily = doc["daily"].as<JsonArray>();
+    for (JsonObject task : daily) {
+      bool isRecurrent = task["recurrent"] | false;
+      bool isCompleted = false;
+      bool isActiveToday = false;
+      int tHour = task["hour"] | 12;
+      int tMin = task["minute"] | 0;
+      String taskText = task["text"] | "";
+      String tDate = task["startDate"] | "";
+      
+      if (isRecurrent) {
+        String endDate = task["endDate"] | "";
+        if ((tDate.length() == 0 || currentDayString >= tDate) &&
+            (endDate.length() == 0 || currentDayString < endDate)) {
+          isActiveToday = true;
+        }
+        if (task.containsKey("completedDates")) {
+          JsonArray compDates = task["completedDates"].as<JsonArray>();
+          for (JsonVariant d : compDates) {
+            if (d.as<String>() == currentDayString) {
+              isCompleted = true;
+              break;
+            }
+          }
+        }
+      } else {
+        String targetDate = task["targetDate"] | "";
+        isActiveToday = (targetDate == currentDayString);
+        isCompleted = task["completed"] | false;
+      }
+      
+      if (isActiveToday && !isCompleted && tHour == currentHour && tMin == currentMin) {
+        triggerBehaviour(EVENT_TASK_DUE, taskText);
+        break;
+      }
+    }
+  }
+}
+
+inline bool hasHighlyOverdueTasks(String currentDayString, String currentMonthString, int currentDaysCount, int currentYear, int currentMonth) {
+  if (!LittleFS.exists("/todo.json")) return false;
+  fs::File file = LittleFS.open("/todo.json", "r");
+  if (!file) return false;
+  DynamicJsonDocument doc(2048);
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return false;
+  
+  if (doc.containsKey("daily")) {
+    JsonArray daily = doc["daily"].as<JsonArray>();
+    for (JsonObject task : daily) {
+      bool isRecurrent = task["recurrent"] | false;
+      bool isCompleted = false;
+      String tDate = task["startDate"] | "";
+      if (isRecurrent) {
+        if (task.containsKey("completedDates")) {
+          JsonArray compDates = task["completedDates"].as<JsonArray>();
+          for (JsonVariant d : compDates) {
+            if (d.as<String>() == currentDayString) {
+              isCompleted = true;
+              break;
+            }
+          }
+        }
+      } else {
+        isCompleted = task["completed"] | false;
+        tDate = task["targetDate"] | "";
+      }
+      
+      if (!isCompleted && tDate.length() == 10) {
+        int diff = currentDaysCount - dateToDays(tDate);
+        if (diff > TASK_OVERDUE_DAYS_LIMIT) return true;
+      }
+    }
+  }
+  
+  if (doc.containsKey("monthly")) {
+    JsonArray monthly = doc["monthly"].as<JsonArray>();
+    for (JsonObject task : monthly) {
+      bool isRecurrent = task["recurrent"] | false;
+      bool isCompleted = false;
+      int tMonth = 1;
+      int tYear = 2026;
+      if (isRecurrent) {
+        String startMonth = task["startMonth"] | "";
+        if (task.containsKey("completedMonths")) {
+          JsonArray compMonths = task["completedMonths"].as<JsonArray>();
+          for (JsonVariant m : compMonths) {
+            if (m.as<String>() == currentMonthString) {
+              isCompleted = true;
+              break;
+            }
+          }
+        }
+        if (startMonth.length() == 7) {
+          tYear = startMonth.substring(0, 4).toInt();
+          tMonth = startMonth.substring(5, 7).toInt();
+        }
+      } else {
+        tMonth = task["month"] | 1;
+        tYear = task["year"] | 2026;
+        isCompleted = task["completed"] | false;
+      }
+      
+      if (!isCompleted) {
+        int diffMonths = (currentYear - tYear) * 12 + (currentMonth - tMonth);
+        if (diffMonths > TASK_OVERDUE_MONTHS_LIMIT) return true;
+      }
+    }
+  }
+  return false;
 }
 
 void loop(void) {
@@ -792,7 +929,25 @@ void loop(void) {
       } else {
         if (lastAwaySliceMs >= BREAK_MINIMUM_MS) {
           String tempBreakDuration = formatTime(appState.currentBreakDurationMs);
-          messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
+          double hoursWorked = (double)appStats.totalDeskTime / 3600000.0;
+          bool excessive = false;
+          if (hoursWorked > 0.5) {
+            double breakRate = (double)appStats.breakCount / hoursWorked;
+            if (breakRate > EXCESSIVE_BREAKS_LIMIT_PER_HOUR) {
+              excessive = true;
+            }
+          }
+          if (excessive && !appStats.excessiveBreaksTriggered) {
+            appStats.excessiveBreaksTriggered = true;
+            saveDailyStats();
+            messageManager.scheduleMessageWithPriority(
+              EVENT_EXCESSIVE_BREAKS,
+              tempBreakDuration,
+              MessageManager::P_URGENT, WELCOME_DELAY_MS, MessageManager::R_IMPORTANT
+            );
+          } else {
+            messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
+          }
         }
       }
     } else {
@@ -819,15 +974,12 @@ void loop(void) {
     // Process MessageManager for proactive scheduling
     // Dispatch direct, bypassing triggerBehaviour's local-quote/AI pipeline
     messageManager.update(millis());
-    while (true) {
+    bool systemBusy = appState.isAILoading || appState.hasNewAIResponse || (millis() < appState.aiScreenEndTime) || appState.pendingWelcomeAlert;
+    if (!systemBusy) {
       MessageManager::DueMessage msg = messageManager.getNextDueMessage();
-      if (msg.eventType == -1) break;
-      xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
-      appState.lastTriggeredEventType = msg.eventType;
-      appState.aiResponse = msg.content;
-      appState.lastResponseIsAi = false;
-      appState.hasNewAIResponse = true;
-      xSemaphoreGive(appState.geminiMutex);
+      if (msg.eventType != -1) {
+        triggerBehaviour(msg.eventType, msg.content);
+      }
     }
       
     // Trigger Stretch alert after 45 minutes of continuous presence
@@ -1043,6 +1195,126 @@ void loop(void) {
         appStats.lunchReminderTriggered = true;
         saveDailyStats();
         triggerBehaviour(EVENT_LUNCH_REMINDER);
+      }
+    }
+  }
+
+  // Goal Completion check
+  if (appConfig.targetHours > 0.0f) {
+    unsigned long targetMs = (unsigned long)(appConfig.targetHours * 3600.0f * 1000.0f);
+    if (appStats.totalDeskTime >= targetMs && !appStats.goalCompletedTriggered) {
+      appStats.goalCompletedTriggered = true;
+      saveDailyStats();
+      messageManager.scheduleMessageWithPriority(
+        EVENT_GOAL_COMPLETED,
+        "",
+        MessageManager::P_HIGH, 0, MessageManager::R_IMPORTANT
+      );
+    }
+  }
+
+  // Morning Kickoff Journal check (5 mins sitting delay)
+  if (appState.currentPresenceState != STATE_AWAY && !appStats.morningJournalTriggered) {
+    unsigned long sitDuration = now - appState.sitDownTime;
+    if (sitDuration >= MORNING_JOURNAL_DELAY_MS) {
+      appStats.morningJournalTriggered = true;
+      saveDailyStats();
+      messageManager.scheduleMessageWithPriority(
+        EVENT_JOURNAL,
+        "",
+        MessageManager::P_HIGH, 0, MessageManager::R_NORMAL
+      );
+    }
+  }
+
+  // Pre-Lunch Journal check
+  if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    int currentHour = ts.tm_hour;
+    int currentMin = ts.tm_min;
+    int currentDay = timeClient.getDay();
+    int learnedLunch = getLearnedLunchHour(currentDay);
+    bool hasHistory = (appStats.historyDaysCountWeekly[currentDay] > 0);
+    int refLunch = hasHistory ? learnedLunch : 12; // fallback to 12 PM
+    
+    int currentMinsFromMidnight = currentHour * 60 + currentMin;
+    int lunchThresholdMins = refLunch * 60 - PRE_LUNCH_JOURNAL_MINS_BEFORE; // 15 mins before learned lunch
+    
+    if (currentMinsFromMidnight >= lunchThresholdMins && currentMinsFromMidnight < refLunch * 60) {
+      if (appState.currentPresenceState != STATE_AWAY && !appStats.preLunchJournalTriggered) {
+        appStats.preLunchJournalTriggered = true;
+        saveDailyStats();
+        messageManager.scheduleMessageWithPriority(
+          EVENT_JOURNAL,
+          "",
+          MessageManager::P_HIGH, 0, MessageManager::R_NORMAL
+        );
+      }
+    }
+  }
+
+  // End-of-Day Journal check
+  if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    int currentHour = ts.tm_hour;
+    int currentMin = ts.tm_min;
+    int currentDay = timeClient.getDay();
+    int learnedEnd = getLearnedWorkdayEnd(currentDay);
+    bool hasHistory = (appStats.historyDaysCountWeekly[currentDay] > 0);
+    int refEnd = hasHistory ? learnedEnd : 18; // fallback to 6 PM (18:00)
+    
+    int currentMinsFromMidnight = currentHour * 60 + currentMin;
+    int endThresholdMins = (refEnd - END_OF_DAY_JOURNAL_HOURS_BEFORE) * 60; // 1 hour before learned workday end
+    
+    if (currentMinsFromMidnight >= endThresholdMins && currentMinsFromMidnight < refEnd * 60) {
+      if (appState.currentPresenceState != STATE_AWAY && !appStats.endOfDayJournalTriggered) {
+        appStats.endOfDayJournalTriggered = true;
+        saveDailyStats();
+        messageManager.scheduleMessageWithPriority(
+          EVENT_JOURNAL,
+          "",
+          MessageManager::P_HIGH, 0, MessageManager::R_NORMAL
+        );
+      }
+    }
+  }
+
+  // Task Due check (granular checking at the start of each minute)
+  static int lastCheckedDueMinute = -1;
+  if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    int currentHour = ts.tm_hour;
+    int currentMin = ts.tm_min;
+    if (currentMin != lastCheckedDueMinute) {
+      lastCheckedDueMinute = currentMin;
+      
+      int currentYear = ts.tm_year + 1900;
+      int currentMonth = ts.tm_mon + 1;
+      int currentDay = ts.tm_mday;
+      char dStr[11];
+      snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
+      
+      checkDueTasks(currentHour, currentMin, String(dStr));
+    }
+  }
+
+  // Nagging check (2 hours sitting delay)
+  if (appState.currentPresenceState != STATE_AWAY && !appStats.naggingTriggeredToday) {
+    unsigned long sitDuration = now - appState.sitDownTime;
+    if (sitDuration >= NAGGING_TRIGGER_DELAY_MS && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+      int currentYear = ts.tm_year + 1900;
+      int currentMonth = ts.tm_mon + 1;
+      int currentDay = ts.tm_mday;
+      char dStr[11];
+      snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
+      char mStr[8];
+      snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
+      
+      if (hasHighlyOverdueTasks(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth)) {
+        appStats.naggingTriggeredToday = true;
+        saveDailyStats();
+        messageManager.scheduleMessageWithPriority(
+          EVENT_NAGGING,
+          "",
+          MessageManager::P_HIGH, 0, MessageManager::R_NORMAL
+        );
       }
     }
   }
