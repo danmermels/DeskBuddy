@@ -41,6 +41,7 @@ extern void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEv
 extern void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 extern void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 extern void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
+extern void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 
 extern TFT_eSprite hourHandSprite;
 extern TFT_eSprite minuteHandSprite;
@@ -122,8 +123,30 @@ inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t ov
   return true;
 }
 
+// Helper to apply overrideColor tinting based on pixel luminance
+inline uint16_t applyColorTint(uint16_t color, uint16_t overrideColor) {
+  if (overrideColor == 0) return color;
+  uint16_t g_5 = (color >> 6) & 0x1F;
+  uint16_t b_5 = color & 0x1F;
+  uint16_t val = (g_5 > b_5) ? g_5 : b_5;
+  
+  uint16_t target_r = (overrideColor >> 11) & 0x1F;
+  uint16_t target_g = (overrideColor >> 5) & 0x3F;
+  uint16_t target_b = overrideColor & 0x1F;
+  
+  uint16_t out_r = (val * target_r) / 21;
+  uint16_t out_g = (val * target_g) / 21;
+  uint16_t out_b = (val * target_b) / 21;
+  
+  if (out_r > target_r) out_r = target_r;
+  if (out_g > target_g) out_g = target_g;
+  if (out_b > target_b) out_b = target_b;
+  
+  return (out_r << 11) | (out_g << 5) | out_b;
+}
+
 // Decode RLE image crop slice into a TFT_eSprite
-inline bool drawRLEImageToSprite(TFT_eSprite &spr, const char* filename, int16_t cropX, int16_t cropY, int16_t cropW, int16_t cropH) {
+inline bool drawRLEImageToSprite(TFT_eSprite &spr, const char* filename, int16_t cropX, int16_t cropY, int16_t cropW, int16_t cropH, uint16_t overrideColor = 0) {
   appStats.fsReadCount++;
   fs::File file = LittleFS.open(filename, "r");
   if (!file) return false;
@@ -143,6 +166,7 @@ inline bool drawRLEImageToSprite(TFT_eSprite &spr, const char* filename, int16_t
     if (header & 0x80) {
       uint16_t color;
       if (file.read((uint8_t*)&color, 2) == 2) {
+        if (overrideColor != 0) color = applyColorTint(color, overrideColor);
         for (int i = 0; i < count; i++) {
           if (curX >= cropX && curX < cropX + cropW && curY >= cropY && curY < cropY + cropH) {
             spr.drawPixel(curX - cropX, curY - cropY, color);
@@ -158,6 +182,7 @@ inline bool drawRLEImageToSprite(TFT_eSprite &spr, const char* filename, int16_t
       for (int i = 0; i < count; i++) {
         uint16_t color;
         if (file.read((uint8_t*)&color, 2) == 2) {
+          if (overrideColor != 0) color = applyColorTint(color, overrideColor);
           if (curX >= cropX && curX < cropX + cropW && curY >= cropY && curY < cropY + cropH) {
             spr.drawPixel(curX - cropX, curY - cropY, color);
           }
@@ -175,7 +200,7 @@ inline bool drawRLEImageToSprite(TFT_eSprite &spr, const char* filename, int16_t
 }
 
 // Decode full RLE image directly into a TFT_eSprite buffer (for watch hands, etc.)
-inline bool drawFullRLEToSprite(TFT_eSprite &spr, const char* filename) {
+inline bool drawFullRLEToSprite(TFT_eSprite &spr, const char* filename, uint16_t overrideColor = 0) {
   appStats.fsReadCount++;
   fs::File file = LittleFS.open(filename, "r");
   if (!file) return false;
@@ -195,6 +220,7 @@ inline bool drawFullRLEToSprite(TFT_eSprite &spr, const char* filename) {
     if (header & 0x80) {
       uint16_t color;
       if (file.read((uint8_t*)&color, 2) == 2) {
+        if (overrideColor != 0) color = applyColorTint(color, overrideColor);
         for (int i = 0; i < count; i++) {
           spr.drawPixel(curX, curY, color);
           curX++;
@@ -208,6 +234,7 @@ inline bool drawFullRLEToSprite(TFT_eSprite &spr, const char* filename) {
       for (int i = 0; i < count; i++) {
         uint16_t color;
         if (file.read((uint8_t*)&color, 2) == 2) {
+          if (overrideColor != 0) color = applyColorTint(color, overrideColor);
           spr.drawPixel(curX, curY, color);
           curX++;
           if (curX >= w) {
@@ -223,13 +250,13 @@ inline bool drawFullRLEToSprite(TFT_eSprite &spr, const char* filename) {
 }
 
 // Helper to draw auto-wrapped text in the center of the round TFT
-inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, const char* fontName, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY) {
+inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, const char* fontName, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY, uint16_t bgColor = TFT_BLACK) {
   if (bgImage != nullptr) {
     if (!drawRLEImage(bgImage, 0, 0)) {
-      tft.fillScreen(TFT_BLACK);
+      tft.fillScreen(bgColor);
     }
   } else {
-    tft.fillScreen(TFT_BLACK);
+    tft.fillScreen(bgColor);
   }
 
   bool fontLoaded = false;
@@ -238,7 +265,7 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
     fontLoaded = true;
   }
 
-  tft.setTextColor(textColor);
+  tft.setTextColor(textColor, bgColor);
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
   
   int y = 45;
@@ -261,8 +288,11 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
         startIdx = endIdx;
       }
     }
-    // Draw string: standard font 4 is ignored if a smooth font is loaded
-    tft.drawString(line, 120, y, 4);
+    if (fontLoaded) {
+      tft.drawString(line, 120, y);
+    } else {
+      tft.drawString(line, 120, y, 4);
+    }
     y += 28;
     if (y > 200) break; // Avoid vertical overflow (up to ~5 lines)
   }
@@ -354,6 +384,9 @@ inline void updateTFTDisplay(unsigned long now) {
       secondHandSprite.deleteSprite();
       centerBgSprite.deleteSprite();
       Serial.println("[SPRITES] Aviator watch hands and center canvas deallocated from RAM.");
+    } else if (lastClockFace == 5) {
+      centerBgSprite.deleteSprite();
+      Serial.println("[SPRITES] Deskbuddy eye canvas deallocated from RAM.");
     }
     lastClockFace = appConfig.clockFace;
   }
@@ -396,6 +429,9 @@ inline void updateTFTDisplay(unsigned long now) {
       break;
     case 4:
       drawAviatorClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
+      break;
+    case 5:
+      drawDeskbuddyFaceplate(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 0:
     default:

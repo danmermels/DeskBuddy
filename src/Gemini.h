@@ -45,16 +45,16 @@ inline String resolveLocalPlaceholders(String templateStr, String detail) {
 inline String resolvePromptPlaceholders(int eventType, String templateStr, String detail) {
   extern const char* PROMPT_PREAMBLE_COACH;
   extern const char* PROMPT_PREAMBLE_CRITIC;
-  extern const char* PROMPT_PREAMBLE_NERD;
-  extern const char* PROMPT_PREAMBLE_ZEN;
+  extern const char* PROMPT_PREAMBLE_SWEET;
+  extern const char* PROMPT_PREAMBLE_FRIEND;
   extern int getLearnedWorkdayStart(int dayIndex);
   extern int getLearnedWorkdayEnd(int dayIndex);
   extern int getLearnedLunchHour(int dayIndex);
 
   const char* activePreamble = PROMPT_PREAMBLE_COACH;
   if (appConfig.aiPersona == 1) activePreamble = PROMPT_PREAMBLE_CRITIC;
-  else if (appConfig.aiPersona == 2) activePreamble = PROMPT_PREAMBLE_NERD;
-  else if (appConfig.aiPersona == 3) activePreamble = PROMPT_PREAMBLE_ZEN;
+  else if (appConfig.aiPersona == 2) activePreamble = PROMPT_PREAMBLE_SWEET;
+  else if (appConfig.aiPersona == 3) activePreamble = PROMPT_PREAMBLE_FRIEND;
 
   // 1. Get current time and day of week
   String timeOfDayStr = "Unknown Time";

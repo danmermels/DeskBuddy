@@ -27,7 +27,7 @@ struct MqttMessage {
 struct ConfigState {
   float targetHours = 8.0;
   int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
-  int aiPersona = 0; // 0 = Coach, 1 = Critic, 2 = Nerd, 3 = Zen
+  int aiPersona = 0; // 0 = Coach, 1 = Critic, 2 = Sweet, 3 = Friend
   int clockFace = 0;
   String userName = "human";
   int focusDistanceLimit = FOCUS_DISTANCE_LIMIT_DEFAULT;

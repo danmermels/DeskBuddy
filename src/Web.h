@@ -1456,8 +1456,8 @@ inline void handleSettings() {
         <select name="aiPersona" id="aiPersonaSelect" class="settings-select">
           <option value="0">Coach</option>
           <option value="1">Critic</option>
-          <option value="2">Nerd</option>
-          <option value="3">Zen</option>
+          <option value="2">Sweet</option>
+          <option value="3">Friend</option>
         </select>
       </div>
       <div class="metric">
@@ -1468,6 +1468,7 @@ inline void handleSettings() {
           <option value="2">HiTech</option>
           <option value="3">DEV Mode</option>
           <option value="4">Aviator</option>
+          <option value="5">Deskbuddy</option>
         </select>
       </div>
       <div class="metric">

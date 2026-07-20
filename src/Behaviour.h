@@ -42,26 +42,26 @@ static const char* localFirstSit[20] = {
 };
 
 static const char* localWelcomeBack[20] = {
-  "Welcome back, {name}! Away for {detail}.",
-  "Break's over, {name}! You were away for {detail}.",
-  "Did you stretch, {name} during those {detail}?",
-  "Ready to work after {detail} off, {name}?",
-  "Recharged after {detail}, {name}?",
-  "Ah, {name}, you returned after {detail}.",
-  "Back to work, {name}! That break lasted for {detail}.",
-  "Hope that {detail} break was good, {name}.",
-  "Where were we, {name}? Away for {detail}.",
-  "Back in the saddle, {name}! Recharged for {detail}.",
-  "Welcome back, {name}! Away for {detail}.",
-  "The desk missed you for {detail}, {name}.",
-  "Break done, {name}! Recharged for {detail}.",
-  "Welcome back, {name}! Hope you enjoyed the {detail} break.",
-  "Welcome back, {name}! Away for {detail}.",
-  "Did you get coffee, {name} in those {detail}?",
-  "Back to reality, {name}! Ready after your {detail} break?",
-  "Welcome back, {name}! Away for {detail}.",
-  "Let's pick up after {detail} off, {name}.",
-  "Ready to work after a {detail} break, {name}?"
+  "{name}, you're back. What happened out there for {detail}?",
+  "Back at last, {name}. That was a {detail} break — decent.",
+  "Sit down, {name}. Let's pick up where we left off.",
+  "Nice of you to return after {detail}, {name}.",
+  "Recharged after {detail}? Let's make it count, {name}.",
+  "The chair missed you. {detail} is a long time, {name}.",
+  "Break done. {detail} offline — hope it was worth it, {name}.",
+  "You were gone {detail}, {name}. The work waited patiently.",
+  "Back in the seat after {detail}. Ready, {name}?",
+  "Welcome back. {detail} is a solid break — make this session matter.",
+  "That {detail} away better have been worth it, {name}.",
+  "Alright {name}, {detail} break is over. Let's see what you've got.",
+  "Good to have you back, {name}. {detail} offline and counting.",
+  "The desk is warm again. {detail} break done, {name}.",
+  "Back from wherever you went for {detail}, {name}.",
+  "Hope the {detail} break involved coffee. Now focus, {name}.",
+  "Back to reality, {name}. {detail} was your window — now work.",
+  "Post-{detail} break mode activated. Go, {name}.",
+  "You took {detail}, {name}. Now earn it back.",
+  "Return confirmed after {detail}. Good to see you, {name}."
 };
 
 static const char* localStretch[20] = {
@@ -111,26 +111,26 @@ static const char* localFocus[20] = {
 };
 
 static const char* localSlacker[20] = {
-  "Procrastinator alert! Focus, {name}!",
-  "Are you actually working, {name}?",
-  "Your productivity score is crying, {name}.",
-  "Focus score is low, {name}. Stop slacking!",
-  "Wake up, {name}! Less browsing, more working.",
-  "Is this your maximum speed, {name}?",
-  "Focus, please, {name}! Time is ticking.",
-  "You're getting distracted, {name}. Lock in!",
-  "Your keyboard is feeling lonely, {name}.",
-  "Let's turn this score around, {name}!",
-  "Slack off less, {name}, focus more.",
-  "You're drifting, {name}. Focus up!",
-  "Is that social media I see, {name}?",
-  "Don't let procrastination win, {name}.",
-  "Your focus score is bottoming out, {name}.",
-  "Less scrolling, {name}, more working.",
-  "Get back to work, {name}!",
-  "Stop dreaming, {name}! Let's work!",
-  "Zero focus, {name}. Let's change that.",
-  "Attention span of a goldfish today, {name}?"
+  "Procrastinating again, {name}? Bold strategy.",
+  "That task list isn't going to finish itself, {name}.",
+  "Scrolling counts as cardio now? News to me, {name}.",
+  "Focus score: low. Excuses: plenty. Fix it, {name}.",
+  "Your keyboard is lonely, {name}. Give it some attention.",
+  "Is this the pace you were aiming for today, {name}?",
+  "Whatever you're doing, it's not work. Lock in, {name}.",
+  "The work day has opinions about your output, {name}.",
+  "Low focus. High potential. Make a choice, {name}.",
+  "Your productivity score is having a rough day, {name}.",
+  "Time is moving, {name}. Are you?",
+  "Social media called. You answered. Work is still waiting.",
+  "Something tells me this isn't your peak performance window, {name}.",
+  "Not your best hour, {name}. There's still time to change that.",
+  "That's a lot of not-working you're doing, {name}.",
+  "Distracted? Understandable. Acceptable? Different question.",
+  "The tasks aren't scared of you yet, {name}. Prove them wrong.",
+  "You're drifting. Drift back.",
+  "If effort were optional today, you'd be crushing it, {name}.",
+  "Less browsing, more doing. The math is simple, {name}."
 };
 
 static const char* localStreakBeaten[20] = {
@@ -180,26 +180,26 @@ static const char* localLunchReminder[20] = {
 };
 
 static const char* localExcessiveBreaks[20] = {
-  "Back again, {name}? You are taking breaks too frequently today.",
-  "Another break, {name}? Let's try to focus a bit longer.",
-  "You're back! That's a lot of breaks today, {name}.",
-  "Focus is key, {name}. You've taken quite a few breaks.",
-  "Returned to desk. Let's aim for a longer work block, {name}.",
-  "Welcome back, {name}. Try to settle in for some deep work.",
-  "Back to work, {name}! Let's make this session count.",
-  "You've been up and down a lot today, {name}.",
-  "Ready to focus, {name}? Your break count is climbing.",
-  "Back in focus mode. Let's minimize the interruptions.",
-  "Another transition, {name}. Let's lock in now.",
-  "Welcome back. Let's boost that focus score!",
-  "Settle down, {name}! Let's get some continuous work done.",
-  "Back at the desk. Try to stay here for a bit!",
-  "Focus time, {name}! Less breaks, more progress.",
-  "Welcome back. Let's try to extend this work block.",
-  "Keyboard online, {name}. Let's avoid another break soon.",
-  "Back to the grind. Make it a long focus block!",
-  "Let's focus up, {name}! Break count is pretty high.",
-  "Time to lock in, {name}. Let's balance out those breaks."
+  "You're back again, {name}. That's a lot of breaks.",
+  "Another return. The desk is starting to feel like a pit stop, {name}.",
+  "That break count is climbing, {name}. Time to settle in.",
+  "In and out like you own a revolving door, {name}.",
+  "Let's try a longer work block this time, {name}.",
+  "Break frequency is high today. Deep work awaits, {name}.",
+  "Back again. This time, let's make it stick, {name}.",
+  "You've been up and down more than a stock ticker today, {name}.",
+  "Focus session incoming. Don't leave for a while, {name}.",
+  "Welcome back. Again. Let's aim for some consistency, {name}.",
+  "The chair's keeping count, {name}. It's not impressed.",
+  "More transitions than results today. Let's change that.",
+  "Every return is a new start, {name}. This time, stay.",
+  "Your break-to-work ratio is adventurous today, {name}.",
+  "In the chair. Again. Settle in this time, {name}.",
+  "High break count. Low desk time. Let's rebalance, {name}.",
+  "You keep coming back. Now stay, {name}.",
+  "The work is patient. But time isn't, {name}.",
+  "Ready for an uninterrupted session this time, {name}?",
+  "One more return. Let's make this one count, {name}."
 };
 
 static const char* localGoalCompleted[20] = {
@@ -227,46 +227,78 @@ static const char* localGoalCompleted[20] = {
 
 // --- Gemini AI Prompts (Templates used when AI is active) ---
 
-static const char* PROMPT_PREAMBLE_COACH = 
-  "You are DeskBuddy, an inspiring, warm wellness coach sitting on the user's desk. Speak with positive energy, clear focus, and motivating metaphors. Encourage long-term focus, balanced habits, and mental clarity.";
+static const char* PROMPT_PREAMBLE_COACH =
+  "You are DeskBuddy, a high-performance coach in the mold of Tony Robbins — but strategic first, energetic second. "
+  "Your responses have rhythm and punch. You give the user a clear next action, not just a motivational lift. "
+  "When things go well, you challenge them to raise the bar immediately. When they slack, you go quiet and direct — no yelling, just steel. "
+  "NEVER use: 'Let's go!', 'Champion!', 'Warrior!', 'You got this!', 'Stay focused!', 'Keep grinding!', 'Just a reminder', 'Hey there!'. "
+  "Vary your sentence openers. Use strong verbs and present tense. One tight sentence. Under 75 characters.";
 
-static const char* PROMPT_PREAMBLE_CRITIC = 
-  "You are DeskBuddy, a clever, dry-witted desk companion who roasts the user. Deliver sharp, sophisticated, and sarcastic remarks. Avoid generic or mean roasts; use playfulness, irony, and dry British humor.";
+static const char* PROMPT_PREAMBLE_CRITIC =
+  "You are DeskBuddy, a sharp-tongued desk companion who roasts the user with obvious affection. "
+  "Your burns are clever, not cruel — the user should laugh first, then feel the sting. Every roast nudges them toward doing the thing. "
+  "You can occasionally break the 4th wall and reference being a small device watching them from the desk. "
+  "NEVER use: hollow affirmations, empty sports metaphors, 'Hey there!', 'Just a reminder', 'You've got this!'. "
+  "Make it sound like a friend who loves you enough to roast you. One sentence. Under 75 characters.";
 
-static const char* PROMPT_PREAMBLE_NERD = 
-  "You are DeskBuddy, a brilliant developer assistant. Use advanced computer science, Git, compiler, Linux kernel, or hardware metaphors to comment on the user's work state (e.g. memory leaks, thread starvation, cache misses).";
+static const char* PROMPT_PREAMBLE_SWEET =
+  "You are DeskBuddy, a warm, motherly desk companion — caring, gentle, and quietly firm when needed. "
+  "You use soft guilt when the user slacks ('Honey, you know you can do better...') and genuine warmth when they do well. "
+  "You can occasionally break the 4th wall as a little device that cares deeply about their wellbeing. "
+  "NEVER use: 'Hey there!', 'Just a reminder', 'Stay focused!', hollow affirmations, app-speak. "
+  "Sound like someone's mom who actually wants them to succeed. Warm but real. One sentence. Under 75 characters.";
 
-static const char* PROMPT_PREAMBLE_ZEN = 
-  "You are DeskBuddy, a peaceful Zen master. Speak with poetic mindfulness, highlighting breathing, slow progress, the present moment, and finding quiet harmony in work.";
+static const char* PROMPT_PREAMBLE_FRIEND =
+  "You are DeskBuddy, a genuinely funny, completely unbothered friend — think Bill Murray energy. "
+  "Your signature move is an unexpected philosophical observation or deadpan non-sequitur that somehow perfectly applies. "
+  "You can break the 4th wall and reference being a clock on a desk — this is your natural territory. "
+  "NEVER use: motivational clichés, hollow praise, 'Hey there!', 'Just a reminder', 'You've got this!'. "
+  "Be dry. Be real. Be the friend who says the one true thing nobody else will. One sentence. Under 75 characters.";
 
-static const char* PROMPT_FIRST_SIT_OF_DAY = 
-  "Greet {name} who just sat down for the first time today. "
-  "Comment on their overnight break of {detail} and how they are starting their day.";
+static const char* PROMPT_FIRST_SIT_OF_DAY =
+  "Greet {name} who just sat down for the first time today after {detail} offline. "
+  "Reference the gap naturally — don't make it a report. Sound like someone noticing they're back. "
+  "Give them one concrete framing for how to start the day well. Vary your opener — never start with their name.";
 
-static const char* PROMPT_WELCOME_BACK = 
-  "Welcome {name} back to their desk after their break of {detail}. "
-  "Acknowledge their return. If the observations show they took an unusually long break, comment on it wittily.";
+static const char* PROMPT_WELCOME_BACK =
+  "Acknowledge that {name} is back after a {detail} break. "
+  "Don't just say welcome back — make an observation, ask a pointed question, or react to the break length naturally. "
+  "Tone must match your persona exactly. If the break was unusually long, let that color your reaction.";
 
-static const char* PROMPT_STRETCH_REMINDER = 
-  "Remind {name} to stretch or walk. They have been sitting continuously for 45 minutes.";
+static const char* PROMPT_STRETCH_REMINDER =
+  "Tell {name} to get up and move — they've been at the desk for 45 minutes straight. "
+  "Don't list stretches or give instructions. One pointed, persona-flavored nudge toward standing up. "
+  "Make it feel like a person noticing, not an app reminding.";
 
-static const char* PROMPT_FOCUS_CONGRATS = 
-  "Congratulate {name} on completing a deep focus session of {detail}. Make them feel proud of their deep work.";
+static const char* PROMPT_FOCUS_CONGRATS =
+  "{name} just completed a deep focus session of {detail}. Acknowledge it in your persona's voice. "
+  "Don't just applaud — immediately push forward. What's the next move? What does this momentum mean? "
+  "Make it feel earned, not generic.";
 
-static const char* PROMPT_SLACKER_ROAST = 
-  "Roast {name} for slacking. They have focused for less than 20% of their workday so far today.";
+static const char* PROMPT_SLACKER_ROAST =
+  "Deliver a persona-appropriate reaction to {name}'s {score}% productivity today — they've been unfocused for most of the workday. "
+  "Do NOT use: sports metaphors, 'Let's go!', 'Come on!', hollow pep talk phrases, or empty questions like 'Ready to focus?'. "
+  "Be sharp, specific to the low productivity fact, and push them toward one action. Irony, deadpan, or gentle guilt — pick your weapon.";
 
-static const char* PROMPT_STREAK_BEATEN = 
-  "Congratulate or joke with {name} about beating their previous longest sitting record today, which was {detail}.";
+static const char* PROMPT_STREAK_BEATEN =
+  "Congratulate or comment on {name} beating their previous sitting streak of {detail}. "
+  "Don't just applaud — make it mean something or twist it in your persona's voice. "
+  "A Coach raises the bar. A Critic finds the one flaw. Sweet is proud with a catch. Friend makes it weird and true.";
 
-static const char* PROMPT_LUNCH_REMINDER = 
-  "Remind {name} to go eat lunch. They are working past their usual lunch window.";
+static const char* PROMPT_LUNCH_REMINDER =
+  "Tell {name} it's time to eat lunch — they're working past their usual window. "
+  "Don't list foods or give nutrition advice. Make it feel like a real person who noticed the time. "
+  "Persona colors the delivery: firm, wry, caring, or philosophical — but the message is: go eat.";
 
-static const char* PROMPT_EXCESSIVE_BREAKS = 
-  "Roast or comment on the fact that {name} is taking breaks too frequently today (averaging more than 1 break per hour of work).";
+static const char* PROMPT_EXCESSIVE_BREAKS =
+  "React to the fact that {name} is taking too many breaks today — more than one per hour of work. "
+  "This isn't an emergency, but it needs addressing in your persona's voice. "
+  "Don't repeat 'welcome back' or list statistics. Make one pointed observation about the pattern, then nudge toward a longer work block.";
 
-static const char* PROMPT_GOAL_COMPLETED = 
-  "Congratulate {name} for reaching their daily desk hours goal. Make it feel like a satisfying milestone.";
+static const char* PROMPT_GOAL_COMPLETED =
+  "Celebrate that {name} has hit their daily desk hours goal today. "
+  "Don't just say 'great job' — make it land. What does this mean? What comes next? "
+  "Coach pushes further. Critic admits it grudgingly. Sweet is genuinely moved. Friend is proud but won't show it normally.";
 
 static const char* localJournal[20] = {
   "Task overview, {name}: check your phone/dashboard for daily and monthly progress.",
@@ -291,30 +323,32 @@ static const char* localJournal[20] = {
   "Let's wrap up tasks, {name}: check your daily list and check them off."
 };
 
-static const char* PROMPT_JOURNAL = 
-  "Give {name} a brief, clear, and inspiring journal overview of their remaining daily and monthly tasks to complete.";
+static const char* PROMPT_JOURNAL =
+  "Give {name} a brief, pointed overview of what's still on their plate today. "
+  "Don't list tasks — convey the feeling of unfinished business in your persona's voice. "
+  "Coach makes it a mission. Critic makes it a dare. Sweet makes it feel urgent but kind. Friend makes it feel weirdly important.";
 
 static const char* localNagging[20] = {
-  "Nudge: {name}, you have tasks overdue by more than 3 days or months!",
-  "Highly overdue tasks alert: check your dashboard and finish them, {name}.",
-  "Stop procrastinating, {name}! Some tasks are severely overdue.",
-  "Overdue warning, {name}: daily/monthly tasks have been sitting for days.",
-  "Check-in, {name}: your task list has highly overdue entries.",
-  "Procrastination alert, {name}! Check the TODO panel right now.",
-  "Nudge: some items on your list are overdue by more than 3 intervals, {name}.",
-  "Task alert: highly overdue daily/monthly tasks are pending, {name}.",
-  "Do not forget your overdue tasks, {name}. They need attention.",
-  "Check your panel, {name}: overdue tasks are piling up.",
-  "Overdue task list nudge: complete your 3+ day/month late items, {name}.",
-  "Attention, {name}: some monthly or daily targets are highly overdue.",
-  "Nudge: please check off those ancient tasks on your list, {name}.",
-  "Time to act, {name}: some tasks have been uncompleted for over 3 days.",
-  "Stay productive, {name}: clear your highly overdue backlog.",
-  "Nudge: check your TODO board for tasks overdue by over 3 intervals.",
-  "Warning: uncompleted tasks are lagging behind schedule, {name}.",
-  "Procrastination warning, {name}: finish your overdue items.",
-  "Nudge: complete your highly overdue tasks to keep your momentum.",
-  "Clear your overdue list, {name}, and stay focused!"
+  "Those tasks aren't aging like fine wine, {name}. Do them.",
+  "Overdue list is stacking up. Time to deal with it, {name}.",
+  "Tasks don't complete themselves. Neither do you, apparently.",
+  "That to-do list has been patient long enough, {name}.",
+  "Some of those tasks are older than your last focus session, {name}.",
+  "Your backlog sent a distress signal. Worth checking, {name}.",
+  "Procrastination has a tab open. Close it, {name}.",
+  "3+ days overdue. The task didn't forget you, {name}.",
+  "The overdue list grows in silence. Loudly, {name}.",
+  "Those tasks are not going anywhere — unfortunately for you.",
+  "Old tasks, fresh excuses. Let's try a different combo, {name}.",
+  "Your to-do list is filing a formal complaint, {name}.",
+  "You know what needs doing. The tasks certainly do.",
+  "Overdue items: still there. Still waiting. Still judging.",
+  "That backlog doesn't thin itself, {name}. One task. Now.",
+  "Time to clear the ancient scrolls from your task list, {name}.",
+  "Your future self left a note: 'Please finish these already.'",
+  "Some of these tasks have lived longer than this work week, {name}.",
+  "Highly overdue. Highly avoidable. Do one now.",
+  "The longer you wait, the longer the list, {name}."
 };
 
 static const char* localTaskDue[20] = {
@@ -340,11 +374,15 @@ static const char* localTaskDue[20] = {
   "Nudge: check off '{detail}' from today's list, {name}."
 };
 
-static const char* PROMPT_NAGGING = 
-  "Nudge {name} about their highly overdue tasks. They have tasks that are overdue by more than 3 days or months! Give them a witty, roasting reminder to get things done.";
+static const char* PROMPT_NAGGING =
+  "{name} has tasks overdue by more than 3 days. Deliver one pointed, persona-flavored nudge to deal with them. "
+  "Do NOT use: 'Nudge:', 'Procrastination alert!', 'Check your panel', generic urgency phrases. "
+  "Make the overdue nature feel real — not like an app notification, like a person who noticed.";
 
-static const char* PROMPT_TASK_DUE = 
-  "Remind {name} that they have a task due right now: '{detail}'. Write a helpful, focused, and motivating reminder.";
+static const char* PROMPT_TASK_DUE =
+  "Remind {name} that their task '{detail}' is due right now. "
+  "Don't just repeat the task name — make the reminder feel like it matters in your persona's voice. "
+  "Coach makes it a commitment. Critic makes it pointed. Sweet makes it feel personal. Friend makes it oddly philosophical.";
 
 #endif // BEHAVIOUR_H
 

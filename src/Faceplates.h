@@ -94,7 +94,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   // 2. Alert/Event Message Mode
   if (showEvent) {
     if (forceRedraw || ringRedrawn) {
-      drawFaceplateMessage("/default_msg.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/default_msg.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY, TFT_BLACK);
       
       // Redraw bezel rings on top of the alert background
       uint8_t r = appState.currentRingColor.r;
@@ -255,7 +255,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/minimalist_msg.rle", message, TFT_WHITE, MSG_FONT_MINIMALIST, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/minimalist_msg.rle", message, TFT_WHITE, MSG_FONT_MINIMALIST, isAi, TFT_LIGHTGREY, TFT_BLACK);
     }
     wasEvent = true;
     return;
@@ -532,7 +532,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
 
 
-#define MSG_FONT_HITECH "GoodTiming15"
+#define MSG_FONT_HITECH "GoodTiming20"
 #define FONT_HITECH_TIME "GoodTiming46"
 #define FONT_HITECH_TEMP "GoodTiming15"
 #define FONT_HITECH_DAY "GoodTiming15"
@@ -554,7 +554,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/hitech_msg.rle", message, HITECH_CYAN, MSG_FONT_HITECH, isAi, HITECH_MUTED);
+      drawFaceplateMessage("/hitech_msg.rle", message, HITECH_CYAN, MSG_FONT_HITECH, isAi, HITECH_MUTED, HITECH_DARKTEAL);
     }
     wasEvent = true;
     return;
@@ -786,7 +786,7 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage(nullptr, message, TFT_GREEN, MSG_FONT_DEV, isAi, TFT_DARKGREY);
+      drawFaceplateMessage(nullptr, message, TFT_GREEN, MSG_FONT_DEV, isAi, TFT_DARKGREY, TFT_BLACK);
     }
     wasEvent = true;
     return;
@@ -933,7 +933,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/aviator_msg.rle", message, COLOR_AVIATOR_ORANGE, MSG_FONT_AVIATOR, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/aviator_msg.rle", message, COLOR_AVIATOR_ORANGE, MSG_FONT_AVIATOR, isAi, TFT_LIGHTGREY, TFT_BLACK);
     }
     wasEvent = true;
     return;
@@ -1052,4 +1052,428 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   tft.drawSmoothCircle(120, 120, 2, TFT_BLACK, TFT_BLACK);
 }
 
+// ============================================================================
+// SECTION 7: DESKBUDDY FACEPLATE
+// ============================================================================
+// Animated companion face: oval sleek eyes with mood-reactive iris color.
+// Layout:
+//   Top 50%    (Y=0-120):  Eye sprite — two oval eyes with animated pupils,
+//                           blink, look-around, and state-reactive expressions.
+//   Bottom 50% (Y=120-240): Time (built-in Font 6), date, rotating stat metric.
+//
+// Eye Behaviors:
+//   - Iris color   = appState.currentRingColor (tracks presence mood ring).
+//   - Pupil Y axis = radar distance (close < 50 cm → look up, far → forward).
+//   - Pupil X axis = random look-around drift every 5-12 seconds.
+//   - Blink        = random every 3–8 seconds (3-frame lid-drop sequence).
+//   - STATE_AWAY   = eyes squint (lower lid raised, brows droop).
+//   - STATE_FOCUS  = pupils slightly constricted.
+//
+// Rendering: Re-uses centerBgSprite (220×115) for flicker-free eye animation.
+//            No LittleFS assets required — fully procedural drawing.
+// ============================================================================
+
+// ── Eye geometry constants ────────────────────────────────────────────────────
+#define BUDDY_EYE_A       48    // sclera horizontal semi-axis (half-width px)
+#define BUDDY_EYE_B       28    // sclera vertical semi-axis (half-height px)
+#define BUDDY_EYE_CY      62    // eye center Y in sprite-local coords
+#define BUDDY_EYE_LX      67    // left eye center X in sprite-local coords
+#define BUDDY_EYE_RX      153   // right eye center X in sprite-local coords
+#define BUDDY_IRIS_R      22    // iris radius (px)
+#define BUDDY_PUPIL_R     11    // pupil radius (px)
+#define BUDDY_HIGHLIGHT_R  5    // primary specular highlight radius (px)
+
+// ── Sprite geometry ────────────────────────────────────────────────────────────
+#define BUDDY_SPR_W       220   // sprite width  (fits inside 240 px circle)
+#define BUDDY_SPR_H       115   // sprite height (covers Y 5–120 on screen)
+#define BUDDY_SPR_X        10   // push offset X on TFT
+#define BUDDY_SPR_Y         5   // push offset Y on TFT
+
+// ── Blink frame IDs ───────────────────────────────────────────────────────────
+#define BUDDY_BLINK_OPEN    0   // fully open
+#define BUDDY_BLINK_HALF    1   // upper lid at eye mid-point (closing / opening)
+#define BUDDY_BLINK_CLOSED  2   // upper lid covers entire eye
+
+// ── Bottom-half font aliases ──────────────────────────────────────────────────
+#define FONT_BUDDY_TIME   6     // built-in large font for HH:MM
+#define FONT_BUDDY_DATE   2     // built-in small font for date / stats
+#define MSG_FONT_BUDDY    nullptr  // event overlay uses built-in font
+
+
+/**
+ * Map a blink-sequence timestamp to one of the lid states (fast close 40ms, smooth open 100ms).
+ */
+static inline uint8_t getBuddyBlinkState(unsigned long now, unsigned long blinkStart) {
+  if (blinkStart == 0) return BUDDY_BLINK_OPEN;
+  unsigned long e = now - blinkStart;
+  if (e < 40)  return BUDDY_BLINK_HALF;    // lid descending fast
+  if (e < 120) return BUDDY_BLINK_CLOSED;  // lid fully down
+  if (e < 180) return BUDDY_BLINK_HALF;    // lid rising smoothly
+  return BUDDY_BLINK_OPEN;
+}
+
+
+/**
+ * Render one oval eye into a sprite at position (cx, cy) with organic iris fibers,
+ * pupil hippus breathing, and follow-gaze curved eyelids.
+ */
+static void buddyDrawEye(TFT_eSprite &spr,
+                         int cx, int cy,
+                         int pupilDx, int pupilDy,
+                         uint8_t blinkState,
+                         uint16_t irisOuter, uint16_t irisInner,
+                         bool squint, bool focusMode,
+                         float hippusOffset,
+                         uint16_t bgColor) {
+
+  // 1. Erase previous frame — overdraw with background ellipse
+  spr.fillEllipse(cx, cy, BUDDY_EYE_A + 3, BUDDY_EYE_B + 4, bgColor);
+
+  // 2. White sclera (oval shape)
+  spr.fillEllipse(cx, cy, BUDDY_EYE_A, BUDDY_EYE_B, TFT_WHITE);
+
+  // 3. Iris and pupil (skip when fully closed)
+  if (blinkState != BUDDY_BLINK_CLOSED) {
+    // Clamp pupil so the iris circle stays inside the sclera ellipse
+    int maxPx = BUDDY_EYE_A - BUDDY_IRIS_R - 4;
+    int maxPy = BUDDY_EYE_B - BUDDY_IRIS_R - 3;
+    int px = cx + constrain(pupilDx, -maxPx, maxPx);
+    int py = cy + constrain(pupilDy, -maxPy, maxPy);
+
+    // Dynamic pupil radius with hippus breathing pulse + focus mode
+    float basePupilR = focusMode ? (BUDDY_PUPIL_R - 2.5f) : (BUDDY_PUPIL_R + hippusOffset);
+    int irisR  = BUDDY_IRIS_R;
+    int pupilR = (int)basePupilR;
+
+    // Outer iris ring — anti-aliased against white sclera
+    spr.fillSmoothCircle(px, py, irisR, irisOuter, TFT_WHITE);
+
+    // Inner iris gradient ring
+    spr.fillSmoothCircle(px, py, irisR - 6, irisInner, irisOuter);
+
+    // Organic iris fiber radial spokes (12 textured rays)
+    uint16_t rayColor = applyColorTint(0xE79C /* bright gray/cyan */, irisOuter);
+    for (int deg = 0; deg < 360; deg += 30) {
+      float rad = deg * 3.14159f / 180.0f;
+      int r1 = pupilR + 2;
+      int r2 = irisR - 3;
+      int x1 = px + (int)(cosf(rad) * r1);
+      int y1 = py + (int)(sinf(rad) * r1);
+      int x2 = px + (int)(cosf(rad) * r2);
+      int y2 = py + (int)(sinf(rad) * r2);
+      spr.drawLine(x1, y1, x2, y2, rayColor);
+    }
+
+    // Pupil — anti-aliased against inner iris
+    spr.fillSmoothCircle(px, py, pupilR, TFT_BLACK, irisInner);
+
+    // Primary specular highlight (top-right of pupil center)
+    spr.fillSmoothCircle(px + 6, py - 5, BUDDY_HIGHLIGHT_R, TFT_WHITE, TFT_BLACK);
+
+    // Micro secondary highlight
+    spr.fillSmoothCircle(px + 10, py - 9, 2, 0xD67A /* specular accent */, TFT_WHITE);
+  }
+
+  // 4. Follow-gaze curved upper eyelid overdraw
+  // When looking up (pupilDy < 0), upper lid raises; when looking down, lid lowers
+  int lidGazeOffset = (pupilDy < 0) ? (pupilDy / 2) : (pupilDy / 3);
+
+  if (blinkState == BUDDY_BLINK_HALF) {
+    // Upper lid descending half-way
+    spr.fillSmoothRoundRect(cx - BUDDY_EYE_A - 2, cy - BUDDY_EYE_B - 6,
+                            (BUDDY_EYE_A + 2) * 2, BUDDY_EYE_B + 6 + lidGazeOffset,
+                            8, bgColor, TFT_BLACK);
+  } else if (blinkState == BUDDY_BLINK_CLOSED) {
+    // Cover entire eye area
+    spr.fillRect(cx - BUDDY_EYE_A - 2, cy - BUDDY_EYE_B - 4,
+                 (BUDDY_EYE_A + 2) * 2, (BUDDY_EYE_B + 4) * 2, bgColor);
+    // Closed-lid curved seam line
+    spr.drawWideLine((float)(cx - BUDDY_EYE_A + 8), (float)cy,
+                     (float)(cx + BUDDY_EYE_A - 8), (float)cy,
+                     1.8f, 0xC618 /* light-gray */, bgColor);
+  } else if (lidGazeOffset > 1) {
+    // Looking down: lid covers upper eye slice naturally
+    spr.fillSmoothRoundRect(cx - BUDDY_EYE_A - 1, cy - BUDDY_EYE_B - 6,
+                            (BUDDY_EYE_A + 1) * 2, 6 + lidGazeOffset,
+                            4, bgColor, TFT_BLACK);
+  }
+
+  // 5. Lower-lid squint overlay (STATE_AWAY: sleepy look)
+  if (squint && blinkState == BUDDY_BLINK_OPEN) {
+    int squintRise = BUDDY_EYE_B / 3 + 2;
+    spr.fillSmoothRoundRect(cx - BUDDY_EYE_A - 1, cy + squintRise,
+                            (BUDDY_EYE_A + 1) * 2, BUDDY_EYE_B + 4,
+                            6, bgColor, TFT_BLACK);
+  }
+
+  // 6. Subtle sclera rim outline for polish
+  spr.drawEllipse(cx, cy, BUDDY_EYE_A, BUDDY_EYE_B, 0xC618);
+}
+
+
+/**
+ * Allocate centerBgSprite for the Deskbuddy eye canvas (220×115).
+ * Called lazily on first frame after faceplate selection.
+ */
+void initDeskbuddySprite() {
+  Serial.println("[BUDDY] Allocating eye canvas sprite 220x115...");
+  centerBgSprite.createSprite(BUDDY_SPR_W, BUDDY_SPR_H);
+  centerBgSprite.fillSprite(TFT_BLACK);
+}
+
+
+/**
+ * SECTION 7: DESKBUDDY FACEPLATE
+ *
+ * Draws the DeskBuddy animated companion face.
+ * - Eyes update at ~30 fps (sprite-push, flicker-free).
+ * - Clock / date / stats update at 500 ms cadence (direct TFT draw on change).
+ */
+void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
+                             bool showEvent, const String &message,
+                             bool isAi, bool wifiAvailable,
+                             bool internetAvailable, bool hasMail) {
+  static bool wasEvent = false;
+
+  // ── Event / message overlay ─────────────────────────────────────────────
+  if (showEvent) {
+    if (forceRedraw) {
+      drawFaceplateMessage(nullptr, message, TFT_WHITE, MSG_FONT_BUDDY,
+                           isAi, TFT_LIGHTGREY, TFT_BLACK);
+    }
+    wasEvent = true;
+    return;
+  }
+
+  if (wasEvent) {
+    forceRedraw = true;
+    wasEvent = false;
+  }
+
+  // ── Lazy sprite init ─────────────────────────────────────────────────────
+  if (!centerBgSprite.created()) {
+    initDeskbuddySprite();
+  }
+
+  // ── One-time init of animation timers ───────────────────────────────────
+  static bool          firstRun   = true;
+  static unsigned long nextBlink  = 0;
+  static unsigned long blinkStart = 0;   // 0 = not blinking
+  static unsigned long nextLook   = 0;
+
+  if (firstRun) {
+    nextBlink = now + 3000UL + (unsigned long)random(5000);
+    nextLook  = now + 5000UL + (unsigned long)random(7000);
+    firstRun  = false;
+  }
+
+  if (forceRedraw) {
+    tft.fillScreen(TFT_BLACK);
+  }
+
+  // ── Blink state machine ──────────────────────────────────────────────────
+  // Trigger a new blink when idle and timer fires
+  if (blinkStart == 0 && now >= nextBlink) {
+    blinkStart = now;
+    nextBlink  = now + 3000UL + (unsigned long)random(5000);
+  }
+  // Clear blink once the full sequence (~180 ms) has elapsed
+  if (blinkStart != 0 && now - blinkStart >= 190UL) {
+    blinkStart = 0;
+  }
+
+  uint8_t blinkState = getBuddyBlinkState(now, blinkStart);
+
+  // ── Gaze / look-around physics ───────────────────────────────────────────
+  static float lookX       = 0.0f;
+  static float lookY       = 0.0f;
+  static float lookTargetX = 0.0f;
+
+  // Refresh random X look target every 5–12 seconds
+  if (now >= nextLook) {
+    lookTargetX = (float)random(-11, 12);          // −11 … +11 px
+    nextLook    = now + 5000UL + (unsigned long)random(7000);
+  }
+
+  // ── UNFILTERED RADAR TARGETING (rawDetectionDist) ───────────────────────
+  // Instant reaction: raw distance in cm. Smaller distance = person close = look up (−Y)
+  int rawDist = appState.rawDetectionDist;          // unfiltered raw cm
+  float lookTargetY = 0.0f;
+  if (rawDist > 0) {
+    if (rawDist < 45) {
+      lookTargetY = -9.0f;                         // very close  → look up towards user face
+    } else if (rawDist < 120) {
+      // Linear interpolation: −9 px at 45 cm → 0 px at 120 cm
+      lookTargetY = -9.0f * (1.0f - (float)(rawDist - 45) / 75.0f);
+    }
+  }
+
+  // Saccadic snap + micro-tremor physics (~30 fps)
+  lookX += (lookTargetX - lookX) * 0.18f;           // quick saccadic X snap
+  lookY += (lookTargetY - lookY) * 0.25f;           // instant Y radar tracking
+
+  // Organic micro-tremor jitter (micro-saccades)
+  float jitterX = ((float)random(-3, 4)) * 0.15f;
+  float jitterY = ((float)random(-3, 4)) * 0.15f;
+
+  // ── Pupil Hippus (Breathing pulse) ───────────────────────────────────────
+  // Organic sine wave modulation (period ~2.4 seconds, amplitude ±1.2 px)
+  float hippusOffset = sinf((float)now * 0.0026f) * 1.2f;
+
+  // ── Presence-state modifiers ─────────────────────────────────────────────
+  bool isSquint  = (appState.currentPresenceState == STATE_AWAY);
+  bool isFocus   = (appState.currentPresenceState == STATE_FOCUS);
+
+  // ── Iris color from mood ring ────────────────────────────────────────────
+  uint8_t mr = appState.currentRingColor.r;
+  uint8_t mg = appState.currentRingColor.g;
+  uint8_t mb = appState.currentRingColor.b;
+  uint16_t irisOuter = tft.color565(mr,              mg,              mb);
+  uint16_t irisInner = tft.color565(mr * 55 / 100,  mg * 55 / 100,  mb * 55 / 100);
+
+  // Deep dark-blue background for the eye panel
+  uint16_t bgColor = tft.color565(6, 6, 12);
+
+  // ── Eye sprite: render at ~30 fps ────────────────────────────────────────
+  static unsigned long lastEyeFrame = 0;
+  bool eyeUpdate = forceRedraw || (now - lastEyeFrame >= 33UL);
+
+  if (eyeUpdate) {
+    lastEyeFrame = now;
+
+    centerBgSprite.fillSprite(bgColor);
+
+    // Circular background vignette
+    centerBgSprite.fillSmoothCircle(110, 58, 106,
+                                    tft.color565(11, 11, 18), bgColor);
+
+    // ── Eyebrows ─────────────────────────────────────────────────────────
+    int browY = BUDDY_EYE_CY - BUDDY_EYE_B - 13;
+    if (isSquint) browY += 5;   // droop brows when sleepy/away
+
+    uint16_t browColor = tft.color565(145, 145, 165);
+
+    // Left brow
+    centerBgSprite.drawWideLine(
+      (float)(BUDDY_EYE_LX - 29), (float)(browY + 5),
+      (float)(BUDDY_EYE_LX + 29), (float)(browY - 1),
+      2.5f, browColor, bgColor);
+
+    // Right brow
+    centerBgSprite.drawWideLine(
+      (float)(BUDDY_EYE_RX - 29), (float)(browY - 1),
+      (float)(BUDDY_EYE_RX + 29), (float)(browY + 5),
+      2.5f, browColor, bgColor);
+
+    // ── Draw both eyes ────────────────────────────────────────────────────
+    int drawPx = (int)(lookX + jitterX);
+    int drawPy = (int)(lookY + jitterY);
+
+    buddyDrawEye(centerBgSprite,
+                 BUDDY_EYE_LX, BUDDY_EYE_CY,
+                 drawPx, drawPy,
+                 blinkState, irisOuter, irisInner,
+                 isSquint, isFocus, hippusOffset, bgColor);
+
+    buddyDrawEye(centerBgSprite,
+                 BUDDY_EYE_RX, BUDDY_EYE_CY,
+                 drawPx, drawPy,
+                 blinkState, irisOuter, irisInner,
+                 isSquint, isFocus, hippusOffset, bgColor);
+
+    // ── Push eye sprite to TFT in one DMA write ───────────────────────────
+    centerBgSprite.pushSprite(BUDDY_SPR_X, BUDDY_SPR_Y);
+  }
+
+  // ── Bottom half: clock / date / rotating stat — throttled to 500 ms ──────
+  static unsigned long lastBottomUpdate = 0;
+  static int  last_h        = -1;
+  static int  last_m        = -1;
+  static String last_date   = "";
+  static String last_metric = "";
+  static uint16_t lastMetricColor = 0;
+  static int  metricIdx     = 0;
+  static unsigned long lastMetricSwitch = 0;
+
+  bool bottomUpdate = forceRedraw || (now - lastBottomUpdate >= 500UL);
+
+  if (bottomUpdate) {
+    lastBottomUpdate = now;
+
+    int h = timeClient.getHours();
+    int m = timeClient.getMinutes();
+    int display_h = h;
+    if (!appConfig.time24h) {
+      display_h = h % 12;
+      if (display_h == 0) display_h = 12;
+    }
+
+    tft.setTextDatum(MC_DATUM);
+
+    // Glass divider
+    tft.drawFastHLine(45, 122, 150, tft.color565(35, 35, 55));
+    tft.drawFastHLine(45, 123, 150, tft.color565(16, 16, 28));
+
+    // Time (HH:MM)
+    if (forceRedraw || h != last_h || m != last_m) {
+      tft.fillRect(28, 128, 184, 46, TFT_BLACK);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      char timeStr[6];
+      snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
+      tft.drawString(String(timeStr), 120, 152, FONT_BUDDY_TIME);
+      last_h = h;
+      last_m = m;
+    }
+
+    // Date
+    String currentDate = String(buf);
+    if (forceRedraw || currentDate != last_date) {
+      tft.fillRect(28, 177, 184, 18, TFT_BLACK);
+      tft.setTextColor(tft.color565(110, 110, 135), TFT_BLACK);
+      tft.drawString(currentDate, 120, 186, FONT_BUDDY_DATE);
+      last_date = currentDate;
+    }
+
+    // Rotating metric (cycles every 12 seconds)
+    if (now - lastMetricSwitch > 12000UL) {
+      metricIdx = (metricIdx + 1) % 3;
+      lastMetricSwitch = now;
+    }
+
+    String metricText = "";
+    switch (metricIdx) {
+      case 0: {
+        int pct = 0;
+        if (appConfig.targetHours > 0.0f) {
+          pct = (int)((appStats.totalDeskTime * 100.0f) /
+                      (appConfig.targetHours * 3600.0f * 1000.0f));
+          if (pct > 100) pct = 100;
+        }
+        metricText = "DAY: " + String(pct) + "%";
+        break;
+      }
+      case 1:
+        metricText = "SCORE: " + String(appStats.productivityScore) + "%";
+        break;
+      case 2:
+        metricText = "FOCUS: " + formatTime(appStats.totalFocusTime);
+        break;
+    }
+
+    // Tint metric text with mood color
+    uint16_t metricColor = tft.color565(mr * 70 / 100,
+                                        mg * 70 / 100,
+                                        mb * 70 / 100);
+
+    if (forceRedraw || metricText != last_metric || metricColor != lastMetricColor) {
+      tft.fillRect(28, 200, 184, 20, TFT_BLACK);
+      tft.setTextColor(metricColor, TFT_BLACK);
+      tft.drawString(metricText, 120, 210, FONT_BUDDY_DATE);
+      last_metric      = metricText;
+      lastMetricColor  = metricColor;
+    }
+  }
+}
+
 #endif // FACEPLATES_H
+
