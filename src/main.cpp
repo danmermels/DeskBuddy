@@ -54,6 +54,10 @@ TodoState appTodo;
 
 // Hardware Instances
 TFT_eSPI tft = TFT_eSPI();
+TFT_eSprite hourHandSprite = TFT_eSprite(&tft);
+TFT_eSprite minuteHandSprite = TFT_eSprite(&tft);
+TFT_eSprite secondHandSprite = TFT_eSprite(&tft);
+TFT_eSprite centerBgSprite = TFT_eSprite(&tft);
 ld2410 radar;
 WebServer server(80);
 DNSServer dnsServer;
@@ -1322,11 +1326,11 @@ void loop(void) {
   // Process MQTT service loop
   loopMqtt();
 
-  // Handle Web Server requests
-  server.handleClient();
+  // Handle Web Server requests (duplicate — already called at top of loop)
+  // server.handleClient();
 
-  // Handle OTA updates in the background
-  ArduinoOTA.handle();
+  // Handle OTA updates in the background (duplicate — already called at top of loop)
+  // ArduinoOTA.handle();
 
   // Update TFT Display
   updateTFTDisplay(now);

@@ -40,6 +40,12 @@ extern void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool sh
 extern void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 extern void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
 extern void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
+extern void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
+
+extern TFT_eSprite hourHandSprite;
+extern TFT_eSprite minuteHandSprite;
+extern TFT_eSprite secondHandSprite;
+extern TFT_eSprite centerBgSprite;
 
 // Draw custom PackBits-RLE compressed image from LittleFS to TFT
 inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t overrideColor = 0) {
@@ -116,14 +122,120 @@ inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t ov
   return true;
 }
 
+// Decode RLE image crop slice into a TFT_eSprite
+inline bool drawRLEImageToSprite(TFT_eSprite &spr, const char* filename, int16_t cropX, int16_t cropY, int16_t cropW, int16_t cropH) {
+  appStats.fsReadCount++;
+  fs::File file = LittleFS.open(filename, "r");
+  if (!file) return false;
+
+  uint16_t imgW, imgH;
+  if (file.read((uint8_t*)&imgW, 2) != 2 || file.read((uint8_t*)&imgH, 2) != 2) {
+    file.close();
+    return false;
+  }
+
+  int16_t curX = 0;
+  int16_t curY = 0;
+
+  while (file.available() > 0) {
+    uint8_t header = file.read();
+    uint8_t count = (header & 0x7F) + 1;
+    if (header & 0x80) {
+      uint16_t color;
+      if (file.read((uint8_t*)&color, 2) == 2) {
+        for (int i = 0; i < count; i++) {
+          if (curX >= cropX && curX < cropX + cropW && curY >= cropY && curY < cropY + cropH) {
+            spr.drawPixel(curX - cropX, curY - cropY, color);
+          }
+          curX++;
+          if (curX >= imgW) {
+            curX = 0;
+            curY++;
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i < count; i++) {
+        uint16_t color;
+        if (file.read((uint8_t*)&color, 2) == 2) {
+          if (curX >= cropX && curX < cropX + cropW && curY >= cropY && curY < cropY + cropH) {
+            spr.drawPixel(curX - cropX, curY - cropY, color);
+          }
+          curX++;
+          if (curX >= imgW) {
+            curX = 0;
+            curY++;
+          }
+        }
+      }
+    }
+  }
+  file.close();
+  return true;
+}
+
+// Decode full RLE image directly into a TFT_eSprite buffer (for watch hands, etc.)
+inline bool drawFullRLEToSprite(TFT_eSprite &spr, const char* filename) {
+  appStats.fsReadCount++;
+  fs::File file = LittleFS.open(filename, "r");
+  if (!file) return false;
+
+  uint16_t w, h;
+  if (file.read((uint8_t*)&w, 2) != 2 || file.read((uint8_t*)&h, 2) != 2) {
+    file.close();
+    return false;
+  }
+
+  int16_t curX = 0;
+  int16_t curY = 0;
+
+  while (file.available() > 0) {
+    uint8_t header = file.read();
+    uint8_t count = (header & 0x7F) + 1;
+    if (header & 0x80) {
+      uint16_t color;
+      if (file.read((uint8_t*)&color, 2) == 2) {
+        for (int i = 0; i < count; i++) {
+          spr.drawPixel(curX, curY, color);
+          curX++;
+          if (curX >= w) {
+            curX = 0;
+            curY++;
+          }
+        }
+      }
+    } else {
+      for (int i = 0; i < count; i++) {
+        uint16_t color;
+        if (file.read((uint8_t*)&color, 2) == 2) {
+          spr.drawPixel(curX, curY, color);
+          curX++;
+          if (curX >= w) {
+            curX = 0;
+            curY++;
+          }
+        }
+      }
+    }
+  }
+  file.close();
+  return true;
+}
+
 // Helper to draw auto-wrapped text in the center of the round TFT
-inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, uint8_t font, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY) {
+inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t textColor, const char* fontName, bool isAi, uint16_t aiLabelColor = TFT_LIGHTGREY) {
   if (bgImage != nullptr) {
     if (!drawRLEImage(bgImage, 0, 0)) {
       tft.fillScreen(TFT_BLACK);
     }
   } else {
     tft.fillScreen(TFT_BLACK);
+  }
+
+  bool fontLoaded = false;
+  if (fontName != nullptr && strlen(fontName) > 0) {
+    tft.loadFont(fontName, LittleFS);
+    fontLoaded = true;
   }
 
   tft.setTextColor(textColor);
@@ -149,9 +261,14 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
         startIdx = endIdx;
       }
     }
-    tft.drawString(line, 120, y, font);
+    // Draw string: standard font 4 is ignored if a smooth font is loaded
+    tft.drawString(line, 120, y, 4);
     y += 28;
     if (y > 200) break; // Avoid vertical overflow (up to ~5 lines)
+  }
+
+  if (fontLoaded) {
+    tft.unloadFont();
   }
 
   if (isAi) {
@@ -231,6 +348,13 @@ inline void updateTFTDisplay(unsigned long now) {
 
   if (appConfig.clockFace != lastClockFace) {
     tft.fillScreen(TFT_BLACK);
+    if (lastClockFace == 4) {
+      hourHandSprite.deleteSprite();
+      minuteHandSprite.deleteSprite();
+      secondHandSprite.deleteSprite();
+      centerBgSprite.deleteSprite();
+      Serial.println("[SPRITES] Aviator watch hands and center canvas deallocated from RAM.");
+    }
     lastClockFace = appConfig.clockFace;
   }
 
@@ -269,6 +393,9 @@ inline void updateTFTDisplay(unsigned long now) {
       break;
     case 3:
       drawDevClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
+      break;
+    case 4:
+      drawAviatorClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 0:
     default:

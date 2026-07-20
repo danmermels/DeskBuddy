@@ -238,7 +238,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       }
     }
     // Enforce daily cap (max 15 requests per day) for normal triggers
-    if (useAI && appStats.dailyAiRequestCount >= 15) {
+    if (useAI && appStats.dailyAiRequestCount >= DAILY_AI_LIMIT) {
       useAI = false;
     }
   }

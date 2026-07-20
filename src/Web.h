@@ -81,18 +81,45 @@ inline void handleRoot() {
     .score-high { color: #4ade80; }
     .score-med { color: #fbbf24; }
     .score-low { color: #f87171; }
+    .ai-carousel {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.5rem;
+      padding: 0 30px;
+    }
     .ai-message {
       font-size: 1.2rem;
       font-style: italic;
       color: #38bdf8;
       text-align: center;
       line-height: 1.5;
-      margin: 15px 0 5px 0;
       min-height: 2.5rem;
       display: flex;
       align-items: center;
       justify-content: center;
     }
+    .ai-arrow {
+      position: absolute;
+      background: none;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s, border-color 0.2s;
+      padding: 0;
+    }
+    .ai-arrow:hover { color: #38bdf8; border-color: #38bdf8; }
+    .ai-arrow.hidden { display: none; }
+    .ai-arrow-up { left: 0; top: 50%; transform: translateY(-50%); }
+    .ai-arrow-down { right: 0; top: 50%; transform: translateY(-50%); }
     .ai-badge {
       display: none;
       font-size: 0.75rem;
@@ -241,7 +268,11 @@ inline void handleRoot() {
 
   <div class="card ai-card">
     <div class="ai-badge" id="aiBadge">AI GENERATED</div>
-    <div class="ai-message" id="aiMsg">Loading latest update...</div>
+    <div class="ai-carousel">
+      <button class="ai-arrow ai-arrow-up hidden" id="aiArrowUp" onclick="aiNav(-1)">&#9664;</button>
+      <div class="ai-message" id="aiMsg">Loading latest update...</div>
+      <button class="ai-arrow ai-arrow-down hidden" id="aiArrowDown" onclick="aiNav(1)">&#9654;</button>
+    </div>
     <div class="ai-loading-container" id="aiLoading" style="display:none;">
       <div class="ai-spinner"></div>
       <span>Gemini is generating response...</span>
@@ -394,6 +425,23 @@ inline void handleRoot() {
 
   <script>
     let selectedDay = -1;
+    let aiMessages = [];
+    let aiIndex = 0;
+    let lastAiMessage = "";
+    const AI_MAX_HISTORY = 10;
+
+    function aiNav(dir) {
+      aiIndex = Math.max(0, Math.min(aiIndex + dir, aiMessages.length - 1));
+      renderAiMessage();
+    }
+
+    function renderAiMessage() {
+      let msg = aiMessages[aiIndex] || "No events recorded yet.";
+      document.getElementById('aiMsg').innerText = msg;
+      document.getElementById('aiArrowUp').classList.toggle('hidden', aiIndex === 0);
+      document.getElementById('aiArrowDown').classList.toggle('hidden', aiIndex >= aiMessages.length - 1);
+    }
+
     function updateHistoryDay() {
       selectedDay = parseInt(document.getElementById('daySelect').value);
       updateMetrics();
@@ -521,16 +569,30 @@ inline void handleRoot() {
             }
           }
           
-          // AI Loading states
+          // AI message history (carousel)
           let aiMsg = document.getElementById('aiMsg');
           let loadingContainer = document.getElementById('aiLoading');
+          let arrowUp = document.getElementById('aiArrowUp');
+          let arrowDown = document.getElementById('aiArrowDown');
           if (data.aiLoading) {
             aiMsg.style.display = "none";
+            arrowUp.classList.add('hidden');
+            arrowDown.classList.add('hidden');
             loadingContainer.style.display = "flex";
           } else {
-            aiMsg.innerText = data.aiMessage ? data.aiMessage : "No events recorded yet.";
-            aiMsg.style.display = "flex";
             loadingContainer.style.display = "none";
+            aiMsg.style.display = "flex";
+            if (data.aiMessage && data.aiMessage !== lastAiMessage) {
+              lastAiMessage = data.aiMessage;
+              if (aiMessages.indexOf(data.aiMessage) === -1) {
+                aiMessages.unshift(data.aiMessage);
+                if (aiMessages.length > AI_MAX_HISTORY) aiMessages.pop();
+              }
+              aiIndex = 0;
+              renderAiMessage();
+            } else {
+              renderAiMessage();
+            }
           }
           
           let isAi = data.isAiGenerated;
@@ -1405,6 +1467,7 @@ inline void handleSettings() {
           <option value="1">Minimalist</option>
           <option value="2">HiTech</option>
           <option value="3">DEV Mode</option>
+          <option value="4">Aviator</option>
         </select>
       </div>
       <div class="metric">

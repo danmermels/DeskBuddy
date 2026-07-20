@@ -29,7 +29,7 @@ extern String formatTime(unsigned long ms);
 // SECTION 2: DEFAULT FACEPLATE
 // ============================================================================
 
-#define MSG_FONT_DEFAULT 4
+#define MSG_FONT_DEFAULT nullptr
 #define FONT_DEFAULT_WEATHER 4
 #define FONT_DEFAULT_CLOCK 6
 #define FONT_DEFAULT_DATE 2
@@ -89,10 +89,12 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     ringRedrawn = true;
   }
 
+  static bool wasEvent = false;
+
   // 2. Alert/Event Message Mode
   if (showEvent) {
     if (forceRedraw || ringRedrawn) {
-      drawFaceplateMessage("/msg_default.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/default_msg.rle", message, TFT_SKYBLUE, MSG_FONT_DEFAULT, isAi, TFT_LIGHTGREY);
       
       // Redraw bezel rings on top of the alert background
       uint8_t r = appState.currentRingColor.r;
@@ -106,7 +108,13 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
       tft.drawSmoothRoundRect(8, 8, 112, 110, 0, 0, middleColor, TFT_BLACK);
       tft.drawSmoothRoundRect(14, 14, 106, 104, 0, 0, innerColor, TFT_BLACK);
     }
+    wasEvent = true;
     return;
+  }
+
+  if (wasEvent) {
+    forceRedraw = true;
+    wasEvent = false;
   }
 
   // 3. Normal Clock Drawing (Throttled to 500ms unless redraw or ring updated)
@@ -115,6 +123,10 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     return;
   }
   lastDefaultFaceUpdate = now;
+
+  if (forceRedraw) {
+    tft.fillScreen(TFT_BLACK);
+  }
 
   static String lastMetricText = "";
   static uint16_t lastMetricColor = 0;
@@ -222,7 +234,7 @@ bool inMinuteWindow(int x, int y) {
   return (x >= 160 && y >= 72 && y <= 150);
 }
 
-#define MSG_FONT_MINIMALIST 4
+#define MSG_FONT_MINIMALIST "RamisArabic18"
 #define FONT_MINIMALIST_TICK "RamisArabic18"
 #define FONT_MINIMALIST_HOUR "RamisArabic64"
 #define FONT_MINIMALIST_DATE "RamisArabic18"
@@ -238,13 +250,20 @@ bool inMinuteWindow(int x, int y) {
  * - Top-Center: Status icons (WiFi, Internet connection, Mail envelope indicator).
  */
 void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  static bool wasEvent = false;
   tft.setTextDatum(MC_DATUM); // Ensure all text draws and erases with the same coordinate system
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/msg_minimalist.rle", message, TFT_WHITE, MSG_FONT_MINIMALIST, isAi, TFT_LIGHTGREY);
+      drawFaceplateMessage("/minimalist_msg.rle", message, TFT_WHITE, MSG_FONT_MINIMALIST, isAi, TFT_LIGHTGREY);
     }
+    wasEvent = true;
     return;
+  }
+
+  if (wasEvent) {
+    forceRedraw = true;
+    wasEvent = false;
   }
 
   // Animation state for non-blocking counter-clockwise tick wipe
@@ -276,6 +295,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
   // If forceRedraw is true, reset statics to force full draw without erasing
   if (forceRedraw) {
+    tft.fillScreen(TFT_BLACK);
     last_m = -1;
     last_h = -1;
     last_date = "";
@@ -512,7 +532,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
 
 
-#define MSG_FONT_HITECH 4
+#define MSG_FONT_HITECH "GoodTiming15"
 #define FONT_HITECH_TIME "GoodTiming46"
 #define FONT_HITECH_TEMP "GoodTiming15"
 #define FONT_HITECH_DAY "GoodTiming15"
@@ -530,11 +550,19 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
  * - Bottom slots: Daily accumulated desk and break hours (loaded dynamically from GoodTiming20).
  */
 void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  static bool wasEvent = false;
+
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/msg_hitech.rle", message, HITECH_CYAN, MSG_FONT_HITECH, isAi, HITECH_MUTED);
+      drawFaceplateMessage("/hitech_msg.rle", message, HITECH_CYAN, MSG_FONT_HITECH, isAi, HITECH_MUTED);
     }
+    wasEvent = true;
     return;
+  }
+
+  if (wasEvent) {
+    forceRedraw = true;
+    wasEvent = false;
   }
 
   static unsigned long lastHiTechFaceUpdate = 0;
@@ -737,7 +765,7 @@ void formatHMS(unsigned long ms, char* outStr, size_t maxLen) {
 // SECTION 5: DEV FACEPLATE
 // ============================================================================
 
-#define MSG_FONT_DEV 4
+#define MSG_FONT_DEV nullptr
 #define FONT_DEV_DATA 2
 
 /**
@@ -754,11 +782,19 @@ void formatHMS(unsigned long ms, char* outStr, size_t maxLen) {
  * - RAM Health (Free heap memory vs historical min free heap since boot)
  */
 void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  static bool wasEvent = false;
+
   if (showEvent) {
     if (forceRedraw) {
       drawFaceplateMessage(nullptr, message, TFT_GREEN, MSG_FONT_DEV, isAi, TFT_DARKGREY);
     }
+    wasEvent = true;
     return;
+  }
+
+  if (wasEvent) {
+    forceRedraw = true;
+    wasEvent = false;
   }
 
   static unsigned long lastDevUpdate = 0;
@@ -854,6 +890,166 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
     uint32_t freeHeapK = ESP.getFreeHeap() / 1024;
   snprintf(line, sizeof(line), "HEAP:%uK AI:%d/15", freeHeapK, appStats.dailyAiRequestCount);
   drawDevLine(11, line, 198);
+}
+
+// ============================================================================
+// SECTION 6: AVIATOR FACEPLATE
+// ============================================================================
+
+#define COLOR_AVIATOR_ORANGE    tft.color565(235, 94, 40)
+#define COLOR_AVIATOR_DARKGRAY  tft.color565(40, 40, 40)
+#define COLOR_AVIATOR_OFFWHITE  tft.color565(240, 240, 240)
+#define COLOR_TRANSPARENT       TFT_BLACK // Black pixels will be transparent
+#define MSG_FONT_AVIATOR        "GoodTiming15"
+
+void initWatchHandSprites() {
+  Serial.println("[SPRITES] Allocating Aviator watch hands and center canvas sprite...");
+
+  // 1. Hour Hand Sprite (27x100)
+  hourHandSprite.createSprite(27, 100);
+  hourHandSprite.fillSprite(COLOR_TRANSPARENT);
+  drawFullRLEToSprite(hourHandSprite, "/aviator_hour.rle");
+  hourHandSprite.setPivot(13, 85);
+
+  // 2. Minute Hand Sprite (21x120)
+  minuteHandSprite.createSprite(21, 120);
+  minuteHandSprite.fillSprite(COLOR_TRANSPARENT);
+  drawFullRLEToSprite(minuteHandSprite, "/aviator_minute.rle");
+  minuteHandSprite.setPivot(10, 109);
+
+  // 3. Second Hand Sprite (9x127)
+  secondHandSprite.createSprite(9, 127);
+  secondHandSprite.fillSprite(COLOR_TRANSPARENT);
+  drawFullRLEToSprite(secondHandSprite, "/aviator_second.rle");
+  secondHandSprite.setPivot(4, 110);
+
+  // 4. Center Canvas Patch Sprite (220x220)
+  centerBgSprite.createSprite(220, 220);
+  centerBgSprite.fillSprite(TFT_BLACK);
+}
+
+void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
+  static bool wasEvent = false;
+
+  if (showEvent) {
+    if (forceRedraw) {
+      drawFaceplateMessage("/aviator_msg.rle", message, COLOR_AVIATOR_ORANGE, MSG_FONT_AVIATOR, isAi, TFT_LIGHTGREY);
+    }
+    wasEvent = true;
+    return;
+  }
+
+  // If returning from an event/message screen, force a full background redraw
+  if (wasEvent) {
+    forceRedraw = true;
+    wasEvent = false;
+  }
+
+  // Lazy loading of sprites from flash on faceplate select
+  if (!hourHandSprite.created() || !centerBgSprite.created()) {
+    initWatchHandSprites();
+  }
+
+  // Read current time
+  int h = timeClient.getHours();
+  int m = timeClient.getMinutes();
+  int s = timeClient.getSeconds();
+
+  static int last_min = -1;
+  static int last_sec = -1;
+  static int last_temp = -999;
+  static int last_mday = -1;
+  static int last_pct = -1;
+
+  bool timeChanged = (s != last_sec);
+  if (!forceRedraw && !timeChanged) {
+    return;
+  }
+  last_sec = s;
+
+  // 1. Draw full 240x240 background image ONLY on forceRedraw (faceplate load / mode switch)
+  if (forceRedraw) {
+    drawRLEImage("/aviator_bg.rle", 0, 0);
+    last_min = -1;
+    last_temp = -999;
+    last_mday = -1;
+    last_pct = -1;
+  }
+
+  // 2. Focus progress percentage calculation
+  int pct = 0;
+  if (appConfig.targetHours > 0.0f) {
+    pct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
+  }
+  if (pct > 100) pct = 100;
+
+  // 3. Render and cache background + all text overlays + hour/minute hands in RAM canvas on change
+  bool updateCanvas = forceRedraw || (m != last_min) || (appState.temp != last_temp) || (ts.tm_mday != last_mday) || (pct != last_pct);
+
+  if (updateCanvas) {
+    // Refresh center background slice in RAM (220x220 centered at 10,10)
+    drawRLEImageToSprite(centerBgSprite, "/aviator_bg.rle", 10, 10, 220, 220);
+    
+    // Draw weather (TFT Y=54 -> relative Y=44)
+    centerBgSprite.setTextColor(TFT_WHITE);
+    centerBgSprite.setTextDatum(MC_DATUM);
+    centerBgSprite.drawString(String(appState.temp) + "C", 110, 44, 2);
+
+    // Draw Date Badge (TFT X=70, Y=68 -> relative X=60, Y=58)
+    char dayStr[3];
+    snprintf(dayStr, sizeof(dayStr), "%d", ts.tm_mday);
+    centerBgSprite.drawString(dayStr, 60, 58, 2);
+
+    // Draw Top Month/Day (TFT Y=74 -> relative Y=64)
+    char monthDayStr[12];
+    const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+    snprintf(monthDayStr, sizeof(monthDayStr), "%02d %s", ts.tm_mday, months[ts.tm_mon]);
+    centerBgSprite.drawString(monthDayStr, 110, 64, 2);
+
+    // Draw Digital Time (HH:MM) centered at Y=93 (relative Y=83)
+    int display_h = h;
+    if (!appConfig.time24h) {
+      display_h = h % 12;
+      if (display_h == 0) display_h = 12;
+    }
+    char timeStr[9];
+    snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
+    centerBgSprite.drawString(timeStr, 110, 83, 4);
+
+    // Draw Focus Progress (TFT Y=182 -> relative Y=172)
+    char stepsGoalStr[32];
+    snprintf(stepsGoalStr, sizeof(stepsGoalStr), "FOCUS: %d%%", pct);
+    centerBgSprite.setTextColor(TFT_LIGHTGREY);
+    centerBgSprite.drawString(stepsGoalStr, 110, 172, 2);
+
+    // Set pivot of centerBgSprite relative to its center (110, 110)
+    centerBgSprite.setPivot(110, 110);
+
+    // Pre-rotate and draw Hour and Minute hands directly onto centerBgSprite in RAM
+    float hourAngle = ((h % 12) * 30.0f) + (m * 0.5f);
+    float minAngle = m * 6.0f;
+    hourHandSprite.pushRotated(&centerBgSprite, hourAngle, COLOR_TRANSPARENT);
+    minuteHandSprite.pushRotated(&centerBgSprite, minAngle, COLOR_TRANSPARENT);
+
+    // Update cached states
+    last_min = m;
+    last_temp = appState.temp;
+    last_mday = ts.tm_mday;
+    last_pct = pct;
+  }
+
+  // 4. Every second: Push center background RAM patch (<1ms, contains dial, text, and Hour+Minute hands!)
+  centerBgSprite.pushSprite(10, 10);
+
+  // 5. Draw ONLY the second hand on top of TFT
+  tft.setPivot(120, 120);
+
+  float secAngle = s * 6.0f;
+  secondHandSprite.pushRotated(secAngle, COLOR_TRANSPARENT);
+
+  // Center hub pin
+  tft.drawSmoothCircle(120, 120, 5, COLOR_AVIATOR_ORANGE, COLOR_AVIATOR_ORANGE);
+  tft.drawSmoothCircle(120, 120, 2, TFT_BLACK, TFT_BLACK);
 }
 
 #endif // FACEPLATES_H
