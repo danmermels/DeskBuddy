@@ -28,7 +28,7 @@
 #define BOOT_SPLASH_MS               4000UL // 4s minimum splash screen at boot
 #define WIFI_TIMEOUT_MS              5000UL // 5s WiFi connect timeout in setup
 #define RING_TRANSITION_MS           1000UL // 1s ring color transition
-#define STICKY_CONFIRM_MS          180000UL // 3 min sticky state confirmation window
+#define STICKY_CONFIRM_MS           30000UL // 0.5 min sticky state confirmation window
 #define DISPLAY_THROTTLE_MS           500UL // 500ms minimum between display faceplate redraws
 #define DEV_REFRESH_MS                200UL // 200ms refresh for dev faceplate
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay
@@ -45,6 +45,7 @@
 #define DISTANCE_LIMIT_DEFAULT            120
 #define FOCUS_DISTANCE_LIMIT_DEFAULT       50
 #define MOTION_RATIO_LIMIT_DEFAULT         15
+#define RECENT_MOTION_WINDOW_S             180  // 180s (3 minutes) rolling motion window for state transitions
 #define FILTER_WINDOW_DEFAULT             2.0f
 #define OVERNIGHT_THRESHOLD_S            14400UL  // 4 hours - overnight/sleep threshold for first-sit greeting
 #define G0S_SENS_DEFAULT                   90

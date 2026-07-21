@@ -69,6 +69,19 @@ MessageManager messageManager;
 RollingMedianFilter detectionDistFilter(DIST_FILTER_SIZE);
 RollingMedianFilter motionFilter(MOTION_FILTER_SIZE);
 
+// Rolling Motion Window (for state machine transitions)
+static uint16_t recentMotionBuckets[RECENT_MOTION_WINDOW_S] = {0};
+static uint16_t recentDeskBuckets[RECENT_MOTION_WINDOW_S] = {0};
+static size_t recentBucketHead = 0;
+static unsigned long lastBucketAdvanceTime = 0;
+
+void clearRecentMotionWindow() {
+  memset(recentMotionBuckets, 0, sizeof(recentMotionBuckets));
+  memset(recentDeskBuckets, 0, sizeof(recentDeskBuckets));
+  recentBucketHead = 0;
+  lastBucketAdvanceTime = millis();
+}
+
 // Productivity & Session Timing Metrics
 volatile uint32_t currentSitDownSessionId = 0;
 uint32_t geminiQuerySessionId = 0;
@@ -787,11 +800,34 @@ void loop(void) {
 
   rawPresent = appState.sensorPresenceDetected;
   if (rawPresent) {
+    // Advance 1-second rolling window bucket
+    if (now - lastBucketAdvanceTime >= 1000) {
+      recentBucketHead = (recentBucketHead + 1) % RECENT_MOTION_WINDOW_S;
+      recentMotionBuckets[recentBucketHead] = 0;
+      recentDeskBuckets[recentBucketHead] = 0;
+      lastBucketAdvanceTime = now;
+    }
+
+    // Accumulate time into current 1-second bucket
+    uint16_t tickMs = (elapsed < 1000) ? (uint16_t)elapsed : 1000;
+    recentDeskBuckets[recentBucketHead] += tickMs;
+    if (appState.sensorMovingTargetDetected) {
+      recentMotionBuckets[recentBucketHead] += tickMs;
+    }
+
+    // Calculate windowed motion ratio over the last RECENT_MOTION_WINDOW_S seconds
+    uint32_t windowMotionMs = 0;
+    uint32_t windowDeskMs = 0;
+    for (int i = 0; i < RECENT_MOTION_WINDOW_S; i++) {
+      windowMotionMs += recentMotionBuckets[i];
+      windowDeskMs += recentDeskBuckets[i];
+    }
+    int recentMotionRatio = (windowDeskMs > 0) ? (int)((windowMotionMs * 100) / windowDeskMs) : 0;
+    if (recentMotionRatio > 100) recentMotionRatio = 100;
+
     float currentDist = (appState.sessionDistanceAverage > 0.0) ? appState.sessionDistanceAverage : (float)appState.rawDetectionDist;
     bool inFocusZone = (currentDist > 0.0 && currentDist < appConfig.focusDistanceLimit);
-    int motionRatio = (appState.sessionDeskTime > 0) ? (appState.sessionMotionTime * 100) / appState.sessionDeskTime : 0;
-    if (motionRatio > 100) motionRatio = 100;
-    bool highMotion = (motionRatio > appConfig.motionRatioLimit);
+    bool highMotion = (recentMotionRatio > appConfig.motionRatioLimit);
 
     if (inFocusZone) {
       rawState = highMotion ? STATE_BUSY : STATE_FOCUS;

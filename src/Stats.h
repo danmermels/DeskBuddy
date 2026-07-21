@@ -7,6 +7,8 @@
 
 extern void saveDailyStats();
 
+extern void clearRecentMotionWindow();
+
 // Resets session-level metrics
 inline void resetSessionStats() {
   appState.sessionDeskTime = 0;
@@ -14,6 +16,7 @@ inline void resetSessionStats() {
   appState.sessionDistanceSum = 0;
   appState.sessionDistanceCount = 0;
   appState.sessionDistanceAverage = 0.0;
+  clearRecentMotionWindow();
 }
 
 // Resets daily counts on day session rollover

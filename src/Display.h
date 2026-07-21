@@ -28,6 +28,10 @@ struct RGBColor {
 
 #include "State.h"
 
+// Forward declarations for faceplate sprite cleanup
+void cleanupDeskbuddySprites();
+
+
 // Externs for global state variables from main.cpp
 extern TFT_eSPI tft;
 extern NTPClient timeClient;
@@ -385,8 +389,7 @@ inline void updateTFTDisplay(unsigned long now) {
       centerBgSprite.deleteSprite();
       Serial.println("[SPRITES] Aviator watch hands and center canvas deallocated from RAM.");
     } else if (lastClockFace == 5) {
-      centerBgSprite.deleteSprite();
-      Serial.println("[SPRITES] Deskbuddy eye canvas deallocated from RAM.");
+      cleanupDeskbuddySprites();
     }
     lastClockFace = appConfig.clockFace;
   }
