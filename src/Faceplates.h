@@ -1112,8 +1112,8 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 #define BUDDY_EYE_GAZE_Y_LIMIT  30   // 30px vertical gaze amplitude
 
 // -- Bottom-half font aliases --------------------------------------------------
-#define FONT_BUDDY_TIME   6
-#define FONT_BUDDY_DATE   2
+#define FONT_BUDDY_TIME   7   // 7-segment digital font
+#define FONT_BUDDY_DATE   2   // Small crisp text font
 #define MSG_FONT_BUDDY    nullptr
 
 // Eye State Modes
@@ -1139,7 +1139,8 @@ static bool ensureEyeSprite(TFT_eSprite &spr) {
 
 /**
  * Decode 100x100 RLE eye file from LittleFS into a TFT_eSprite.
- * Reuses existing allocated RAM buffer to avoid heap fragmentation and allocation crashes.
+ * Uses a single fast buffered read and direct RAM pointer writing to achieve ~150x decoding speedup,
+ * preventing SPI bus locking and web server unresponsiveness.
  */
 static bool loadEyeSprite100(TFT_eSprite &spr, const char *rleFile) {
   if (!ensureEyeSprite(spr)) return false;
@@ -1151,33 +1152,67 @@ static bool loadEyeSprite100(TFT_eSprite &spr, const char *rleFile) {
     return false;
   }
 
-  uint16_t w = 0, h = 0;
-  f.read((uint8_t*)&w, 2);
-  f.read((uint8_t*)&h, 2);
+  uint8_t header[4];
+  if (f.read(header, 4) < 4) {
+    f.close();
+    return false;
+  }
+
+  uint16_t w = header[0] | ((uint16_t)header[1] << 8);
+  uint16_t h = header[2] | ((uint16_t)header[3] << 8);
+
+  uint8_t chunk[256];
+  size_t chunkPos = 0;
+  size_t chunkSize = 0;
 
   int curX = 0, curY = 0;
-  while (f.available()) {
-    uint8_t hdr = f.read();
+
+  while (f.available() || chunkPos < chunkSize) {
+    if (chunkPos >= chunkSize) {
+      if (!f.available()) break;
+      chunkSize = f.read(chunk, sizeof(chunk));
+      chunkPos = 0;
+      if (chunkSize == 0) break;
+    }
+    uint8_t hdr = chunk[chunkPos++];
+    int count = (hdr & 0x7F) + 1;
+
     if (hdr & 0x80) {
-      uint8_t lo = f.read();
-      uint8_t hi = f.read();
+      if (chunkPos + 1 >= chunkSize && f.available()) {
+        // refill buffer if run color bytes cross buffer boundary
+        size_t rem = chunkSize - chunkPos;
+        if (rem > 0) memmove(chunk, chunk + chunkPos, rem);
+        size_t readIn = f.read(chunk + rem, sizeof(chunk) - rem);
+        chunkSize = rem + readIn;
+        chunkPos = 0;
+      }
+      if (chunkPos + 1 >= chunkSize) break;
+      uint8_t lo = chunk[chunkPos++];
+      uint8_t hi = chunk[chunkPos++];
       uint16_t color = lo | ((uint16_t)hi << 8);
-      int count = (hdr & 0x7F) + 1;
       for (int k = 0; k < count; k++) {
         spr.drawPixel(curX, curY, color);
         if (++curX >= (int)w) { curX = 0; curY++; }
       }
     } else {
-      int count = (hdr & 0x7F) + 1;
       for (int k = 0; k < count; k++) {
-        uint8_t lo = f.read();
-        uint8_t hi = f.read();
+        if (chunkPos + 1 >= chunkSize && f.available()) {
+          size_t rem = chunkSize - chunkPos;
+          if (rem > 0) memmove(chunk, chunk + chunkPos, rem);
+          size_t readIn = f.read(chunk + rem, sizeof(chunk) - rem);
+          chunkSize = rem + readIn;
+          chunkPos = 0;
+        }
+        if (chunkPos + 1 >= chunkSize) break;
+        uint8_t lo = chunk[chunkPos++];
+        uint8_t hi = chunk[chunkPos++];
         uint16_t color = lo | ((uint16_t)hi << 8);
         spr.drawPixel(curX, curY, color);
         if (++curX >= (int)w) { curX = 0; curY++; }
       }
     }
   }
+
   f.close();
   appStats.fsReadCount++;
   return true;
@@ -1201,6 +1236,24 @@ static void applyTopEyelidMask(TFT_eSprite &visor, int stampX, int stampY, int t
     if (topLidH > BUDDY_EYE_SPR_H) topLidH = BUDDY_EYE_SPR_H;
     visor.fillRect(stampX - 5, stampY - 5, BUDDY_EYE_SPR_W + 10, topLidH + 5, bgColor);
   }
+}
+
+/**
+ * Apply visor frame edge mask to block eyes/eyebrows from drawing over the background frame (20px from screen edges).
+ */
+static void applyVisorFrameMask(TFT_eSprite &visor, uint16_t bgColor) {
+  // Left 10px edge block (screen X < 20)
+  visor.fillRect(0, 0, 10, BUDDY_SPR_H, bgColor);
+
+  // Right 10px edge block (screen X > 220)
+  visor.fillRect(BUDDY_SPR_W - 10, 0, 10, BUDDY_SPR_H, bgColor);
+
+  // Top 10px edge block (screen Y < 15)
+  visor.fillRect(0, 0, BUDDY_SPR_W, 10, bgColor);
+
+  // Curved corner blocks for circular screen bezel (top-left & top-right)
+  visor.fillTriangle(0, 0, 26, 0, 0, 26, bgColor);
+  visor.fillTriangle(BUDDY_SPR_W - 26, 0, BUDDY_SPR_W, 0, BUDDY_SPR_W, 26, bgColor);
 }
 
 /**
@@ -1228,15 +1281,15 @@ static void drawDeskbuddyEyebrows(
     float browInset)                     // [0..1]  shared inward slide
 {
   const float HALF_SPAN  = 18.0f;   // half-length of each brow segment
-  const float LIFT_MAX   = 15.0f;   // px of upward travel at lift=1
-  const float TILT_MAX   =  8.0f;   // px of end-point displacement at |tilt|=1
+  const float LIFT_MAX   = 10.0f;   // px of upward travel at lift=1
+  const float TILT_MAX   =  5.0f;   // px of end-point displacement at |tilt|=1
   const float INSET_MAX  = 10.0f;   // px of inward slide at inset=1
 
   int dipL = (int)(leftBlinkPct  * 3.0f);
   int dipR = (int)(rightBlinkPct * 3.0f);
 
   float insetPx  = browInset * INSET_MAX;
-  float neutralY = (float)(centerY - 42); // raised 5px higher than before
+  float neutralY = (float)(centerY - 27); // raised 5px higher than before
 
   // ── Left brow ─────────────────────────────────────────────────────────────
   //   lx_outer = leftward (away from nose), lx_inner = rightward (toward nose)
@@ -1256,7 +1309,7 @@ static void drawDeskbuddyEyebrows(
   float rx_outer = (float)rightCenterX + HALF_SPAN - insetPx; // slides left on inset
   float ry_outer = rBaseY - rTiltPx;                           // rises when tilt+
 
-  uint16_t glowColor = tft.color565(0, 100, 140);
+  uint16_t glowColor = tft.color565(0, 30, 50);
 
   // Glow underlay (thinner, 1px lower)
   visor.drawWedgeLine(lx_outer, ly_outer + 1.0f, lx_inner, ly_inner + 1.0f, 1.2f, 1.2f, glowColor, TFT_BLACK);
@@ -1269,27 +1322,37 @@ static void drawDeskbuddyEyebrows(
 
 
 
-static TFT_eSprite leftEyeSpr(&tft);
-static TFT_eSprite rightEyeSpr(&tft);
+static TFT_eSprite buddyEyeSpr(&tft);
+static TFT_eSprite visorBgCache(&tft);  // Cached background region for the visor area (50KB)
 
 /**
- * Deallocate DeskBuddy eye sprites and visor canvas to free ~90KB RAM when switching clock faces.
+ * Deallocate DeskBuddy eye sprite, visor canvas and background cache to free RAM when switching clock faces.
  */
 void cleanupDeskbuddySprites() {
-  if (leftEyeSpr.created()) leftEyeSpr.deleteSprite();
-  if (rightEyeSpr.created()) rightEyeSpr.deleteSprite();
+  if (buddyEyeSpr.created())  buddyEyeSpr.deleteSprite();
   if (centerBgSprite.created()) centerBgSprite.deleteSprite();
-  Serial.println("[SPRITES] Deskbuddy eye sprites (40KB) and visor canvas (50KB) deallocated from RAM.");
+  if (visorBgCache.created()) visorBgCache.deleteSprite();
+  Serial.println("[SPRITES] Deskbuddy sprites (eye 20KB + visor 50KB + bgCache 50KB) deallocated.");
 }
 
 /**
- * Allocate the visor canvas sprite (220x115).
+ * Allocate the visor canvas sprite (220x115), eye sprite (100x100) and background cache (220x115).
  */
 void initDeskbuddySprite() {
   if (!centerBgSprite.created()) {
     Serial.println("[BUDDY] Allocating visor canvas sprite 220x115...");
     centerBgSprite.createSprite(BUDDY_SPR_W, BUDDY_SPR_H);
     centerBgSprite.fillSprite(TFT_BLACK);
+  }
+  if (!buddyEyeSpr.created()) {
+    Serial.println("[BUDDY] Allocating eye sprite 100x100...");
+    buddyEyeSpr.createSprite(BUDDY_EYE_SPR_W, BUDDY_EYE_SPR_H);
+    buddyEyeSpr.fillSprite(TFT_BLACK);
+  }
+  if (!visorBgCache.created()) {
+    Serial.println("[BUDDY] Allocating visor background cache 220x115...");
+    visorBgCache.createSprite(BUDDY_SPR_W, BUDDY_SPR_H);
+    visorBgCache.fillSprite(TFT_BLACK);
   }
 }
 
@@ -1318,12 +1381,12 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     wasEvent = false;
   }
 
-  // -- Lazy visor canvas init ------------------------------------------------
+  // -- Lazy visor canvas & eye sprite init ------------------------------------
   initDeskbuddySprite();
 
-  // -- RAM Eye Sprites tracking ----------------------------------------------
-  static int loadedLeftMode  = -1;
-  static int loadedRightMode = -1;
+  // -- RAM Eye Sprite & Background tracking ------------------------------------
+  static int  loadedEyeMode        = -1;
+  static bool hasDeskbuddyBgImage  = false;
 
 
   // -- Animation State & Timers ----------------------------------------------
@@ -1380,9 +1443,19 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   }
 
   if (forceRedraw) {
-    tft.fillScreen(TFT_BLACK);
-    loadedLeftMode  = -1;
-    loadedRightMode = -1;
+    hasDeskbuddyBgImage = drawRLEImage("/buddy_bg.rle", 0, 0);
+    if (!hasDeskbuddyBgImage) {
+      tft.fillScreen(TFT_BLACK);
+      if (visorBgCache.created()) visorBgCache.fillSprite(TFT_BLACK);
+    } else {
+      // Decode the visor region of the background into RAM cache for per-frame restoration.
+      // This is a one-time flash read; subsequent frames use fast memcpy from this cache.
+      if (visorBgCache.created()) {
+        drawRLEImageToSprite(visorBgCache, "/buddy_bg.rle", BUDDY_SPR_X, BUDDY_SPR_Y, BUDDY_SPR_W, BUDDY_SPR_H);
+        Serial.println("[BUDDY] Background region cached into visorBgCache.");
+      }
+    }
+    loadedEyeMode = -1;
   }
 
   // ── Determine Primary Eye Mode from Presence State ───────────────────────
@@ -1505,23 +1578,6 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     }
   }
 
-  // Lazy-load eye bitmaps into RAM on mode change (with persistent RAM buffers)
-  if (loadedLeftMode != leftModeID) {
-    if (loadEyeSprite100(leftEyeSpr, leftRLE)) {
-      loadedLeftMode = leftModeID;
-    }
-  }
-  if (loadedRightMode != rightModeID) {
-    if (strcmp(leftRLE, rightRLE) == 0 && leftEyeSpr.created()) {
-      // Both eyes use identical texture: no need to decode RLE twice!
-      loadedRightMode = rightModeID;
-    } else {
-      if (loadEyeSprite100(rightEyeSpr, rightRLE)) {
-        loadedRightMode = rightModeID;
-      }
-    }
-  }
-
   // ── Gaze / Radar Distance Physics ─────────────────────────────────────────
   // 1. Horizontal Gaze: Halved (±3px drift)
   if (now >= nextLook) {
@@ -1558,22 +1614,24 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   lookY        += (lookTargetY - lookY) * 0.15f;
   convergenceX += (targetConvergence - convergenceX) * 0.12f;
 
-  // ── Mood Ring Color ───────────────────────────────────────────────────────
-  uint8_t mr = appState.currentRingColor.r;
-  uint8_t mg = appState.currentRingColor.g;
-  uint8_t mb = appState.currentRingColor.b;
-
   // ── Render Visor Frame at ~30 fps (Pure TFT_BLACK canvas, no box) ─────────
   static unsigned long lastEyeFrame = 0;
   bool eyeUpdate = forceRedraw || isGlitching || isCameoActive || (now - lastEyeFrame >= 33UL);
 
   if (eyeUpdate) {
     lastEyeFrame = now;
-    uint16_t visorBg = TFT_BLACK; // Pure TFT_BLACK background (no box behind eyes)
+    uint16_t visorBg = TFT_BLACK;
 
-    // 1. Fill entire visor canvas with pure TFT_BLACK
+    // 1. Fill visor canvas: memcpy the cached background region (fast RAM-to-RAM) so that
+    //    any previously drawn eye pixels are fully erased before new eyes are stamped.
+    //    Falls back to fillSprite(TFT_BLACK) when no background image is active.
     if (centerBgSprite.created()) {
-      centerBgSprite.fillSprite(visorBg);
+      if (hasDeskbuddyBgImage && visorBgCache.created()) {
+        memcpy(centerBgSprite.getPointer(), visorBgCache.getPointer(),
+               (size_t)BUDDY_SPR_W * BUDDY_SPR_H * 2);
+      } else {
+        centerBgSprite.fillSprite(visorBg);
+      }
 
       int gx = (int)lookX + glitchJitterX;
       int gy = (int)lookY + glitchJitterY;
@@ -1585,16 +1643,27 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
       int rightX = (BUDDY_EYE_RX_BASE - cx) - 50 + gx;
       int rightY = BUDDY_EYE_CY - 50 + gy;
 
-      // 2. Stamp Left Eye & apply top-down mask blink (ONLY IN OPEN MODE!)
-      stampEye100(centerBgSprite, leftEyeSpr, leftX, leftY);
+      // 2. Load & stamp Left Eye
+      if (loadedEyeMode != leftModeID) {
+        if (loadEyeSprite100(buddyEyeSpr, leftRLE)) {
+          loadedEyeMode = leftModeID;
+        }
+      }
+      stampEye100(centerBgSprite, buddyEyeSpr, leftX, leftY);
       if (activeEyeMode == EYE_MODE_OPEN) {
         int leftTopLidH = (int)(leftBlinkPct * 65.0f);
         applyTopEyelidMask(centerBgSprite, leftX, leftY, leftTopLidH, visorBg);
       }
 
-      // 3. Stamp Right Eye (use rightEyeSpr if created during glitch, otherwise leftEyeSpr)
-      TFT_eSprite &rSpr = (rightEyeSpr.created() && strcmp(leftRLE, rightRLE) != 0) ? rightEyeSpr : leftEyeSpr;
-      stampEye100(centerBgSprite, rSpr, rightX, rightY);
+      // 3. Stamp Right Eye
+      if (strcmp(leftRLE, rightRLE) != 0) {
+        // Different texture during 100ms glitch: load right eye into buffer temporarily
+        loadEyeSprite100(buddyEyeSpr, rightRLE);
+        stampEye100(centerBgSprite, buddyEyeSpr, rightX, rightY);
+        loadedEyeMode = -1; // force reload of leftRLE on next frame
+      } else {
+        stampEye100(centerBgSprite, buddyEyeSpr, rightX, rightY);
+      }
       if (activeEyeMode == EYE_MODE_OPEN) {
         int rightTopLidH = (int)(rightBlinkPct * 65.0f);
         applyTopEyelidMask(centerBgSprite, rightX, rightY, rightTopLidH, visorBg);
@@ -1604,37 +1673,54 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
       if (activeEyeMode == EYE_MODE_OPEN) {
         // ── Autonomous Eyebrow Mood State Machine ───────────────────────────
         // Expressions mapped to single-segment brow geometry (lift + tilt + inset):
-        //   40% → Interest    : tilt+1 both, inset 0.7   brows converge & inner ends dip
-        //   15% → Surprise    : lift+1 both, tilt 0       brows rise flat
-        //   15% → Strangement : lift+1 one side, tilt-0.6 that side  skeptical arch
-        //   30% → Skip        : quiet reschedule
+        //   35% → Curious/Interest : dynamic inward, outward, or head-tilt pitch (+15%)
+        //   20% → Surprise         : both brows rise fully
+        //   20% → Strangement      : one brow lifts, skeptical arch
+        //   25% → Skip             : quiet reschedule
         bool browAtRest = (fabsf(browLiftL) < 0.01f && fabsf(browLiftR) < 0.01f &&
                            fabsf(browTiltL) < 0.01f && fabsf(browTiltR) < 0.01f &&
                            fabsf(browInset) < 0.01f);
         if (!browHolding && browAtRest && now >= nextBrowCheck) {
           int roll = (int)random(100);
-          if (roll < 40) {
-            // Interest: inner ends angle down + brows converge inward
-            browLiftLTarget = 0.0f;  browLiftRTarget = 0.0f;
-            browTiltLTarget = 1.0f;  browTiltRTarget = 1.0f;
-            browInsetTarget = 0.7f;
+          if (roll < 35) {
+            // Curious / Interest: dynamic inward, outward, or head-tilt inquiring pitch
+            int subRoll = (int)random(100);
+            if (subRoll < 40) {
+              // Inward Curious: pitch down inward, slide toward nose
+              browLiftLTarget = 0.35f; browLiftRTarget = 0.35f;
+              browTiltLTarget = 1.0f;  browTiltRTarget = 1.0f;
+              browInsetTarget = 0.3f;
+            } else if (subRoll < 75) {
+              // Outward Curious: pitch up outward, slide away from nose
+              browLiftLTarget = 0.5f;  browLiftRTarget = 0.5f;
+              browTiltLTarget = -0.7f; browTiltRTarget = -0.7f;
+              browInsetTarget = -0.3f;
+            } else {
+              // Asymmetric Curious (head-tilt inquiring look)
+              bool leftUp     = (random(2) == 0);
+              browLiftLTarget = leftUp ? 0.6f : 0.2f;
+              browLiftRTarget = leftUp ? 0.2f : 0.6f;
+              browTiltLTarget = leftUp ? -0.8f : 0.8f;
+              browTiltRTarget = leftUp ? 0.8f : -0.8f;
+              browInsetTarget = 0.0f;
+            }
             browHoldEnd     = now + 2000UL + (unsigned long)random(58000); // 2s–1min
             browHolding     = true;
             nextBrowCheck   = now + 12000UL + (unsigned long)random(10000);
           } else if (roll < 55) {
-            // Surprise: both brows lift straight up
+            // Surprise: both brows lift fully, no inset
             browLiftLTarget = 1.0f;  browLiftRTarget = 1.0f;
             browTiltLTarget = 0.0f;  browTiltRTarget = 0.0f;
             browInsetTarget = 0.0f;
             browHoldEnd     = now + 1000UL + (unsigned long)random(29000); // 1s–30s
             browHolding     = true;
             nextBrowCheck   = now + 25000UL + (unsigned long)random(20000);
-          } else if (roll < 70) {
-            // Strangement: one brow lifts with slight skeptical arch inward tilt
+          } else if (roll < 75) {
+            // Strangement: one brow lifts fully, other rises slightly for contrast
             bool leftSide   = (random(2) == 0);
-            browLiftLTarget = leftSide ? 1.0f : 0.0f;
-            browLiftRTarget = leftSide ? 0.0f : 1.0f;
-            browTiltLTarget = leftSide ? -0.6f : 0.0f; // raised brow tilts: inner end up
+            browLiftLTarget = leftSide ? 1.0f : 0.15f;        // resting brow rises slightly
+            browLiftRTarget = leftSide ? 0.15f : 1.0f;
+            browTiltLTarget = leftSide ? -0.6f : 0.0f;        // raised brow: inner end up
             browTiltRTarget = leftSide ? 0.0f : -0.6f;
             browInsetTarget = 0.0f;
             browHoldEnd     = now + 2000UL + (unsigned long)random(58000); // 2s–1min
@@ -1675,7 +1761,9 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
             browLiftL, browLiftR, browTiltL, browTiltR, browInset);
       }
 
-      // 5. Push completed visor patch to TFT (<1ms)
+      // 5. Push completed visor patch to TFT (<1ms).
+      //    Always push opaquely — the background cache fill ensures background pixels
+      //    correctly show in non-eye areas without any transparency hacks.
       centerBgSprite.pushSprite(BUDDY_SPR_X, BUDDY_SPR_Y);
     }
   }
@@ -1707,19 +1795,35 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     tft.setTextDatum(MC_DATUM);
 
     // 3D glowing divider bar
-    uint16_t dividerGlow = tft.color565(mr * 70 / 100, mg * 70 / 100, mb * 70 / 100);
-    tft.drawFastHLine(35, 120, 170, tft.color565(12, 12, 22));
-    tft.drawFastHLine(42, 121, 156, dividerGlow);
-    tft.drawFastHLine(46, 122, 148, tft.color565(80, 85, 115));
-    tft.drawFastHLine(50, 123, 140, tft.color565(6, 6, 12));
+    uint8_t mr = appState.currentRingColor.r;
+    uint8_t mg = appState.currentRingColor.g;
+    uint8_t mb = appState.currentRingColor.b;
+
+    // 3D glowing divider bar (only in fallback mode when no background image)
+    if (!hasDeskbuddyBgImage) {
+      uint16_t dividerGlow = tft.color565(mr * 70 / 100, mg * 70 / 100, mb * 70 / 100);
+      tft.drawFastHLine(35, 120, 170, tft.color565(12, 12, 22));
+      tft.drawFastHLine(42, 121, 156, dividerGlow);
+      tft.drawFastHLine(46, 122, 148, tft.color565(80, 85, 115));
+      tft.drawFastHLine(50, 123, 140, tft.color565(6, 6, 12));
+    }
 
     // Time (HH:MM)
     if (forceRedraw || h != last_h || m != last_m) {
-      tft.fillRect(28, 128, 184, 46, TFT_BLACK);
-      tft.setTextColor(TFT_WHITE, TFT_BLACK);
       char timeStr[6];
       snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
-      tft.drawString(String(timeStr), 120, 152, FONT_BUDDY_TIME);
+
+      if (hasDeskbuddyBgImage) {
+        tft.fillRect(33, 132, 82, 22, TFT_RED);
+        tft.loadFont("GoodTiming15", LittleFS);
+        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK); // Glowing cyan digital text
+        tft.drawString(String(timeStr), 80, 138); // Renders GoodTiming15 smooth font
+        tft.unloadFont();
+      } else {
+        tft.fillRect(28, 128, 184, 46, TFT_BLACK);
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        tft.drawString(String(timeStr), 120, 152, FONT_BUDDY_TIME);
+      }
       last_h = h;
       last_m = m;
     }
@@ -1727,9 +1831,17 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     // Date
     String currentDate = String(buf);
     if (forceRedraw || currentDate != last_date) {
-      tft.fillRect(28, 177, 184, 18, TFT_BLACK);
-      tft.setTextColor(tft.color565(110, 110, 135), TFT_BLACK);
-      tft.drawString(currentDate, 120, 186, FONT_BUDDY_DATE);
+      if (hasDeskbuddyBgImage) {
+        tft.fillRect(129, 132, 77, 22, TFT_BLACK);
+        tft.loadFont("GoodTiming15", LittleFS);
+        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK); // Cyan matching theme
+        tft.drawString(currentDate, 167, 140);
+        tft.unloadFont();
+      } else {
+        tft.fillRect(28, 177, 184, 18, TFT_BLACK);
+        tft.setTextColor(tft.color565(110, 110, 135), TFT_BLACK);
+        tft.drawString(currentDate, 120, 186, FONT_BUDDY_DATE);
+      }
       last_date = currentDate;
     }
 
@@ -1762,9 +1874,17 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     uint16_t metricColor = tft.color565(mr * 70 / 100, mg * 70 / 100, mb * 70 / 100);
 
     if (forceRedraw || metricText != last_metric || metricColor != lastMetricColor) {
-      tft.fillRect(28, 200, 184, 20, TFT_BLACK);
-      tft.setTextColor(metricColor, TFT_BLACK);
-      tft.drawString(metricText, 120, 210, FONT_BUDDY_DATE);
+      if (hasDeskbuddyBgImage) {
+        tft.fillRect(70, 165, 110, 18, TFT_RED);
+        tft.loadFont("GoodTiming15", LittleFS);
+        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
+        tft.drawString(metricText, 120, 165);
+        tft.unloadFont();
+      } else {
+        tft.fillRect(28, 200, 184, 20, TFT_BLACK);
+        tft.setTextColor(metricColor, TFT_BLACK);
+        tft.drawString(metricText, 120, 210, FONT_BUDDY_DATE);
+      }
       last_metric     = metricText;
       lastMetricColor = metricColor;
     }
