@@ -33,8 +33,7 @@ extern String formatEpochTime(uint32_t epoch);
 extern void saveDailyStats();
 
 // Web Server Route Handlers
-inline void handleRoot() {
-  String html = R"rawhtml(
+static const char ROOT_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -99,17 +98,18 @@ inline void handleRoot() {
       display: flex;
       align-items: center;
       justify-content: center;
+      width: 100%;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      position: absolute;
     }
-    .ai-arrow {
+    .ai-message.active {
+      opacity: 1;
+      position: relative;
+    }
+    .carousel-btn {
       position: absolute;
       background: none;
-      border: 1px solid #334155;
-      color: #94a3b8;
-      border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      font-size: 1rem;
-      cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -690,11 +690,13 @@ inline void handleRoot() {
 </body>
 </html>
   )rawhtml";
-  server.send(200, "text/html", html);
+
+inline void handleRoot() {
+  appState.lastWebActivityTime = millis();
+  server.send_P(200, "text/html", ROOT_HTML);
 }
 
-inline void handleTodo() {
-  String html = R"rawhtml(
+static const char TODO_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -1301,7 +1303,9 @@ inline void handleTodo() {
 </body>
 </html>
   )rawhtml";
-  server.send(200, "text/html", html);
+
+inline void handleTodo() {
+  server.send_P(200, "text/html", TODO_HTML);
 }
 
 inline void handleGetTasks() {
@@ -1330,8 +1334,7 @@ inline void handleSaveTasks() {
   }
 }
 
-inline void handleSettings() {
-  String html = R"rawhtml(
+static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -1445,7 +1448,7 @@ inline void handleSettings() {
     <form action="/save-settings" method="POST">
       <div class="metric">
         <span class="label">AI Mode</span>
-        <select name="aiMode" id="aiModeSelect" class="settings-select">
+        <select name="aiMode" id="aiModeSelect" class="settings-select" onchange="this.form.submit()">
           <option value="0">Eco (Off)</option>
           <option value="1">Balanced</option>
           <option value="2">Frequent</option>
@@ -1453,7 +1456,7 @@ inline void handleSettings() {
       </div>
       <div class="metric">
         <span class="label">AI Persona</span>
-        <select name="aiPersona" id="aiPersonaSelect" class="settings-select">
+        <select name="aiPersona" id="aiPersonaSelect" class="settings-select" onchange="this.form.submit()">
           <option value="0">Coach</option>
           <option value="1">Critic</option>
           <option value="2">Sweet</option>
@@ -1462,7 +1465,7 @@ inline void handleSettings() {
       </div>
       <div class="metric">
         <span class="label">Clock Face Style</span>
-        <select name="clockFace" id="clockFaceSelect" class="settings-select">
+        <select name="clockFace" id="clockFaceSelect" class="settings-select" onchange="this.form.submit()">
           <option value="0">Default Digital</option>
           <option value="1">Minimalist</option>
           <option value="2">HiTech</option>
@@ -1472,8 +1475,18 @@ inline void handleSettings() {
         </select>
       </div>
       <div class="metric">
+        <span class="label">DeskBuddy Font</span>
+        <select name="buddyFontIdx" id="buddyFontIdxSelect" class="settings-select" onchange="this.form.submit()">
+          <option value="0">GoodTiming 20 (Medium)</option>
+          <option value="1">GoodTiming 15 (Small)</option>
+          <option value="2">GoodTiming 46 (Large)</option>
+          <option value="3">RamisArabic 18 (Small)</option>
+          <option value="4">RamisArabic 36 (Medium)</option>
+        </select>
+      </div>
+      <div class="metric">
         <span class="label">Time Format</span>
-        <select name="time24h" id="time24hSelect" class="settings-select">
+        <select name="time24h" id="time24hSelect" class="settings-select" onchange="this.form.submit()">
           <option value="1">24-Hour</option>
           <option value="0">12-Hour</option>
         </select>
@@ -1489,7 +1502,7 @@ inline void handleSettings() {
       </div>
       <div class="metric">
         <span class="label">Mail Alert Active</span>
-        <select name="hasMail" id="hasMailSelect" class="settings-select">
+        <select name="hasMail" id="hasMailSelect" class="settings-select" onchange="this.form.submit()">
           <option value="0">No Mail</option>
           <option value="1">Mail Active</option>
         </select>
@@ -1927,6 +1940,7 @@ inline void handleSettings() {
             setVal('aiModeSelect', data.aiMode);
             setVal('aiPersonaSelect', data.aiPersona);
             setVal('clockFaceSelect', data.clockFace);
+            setVal('buddyFontIdxSelect', data.buddyFontIdx);
             setVal('targetHoursInput', data.targetHours);
             setVal('userNameInput', data.userName);
             setVal('hasMailSelect', data.hasMail ? "1" : "0");
@@ -2041,11 +2055,12 @@ inline void handleSettings() {
 </body>
 </html>
   )rawhtml";
-  server.send(200, "text/html", html);
+
+inline void handleSettings() {
+  server.send_P(200, "text/html", SETTINGS_HTML);
 }
 
-inline void handleCredentials() {
-  String html = R"rawhtml(
+static const char CREDENTIALS_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -2311,7 +2326,9 @@ inline void handleCredentials() {
 </body>
 </html>
   )rawhtml";
-  server.send(200, "text/html", html);
+
+inline void handleCredentials() {
+  server.send_P(200, "text/html", CREDENTIALS_HTML);
 }
 
 inline void handleWifiScan() {
@@ -2337,8 +2354,7 @@ inline void handleCaptiveRedirect() {
 }
 
 // Captive portal: simplified WiFi provisioning page
-inline void handleSetup() {
-  String html = R"rawhtml(
+static const char SETUP_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -2455,7 +2471,9 @@ inline void handleSetup() {
 </body>
 </html>
   )rawhtml";
-  server.send(200, "text/html", html);
+
+inline void handleSetup() {
+  server.send_P(200, "text/html", SETUP_HTML);
 }
 
 inline void handleSaveCredentials() {
@@ -2504,6 +2522,7 @@ inline void handleSaveCredentials() {
 }
 
 inline void handleRadarData() {
+  appState.lastWebActivityTime = millis();
   DynamicJsonDocument doc(4096);
   doc["presence"] = (appState.currentPresenceState != STATE_AWAY);
   doc["state"] = getPresenceStateName(appState.currentPresenceState);
@@ -2539,6 +2558,7 @@ inline void handleRadarData() {
   doc["todayMinutesElapsed"] = timeClient.isTimeSet() ? (timeClient.getHours() * 60 + timeClient.getMinutes()) : 0;
   doc["uptimeSeconds"] = (uint32_t)(millis() / 1000);
   doc["clockFace"] = appConfig.clockFace;
+  doc["buddyFontIdx"] = appConfig.buddyFontIndex;
   doc["targetHours"] = appConfig.targetHours;
   doc["hasMail"] = appConfig.hasMail;
   doc["time24h"] = appConfig.time24h;
@@ -2658,6 +2678,10 @@ inline void handleSaveSettings() {
     if (server.hasArg("clockFace")) {
       int val = server.arg("clockFace").toInt();
       if (val != appConfig.clockFace) { appConfig.clockFace = val; preferences.putInt("clockFace", appConfig.clockFace); }
+    }
+    if (server.hasArg("buddyFontIdx")) {
+      int val = server.arg("buddyFontIdx").toInt();
+      if (val != appConfig.buddyFontIndex) { appConfig.buddyFontIndex = val; preferences.putInt("buddyFontIdx", appConfig.buddyFontIndex); }
     }
     if (server.hasArg("targetHours")) {
       float val = server.arg("targetHours").toFloat();
@@ -3007,8 +3031,7 @@ inline void handleFileUpload() {
   }
 }
 
-inline void handleFileManager() {
-  String html = R"rawhtml(
+static const char FILE_MANAGER_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
 <head>
@@ -3362,7 +3385,9 @@ inline void handleFileManager() {
 </body>
 </html>
   )rawhtml";
-  server.send(200, "text/html", html);
+
+inline void handleFileManager() {
+  server.send_P(200, "text/html", FILE_MANAGER_HTML);
 }
 
 

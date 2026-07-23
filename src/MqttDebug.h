@@ -115,6 +115,7 @@ static void handleGetConfig() {
   doc["aiMode"] = appConfig.aiMode;
   doc["aiPersona"] = appConfig.aiPersona;
   doc["clockFace"] = appConfig.clockFace;
+  doc["buddyFontIdx"] = appConfig.buddyFontIndex;
   doc["userName"] = appConfig.userName;
   doc["targetHours"] = appConfig.targetHours;
   doc["focusDistLim"] = appConfig.focusDistanceLimit;
@@ -258,6 +259,10 @@ static void handleGetGeneric(const String& key) {
     doc["ok"] = true;
     doc[key] = appConfig.clockFace;
   }
+  else if (key == "buddyFontIdx") {
+    doc["ok"] = true;
+    doc[key] = appConfig.buddyFontIndex;
+  }
   else if (key == "distLimit") {
     doc["ok"] = true;
     doc[key] = appConfig.deskDistanceLimit;
@@ -322,6 +327,10 @@ static void handleSet(const String& args) {
   } else if (cfgKey == "clockFace" && isDigitStr(valStr)) {
     appConfig.clockFace = valStr.toInt();
     preferences.putInt("clockFace", appConfig.clockFace);
+    ok = true;
+  } else if (cfgKey == "buddyFontIdx" && isDigitStr(valStr)) {
+    appConfig.buddyFontIndex = valStr.toInt();
+    preferences.putInt("buddyFontIdx", appConfig.buddyFontIndex);
     ok = true;
   } else if (cfgKey == "userName") {
     if (valStr.startsWith("\"") && valStr.endsWith("\"")) {

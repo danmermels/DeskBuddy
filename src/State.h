@@ -36,6 +36,7 @@ struct ConfigState {
   float filterWindow = 2.0;
   bool hasMail = false;
   bool time24h = true;
+  int buddyFontIndex = 0; // 0 = GoodTiming20, 1 = GoodTiming15 (or other 2nd font)
 
   // Radar Gate Sensitivities
   int g0mSens = 90;
@@ -181,6 +182,9 @@ struct RuntimeState {
 
   // Captive Portal
   bool captivePortalMode = false;
+
+  // Web activity safety tracker
+  unsigned long lastWebActivityTime = 0;
 };
 
 struct TodoState {

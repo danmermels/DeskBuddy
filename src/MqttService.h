@@ -48,6 +48,9 @@ inline void addMqttHistory(String topic, String payload) {
 
 // Callback invoked when MQTT messages are received
 inline void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  if (topic != nullptr && strcmp(topic, "deskbuddy/heap") == 0) {
+    return; // Ignore loopback heap telemetry to prevent heap fragmentation
+  }
   String p = "";
   for (unsigned int i = 0; i < length; i++) {
     p += (char)payload[i];

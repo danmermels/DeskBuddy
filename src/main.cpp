@@ -403,6 +403,7 @@ void setup(void) {
   appConfig.filterWindow = preferences.getFloat("filterWindow", 2.0);
   appConfig.hasMail = preferences.getBool("hasMail", false);
   appConfig.time24h = preferences.getBool("time24h", true);
+  appConfig.buddyFontIndex = preferences.getInt("buddyFontIdx", 0);
   appConfig.g0mSens = preferences.getInt("g0mSens", 90);
   appConfig.g0sSens = preferences.getInt("g0sSens", 90);
   appConfig.g1mSens = preferences.getInt("g1mSens", 60);
@@ -663,7 +664,11 @@ void loop(void) {
   if (appState.captivePortalMode) {
     dnsServer.processNextRequest();
   }
+  unsigned long startWeb = millis();
   server.handleClient();
+  if (millis() - startWeb > 2UL) {
+    appState.lastWebActivityTime = millis();
+  }
   if (!appState.captivePortalMode) {
     checkWiFiConnection();
   }

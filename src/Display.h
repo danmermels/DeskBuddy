@@ -312,6 +312,23 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
 }
 
 inline void updateTFTDisplay(unsigned long now) {
+  // -- 10-Second Heap & Memory telemetry logger (runs under all modes) ---------
+  static unsigned long lastHeapLogTime = 0;
+  if (now - lastHeapLogTime >= 10000UL) {
+    lastHeapLogTime = now;
+    uint32_t freeHeap = ESP.getFreeHeap();
+    uint32_t minFreeHeap = ESP.getMinFreeHeap();
+    uint32_t maxAlloc = ESP.getMaxAllocHeap();
+    Serial.printf("[HEAPS] Free Heap: %u B (%u KB) | Min Free Heap: %u B (%u KB) | Max Alloc: %u B (%u KB)\n", 
+                  freeHeap, freeHeap / 1024, minFreeHeap, minFreeHeap / 1024, maxAlloc, maxAlloc / 1024);
+    
+    if (mqttClient.connected()) {
+      char payload[64];
+      snprintf(payload, sizeof(payload), "{\"freeHeap\":%u,\"minFreeHeap\":%u}", freeHeap, minFreeHeap);
+      mqttClient.publish("deskbuddy/heap", payload);
+    }
+  }
+
   static int lastDisplayedPage = -1; // -1 = Away, 0 = Clock, -2 = Alert
   static int lastDisplayedState = -1;
   static int lastClockFace = -1;
@@ -382,6 +399,9 @@ inline void updateTFTDisplay(unsigned long now) {
 
   if (appConfig.clockFace != lastClockFace) {
     tft.fillScreen(TFT_BLACK);
+    Serial.printf("[TRANSITION] Changing faceplate: %d -> %d\n", lastClockFace, appConfig.clockFace);
+    Serial.printf("[TRANSITION] Before Dealloc - Free Heap: %u B | Max Alloc: %u B\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
     if (lastClockFace == 4) {
       hourHandSprite.deleteSprite();
       minuteHandSprite.deleteSprite();
@@ -391,6 +411,8 @@ inline void updateTFTDisplay(unsigned long now) {
     } else if (lastClockFace == 5) {
       cleanupDeskbuddySprites();
     }
+
+    Serial.printf("[TRANSITION] After Dealloc - Free Heap: %u B | Max Alloc: %u B\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     lastClockFace = appConfig.clockFace;
   }
 
