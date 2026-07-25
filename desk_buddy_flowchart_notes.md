@@ -137,7 +137,7 @@ stateDiagram-v2
 
 ## 3. Behavioural Events & Gemini AI Triggers
 
-When the state machine registers specific transitions or durations, it calls `triggerBehaviour()` in [Gemini.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Gemini.h#L206).
+When the state machine registers specific transitions or durations, it calls `triggerBehaviour()` in [AI.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/AI.h#L225).
 
 ![Gemini AI and Local Triggers](flowcharts/ai_triggers.svg)
 

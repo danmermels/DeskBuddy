@@ -92,6 +92,7 @@
 #define MQTT_PUBLISH_TOPIC     "deskbuddy/message"
 #define MQTT_ECHO_TOPIC        "deskbuddy/echo"
 #define MQTT_HISTORY_SIZE                   50
+#define SYSTEM_LOG_SIZE                     15
 
 // --- MQTT Debug Platform Topics ---
 #define MQTT_DEBUG_CMD_TOPIC      "deskbuddy/debug/cmd"

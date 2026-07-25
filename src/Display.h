@@ -312,9 +312,9 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
 }
 
 inline void updateTFTDisplay(unsigned long now) {
-  // -- 10-Second Heap & Memory telemetry logger (runs under all modes) ---------
+  // -- 1-Minute Heap & Memory telemetry logger (runs under all modes) ----------
   static unsigned long lastHeapLogTime = 0;
-  if (now - lastHeapLogTime >= 10000UL) {
+  if (now - lastHeapLogTime >= 60000UL) {
     lastHeapLogTime = now;
     uint32_t freeHeap = ESP.getFreeHeap();
     uint32_t minFreeHeap = ESP.getMinFreeHeap();

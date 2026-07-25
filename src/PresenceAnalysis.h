@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include "State.h"
+#include "Logger.h"
 
 // Presence Analysis Functions (formerly in Learning.h)
 
@@ -14,11 +15,16 @@ inline void accumulatePresence(int hour, unsigned long elapsedMs) {
 }
 
 inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayEpoch, int currentDay, int referenceNtpDay) {
+  Logger::log("STATE", "ResetCheck: cur=%s ref=%s curDay=%d refDay=%d", 
+              Logger::formatEpoch(currentEpoch).c_str(), Logger::formatEpoch(referenceAwayEpoch).c_str(), currentDay, referenceNtpDay);
+  
   if (referenceAwayEpoch == 0) {
+    Logger::log("STATE", "ResetCheck: true (fresh boot/no departure)");
     return true; // Fresh startup / no prior departure, perform reset
   }
 
   if (currentEpoch < referenceAwayEpoch) {
+    Logger::log("STATE", "ResetCheck: true (clock discrepancy: cur < ref)");
     return true; // Time sync discrepancy, perform safety reset
   }
 
@@ -40,6 +46,9 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
   // Dynamic threshold: 3 hours if departing during workday (known off-hours), 7 hours default (unknown/work hours)
   uint32_t threshold = departedDuringWork ? 10800UL : 25200UL;
 
+  Logger::log("STATE", "ResetCheck: abs=%u s (%u h %u m) dep=%02d:00 depDay=%d depWork=%d th=%u s (%u h)", 
+              absenceDuration, absenceDuration / 3600, (absenceDuration % 3600) / 60, departureHour, departureDay, departedDuringWork, threshold, threshold / 3600);
+
   if (currentDay == referenceNtpDay) {
     // SAME CALENDAR DAY ROLLOVER CRITERIA:
     // We only reset the session on the same day if:
@@ -47,8 +56,10 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
     // 2. The absence duration is long enough (greater than or equal to the dynamic threshold).
     // This preserves the session if the user takes a long lunch/break after a productive morning.
     if (appStats.totalDeskTime < 900000UL && absenceDuration >= threshold) {
+      Logger::log("STATE", "ResetCheck: true (same-day reset, deskTime=%u)", appStats.totalDeskTime);
       return true;
     }
+    Logger::log("STATE", "ResetCheck: false (same-day, resume session)");
     return false; // Same calendar day, continue current session
   }
   
@@ -68,13 +79,18 @@ inline bool shouldResetDaySession(uint32_t currentEpoch, uint32_t referenceAwayE
     int limit = learnedStart - 3;
     if (limit < 3) limit = 3;
 
+    Logger::log("STATE", "ResetCheck: diff-day. curHr=%d lStart=%d lim=%d", currentHour, learnedStart, limit);
+
     // If we are before the limit hour and the absence was less than 10 hours (36,000s):
     // Treat this as a temporary night interruption (e.g. bathroom visit) and do not roll over.
     if (currentHour < limit && absenceDuration < 36000UL) {
+      Logger::log("STATE", "ResetCheck: false (night interruption, curHr < lim, abs < 10h)");
       return false; // Treat as night interruption, do not rollover yet
     }
+    Logger::log("STATE", "ResetCheck: true (rollover, abs >= 4h)");
     return true; // Valid workday rollover
   }
+  Logger::log("STATE", "ResetCheck: false (diff-day, abs < 4h)");
   return false;
 }
 

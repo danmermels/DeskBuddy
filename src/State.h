@@ -24,6 +24,17 @@ struct MqttMessage {
 };
 #endif
 
+// System Log structure
+#ifndef LOG_ENTRY_STRUCT
+#define LOG_ENTRY_STRUCT
+struct LogEntry {
+  uint32_t timestamp; // NTP Epoch or millis()
+  char category[16];
+  char message[128];
+};
+#endif
+
+
 struct ConfigState {
   float targetHours = 8.0;
   int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
@@ -185,6 +196,12 @@ struct RuntimeState {
 
   // Web activity safety tracker
   unsigned long lastWebActivityTime = 0;
+
+  // System Log Buffer (RAM-based, optimized size 15 for stability)
+  LogEntry systemLog[SYSTEM_LOG_SIZE];
+  int systemLogHead = 0;
+  int systemLogCount = 0;
+  SemaphoreHandle_t systemLogMutex = NULL;
 };
 
 struct TodoState {

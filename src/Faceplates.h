@@ -1531,23 +1531,6 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     initDeskbuddySprite();
   }
 
-  // -- Lazy Visor Font Preloading (Zero Per-Minute Heap Churn) -----------------
-  if (appConfig.buddyFontIndex != deskbuddyLastFontIdx) {
-    tft.unloadFont(); // Safely unload previous font if any
-    String fontFile;
-    switch (appConfig.buddyFontIndex) {
-      case 1:  fontFile = "GoodTiming15"; break;
-      case 2:  fontFile = "GoodTiming46"; break;
-      case 3:  fontFile = "RamisArabic18"; break;
-      case 4:  fontFile = "RamisArabic36"; break;
-      case 0:
-      default: fontFile = "GoodTiming20"; break;
-    }
-    Serial.printf("[BUDDY] Preloading font /%s.vlw...\n", fontFile.c_str());
-    tft.loadFont(fontFile, LittleFS);
-    deskbuddyLastFontIdx = appConfig.buddyFontIndex;
-  }
-
   // -- RAM Eye Sprite & Background tracking ------------------------------------
   static int  loadedEyeMode        = -1;
   static int  loadedRightEyeMode   = -1;  // Bug 4 fix: track right eye separately to skip redundant flash reads
@@ -1996,6 +1979,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     char timeStr[6];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
     String currentDate = String(buf);
+    currentDate.toUpperCase();
 
     // Rotating metric: advance index every 12 seconds
     if (now - lastMetricSwitch > 12000UL) {
@@ -2030,21 +2014,27 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     if (hasDeskbuddyBgImage && (timeChanged || dateChanged || metricChanged)) {
 
       if (timeChanged) {
-        tft.fillRect(39, 135, 79, 20, TFT_BLACK);
-        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
-        tft.drawString(String(timeStr), 80, 138);
+        tft.fillRect(33, 127, 85, 26, TFT_BLACK);
+        tft.setTextColor(tft.color565(245, 207, 142), TFT_BLACK);
+        tft.loadFont("7Segment50", LittleFS);
+        tft.drawString(String(timeStr), 71, 101);
+        tft.unloadFont();
         last_h = h; last_m = m;
       }
       if (dateChanged) {
-        tft.fillRect(128, 135, 74, 20, TFT_BLACK);
-        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
-        tft.drawString(currentDate, 167, 140);
+        tft.fillRect(128, 128, 78, 24, TFT_BLACK);
+        tft.setTextColor(tft.color565(142, 174, 245), TFT_BLACK);
+        tft.loadFont("Unicode.impact19", LittleFS);
+        tft.drawString(currentDate, 167, 131);
+        tft.unloadFont();
         last_date = currentDate;
       }
       if (metricChanged) {
-        tft.fillRect(58, 165, 129, 20, TFT_BLACK);
+        //tft.fillRect(58, 165, 129, 20, TFT_BLACK);
         tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
-        tft.drawString(metricText, 120, 168);
+        tft.loadFont("GoodTiming20", LittleFS);
+        //tft.drawString(metricText, 120, 188);
+        tft.unloadFont();
         last_metric     = metricText;
         lastMetricColor = metricColor;
       }

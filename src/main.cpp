@@ -21,7 +21,7 @@
 // ============================================================
 #include "Constants.h"
 
-// Maximum AI response character count, shared with Display.h and Gemini.h
+// Maximum AI response character count, shared with Display.h and AI.h
 extern const int AI_RESPONSE_MAX_CHARS = 45;
 extern const int DISPLAY_CHARS_PER_LINE = 13;
 
@@ -38,7 +38,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 13;
 #include "Display.h"
 #include "Radar.h"
 #include "Stats.h"
-#include "Gemini.h"
+#include "AI.h"
 #include "Web.h"
 #include "Faceplates.h"
 
@@ -46,6 +46,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 13;
 // State management definitions
 // ============================================================
 #include "State.h"
+#include "Logger.h"
 
 ConfigState appConfig;
 StatsState appStats;
@@ -388,7 +389,8 @@ void setup(void) {
   // Setup Mutex for MQTT History Thread Safety
   appState.mqttHistoryMutex = xSemaphoreCreateMutex();
 
-
+  // Setup Mutex for System Logging Thread Safety
+  appState.systemLogMutex = xSemaphoreCreateMutex();
 
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
@@ -890,6 +892,8 @@ void loop(void) {
       appState.sitDownTime = now;
       appState.sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
       currentSitDownSessionId++;
+      Logger::log("STATE", "Away->Present: sit=%lu epoch=%s session=%d state=%s", 
+                  now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, presenceStateName(targetState));
       
       // Calculate currentBreakDurationMs immediately at the transition using transition timestamps
       appState.currentBreakDurationMs = 0;
@@ -906,6 +910,11 @@ void loop(void) {
           appState.currentBreakDurationMs = grossMs - appState.totalStopByTimeMs;
         }
       }
+      Logger::log("STATE", "Away->Present: refAway=%s gross=%lu s break=%lu s stopBy=%lu s", 
+                  Logger::formatEpoch(referenceAwayEpoch).c_str(), 
+                  (appState.currentBreakDurationMs + appState.totalStopByTimeMs) / 1000UL, 
+                  appState.currentBreakDurationMs / 1000UL, 
+                  appState.totalStopByTimeMs / 1000UL);
 
       // Check if this is the first sit of the day
       bool isFirstSit = (currentSessionState == PRESENCE_AWAY);
@@ -922,6 +931,7 @@ void loop(void) {
           resetDailyStats(tempLastAway, currentDay);
         }
       }
+      Logger::log("STATE", "Away->Present: rollover=%d isFirstSit=%d wasFirstToday=%d", willRollover, isFirstSit, wasFirstSitToday);
 
       if (appStats.firstSitToday) {
         appStats.firstSitToday = false;
@@ -938,6 +948,7 @@ void loop(void) {
         appState.originalLastAwayEpoch = 0;
         appState.totalStopByTimeMs = 0;
         appStats.previousLatestBreakDuration = 0;
+        Logger::log("STATE", "Away->Present: Handled firstSit: firstSitEpoch=%u overnight=%lu", appStats.firstSitEpoch, appStats.overnightBreakDuration);
         saveDailyStats();
         resetSessionStats();
       } else {
@@ -947,8 +958,11 @@ void loop(void) {
           appStats.previousLatestBreakDuration = appStats.latestBreakDuration;
           appStats.latestBreakDuration = appState.currentBreakDurationMs;
           appState.isStopByTracking = true;
+          Logger::log("STATE", "Away->Present: Handled standard break return: breakCount=%d duration=%lu s", appStats.breakCount, appStats.latestBreakDuration / 1000UL);
           saveDailyStats();
           resetSessionStats();
+        } else {
+          Logger::log("STATE", "Away->Present: Ignored brief return (breakMs=%lu < min=%lu)", appState.currentBreakDurationMs, BREAK_MINIMUM_MS);
         }
       }
 
@@ -1068,9 +1082,12 @@ void loop(void) {
       }
       
       unsigned long presenceDurationMs = now - appState.sitDownTime;
+      Logger::log("STATE", "Present->Away: prevState=%s presDur=%lu s focusDur=%lu s stopByTrack=%d", 
+                  presenceStateName(appState.currentPresenceState), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
       
       if (appState.isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
         // This was a STOP-BY! Roll back the break but start fresh from now.
+        int oldBreakCount = appStats.breakCount;
         if (appStats.breakCount > 0) appStats.breakCount--;
         appStats.latestBreakDuration = appStats.previousLatestBreakDuration;
         
@@ -1081,6 +1098,8 @@ void loop(void) {
         
         appState.currentPresenceState = STATE_AWAY;
         appState.lastStateTransitionTime = now;
+        Logger::log("STATE", "Present->Away: Stop-By! breakCount %d->%d restoreLatestBreak=%lu lastAwayEpoch=%s", 
+                    oldBreakCount, appStats.breakCount, appStats.latestBreakDuration / 1000UL, Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
         saveDailyStats();
       } else {
         // This was a REAL presence session (>= 8 minutes) or we weren't tracking stop-bys
@@ -1090,6 +1109,7 @@ void loop(void) {
         appState.isStopByTracking = false;
         appState.totalStopByTimeMs = 0;
         appState.originalLastAwayEpoch = appStats.lastAwayEpoch; // Save start of this new break session
+        Logger::log("STATE", "Present->Away: Real session completed. lastAwayEpoch=%s reset stopByTracking", Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
         saveDailyStats();
       }
       
@@ -1375,6 +1395,13 @@ void loop(void) {
 
   // Update TFT Display
   updateTFTDisplay(now);
+
+  // Periodic Log Flusher to Flash (every 5 seconds)
+  static unsigned long lastLogFlushTime = 0;
+  if (now - lastLogFlushTime >= 5000) {
+    lastLogFlushTime = now;
+    Logger::flushToFlash();
+  }
 
   delay(LOOP_DELAY_MS);
 }

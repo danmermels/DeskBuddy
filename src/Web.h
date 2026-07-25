@@ -423,6 +423,20 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     </div>
   </div>
 
+  <div class="card">
+    <div class="panel-header-row">
+      <h1 style="margin: 0; font-size: 1.5rem; color: #f472b6;">System Logs</h1>
+      <div class="mqtt-status" style="font-size: 0.8rem; color: #64748b;">Real-time diagnostics</div>
+    </div>
+    <div id="logsConsole" style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid #334155; height: 240px; overflow-y: auto; padding: 10px; font-family: 'Fira Code', monospace; font-size: 0.82rem; color: #a7f3d0; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
+      <div style="color: #64748b; font-style: italic;">System logs initializing...</div>
+    </div>
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+      <button class="btn btn-secondary" onclick="clearSystemLogs()" style="padding: 5px 12px; font-size: 0.85rem;">Clear Logs</button>
+    </div>
+  </div>
+
+
   <script>
     let selectedDay = -1;
     let aiMessages = [];
@@ -652,6 +666,72 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
         });
     }
     updateMqttHistory();
+
+    let lastLogCount = -1;
+    function updateSystemLogs() {
+      fetch('/api/logs')
+        .then(response => response.json())
+        .then(data => {
+          let consoleDiv = document.getElementById('logsConsole');
+          if (data.logs && data.logs.length !== lastLogCount) {
+            consoleDiv.innerHTML = '';
+            if (data.logs.length === 0) {
+              consoleDiv.innerHTML = '<div style="color: #64748b; font-style: italic;">No logs recorded.</div>';
+            } else {
+              data.logs.forEach(log => {
+                let row = document.createElement('div');
+                let ts = log.timestamp;
+                let timeStr = "";
+                
+                if (ts > 1000000000) {
+                  let d = new Date(ts * 1000);
+                  let hours = String(d.getHours()).padStart(2, '0');
+                  let minutes = String(d.getMinutes()).padStart(2, '0');
+                  let seconds = String(d.getSeconds()).padStart(2, '0');
+                  timeStr = hours + ':' + minutes + ':' + seconds;
+                } else {
+                  let h = Math.floor(ts / 3600);
+                  let m = Math.floor((ts % 3600) / 60);
+                  let s = ts % 60;
+                  timeStr = "UP:" + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+                }
+                
+                let color = "#10b981"; // green for system
+                if (log.category === "ERROR") color = "#ef4444"; // red
+                else if (log.category === "STATE") color = "#f59e0b"; // amber
+                else if (log.category === "RADAR") color = "#3b82f6"; // blue
+                else if (log.category === "BEHAVIOUR") color = "#ec4899"; // pink
+                else if (log.category === "MQTT") color = "#8b5cf6"; // purple
+                
+                row.innerHTML = `<span style="color: #64748b;">[${timeStr}]</span> <span style="color: ${color}; font-weight: bold;">[${log.category}]</span> <span class="log-msg" style="color: #f8fafc;"></span>`;
+                row.querySelector('.log-msg').textContent = log.message;
+                consoleDiv.appendChild(row);
+              });
+            }
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            lastLogCount = data.logs.length;
+          }
+          setTimeout(updateSystemLogs, 1000);
+        })
+        .catch(err => {
+          console.error("Error fetching system logs:", err);
+          let consoleDiv = document.getElementById('logsConsole');
+          if (consoleDiv) {
+            consoleDiv.innerHTML = `<div style="color: #f87171; font-style: italic;">Error loading logs: ${err.message || err}</div>`;
+          }
+          setTimeout(updateSystemLogs, 3000);
+        });
+    }
+    updateSystemLogs();
+
+    function clearSystemLogs() {
+      fetch('/api/logs/clear', { method: 'POST' })
+        .then(() => {
+          lastLogCount = -1;
+        })
+        .catch(err => console.error('Failed to clear system logs:', err));
+    }
+
 
     function sendMqttMessage() {
       let topic = document.getElementById('mqttTopic').value;
@@ -1475,16 +1555,6 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
         </select>
       </div>
       <div class="metric">
-        <span class="label">DeskBuddy Font</span>
-        <select name="buddyFontIdx" id="buddyFontIdxSelect" class="settings-select" onchange="this.form.submit()">
-          <option value="0">GoodTiming 20 (Medium)</option>
-          <option value="1">GoodTiming 15 (Small)</option>
-          <option value="2">GoodTiming 46 (Large)</option>
-          <option value="3">RamisArabic 18 (Small)</option>
-          <option value="4">RamisArabic 36 (Medium)</option>
-        </select>
-      </div>
-      <div class="metric">
         <span class="label">Time Format</span>
         <select name="time24h" id="time24hSelect" class="settings-select" onchange="this.form.submit()">
           <option value="1">24-Hour</option>
@@ -1940,7 +2010,6 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
             setVal('aiModeSelect', data.aiMode);
             setVal('aiPersonaSelect', data.aiPersona);
             setVal('clockFaceSelect', data.clockFace);
-            setVal('buddyFontIdxSelect', data.buddyFontIdx);
             setVal('targetHoursInput', data.targetHours);
             setVal('userNameInput', data.userName);
             setVal('hasMailSelect', data.hasMail ? "1" : "0");
@@ -2826,6 +2895,41 @@ inline void handleResetStats() {
   server.send(200, "text/plain", "Daily Stats Reset");
 }
 
+inline void handleSystemLogs() {
+  DynamicJsonDocument doc(8192);
+  JsonArray arr = doc.createNestedArray("logs");
+  
+  if (appState.systemLogMutex != NULL) {
+    if (xSemaphoreTake(appState.systemLogMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+      int idx = appState.systemLogHead;
+      int count = appState.systemLogCount;
+
+      for (int i = 0; i < count; i++) {
+        int curIdx = (idx - count + i + SYSTEM_LOG_SIZE) % SYSTEM_LOG_SIZE;
+        JsonObject obj = arr.createNestedObject();
+        obj["timestamp"] = (double)appState.systemLog[curIdx].timestamp;
+        obj["category"] = appState.systemLog[curIdx].category;
+        obj["message"] = appState.systemLog[curIdx].message;
+      }
+      xSemaphoreGive(appState.systemLogMutex);
+    }
+  }
+
+  String response;
+  serializeJson(doc, response);
+  server.send(200, "application/json", response);
+}
+
+inline void handleSystemLogsClear() {
+  if (appState.systemLogMutex != NULL) {
+    xSemaphoreTake(appState.systemLogMutex, portMAX_DELAY);
+    appState.systemLogHead = 0;
+    appState.systemLogCount = 0;
+    xSemaphoreGive(appState.systemLogMutex);
+  }
+  server.send(200, "text/plain", "Logs Cleared");
+}
+
 inline void handleMqttHistory() {
   DynamicJsonDocument doc(4096);
   JsonArray arr = doc.createNestedArray("messages");
@@ -3418,6 +3522,8 @@ inline void setupWebServer() {
   server.on("/reset-stats", handleResetStats);
   server.on("/factory-reset", handleFactoryReset);
   server.on("/trigger-event", handleTriggerEvent);
+  server.on("/api/logs", HTTP_GET, handleSystemLogs);
+  server.on("/api/logs/clear", HTTP_POST, handleSystemLogsClear);
   server.on("/mqtt-history", handleMqttHistory);
   server.on("/mqtt-publish", handleMqttPublish);
   server.on("/mqtt-clear", HTTP_POST, handleMqttClear);

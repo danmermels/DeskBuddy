@@ -9,6 +9,7 @@
 #include <LittleFS.h>
 #include "Constants.h"
 #include "State.h"
+#include "Logger.h"
 #include "Learning.h"
 
 extern PubSubClient mqttClient;
@@ -669,6 +670,7 @@ static void handleSys(const String& args) {
 void handleDebugCommand(const String& payload) {
   String trimmed = payload;
   trimmed.trim();
+  Logger::log("MQTT", "CMD: \"%s\"", trimmed.c_str());
 
   int sp = trimmed.indexOf(' ');
   String cmd = (sp < 0) ? trimmed : trimmed.substring(0, sp);

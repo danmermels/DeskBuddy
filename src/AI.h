@@ -1,5 +1,5 @@
-#ifndef GEMINI_H
-#define GEMINI_H
+#ifndef AI_H
+#define AI_H
 
 #include <Arduino.h>
 #include <ESP32_AI_Connect.h>
@@ -8,6 +8,7 @@
 #include "MqttService.h"
 
 #include "State.h"
+#include "Logger.h"
 #include <NTPClient.h>
 
 extern NTPClient timeClient;
@@ -124,7 +125,7 @@ inline void queryGeminiTask(void * parameter) {
   uint32_t querySessionId = geminiQuerySessionId;
   xSemaphoreGive(appState.geminiMutex);
 
-  Serial.println("[AI REQUEST] Prompt:\n" + prompt);
+  Logger::log("BEHAVIOUR", "AI Request: session=%u promptLen=%d", querySessionId, prompt.length());
   if (mqttClient.connected()) {
     mqttClient.publish("deskbuddy/debug/ai/request", prompt.c_str());
   }
@@ -145,7 +146,7 @@ inline void queryGeminiTask(void * parameter) {
       response = response.substring(1, response.length() - 1);
     }
     
-    Serial.println("[AI RESPONSE] Success:\n" + response);
+    Logger::log("BEHAVIOUR", "AI Response Success: len=%d resp=\"%s\"", response.length(), response.c_str());
     if (mqttClient.connected()) {
       mqttClient.publish("deskbuddy/debug/ai/response", response.c_str());
     }
@@ -162,6 +163,9 @@ inline void queryGeminiTask(void * parameter) {
       appState.lastResponseIsAi = true;
       appState.aiResponse = response;
       appState.hasNewAIResponse = true;
+    } else {
+      Logger::log("BEHAVIOUR", "AI Response Discarded (sessionChanged=%d userAway=%d)", 
+                  (querySessionId != currentSitDownSessionId), (appState.currentPresenceState == STATE_AWAY));
     }
     xSemaphoreGive(appState.geminiMutex);
     success = true;
@@ -169,7 +173,7 @@ inline void queryGeminiTask(void * parameter) {
 
   // Graceful fallback: If Gemini query fails, load a local fallback quote immediately
   if (!success) {
-    Serial.println("[AI RESPONSE] Failed (HTTP Code: " + String(httpCode) + ")");
+    Logger::log("BEHAVIOUR", "AI Request Failed: http=%d. Loading local fallback.", httpCode);
     if (mqttClient.connected()) {
       mqttClient.publish("deskbuddy/debug/ai/response", "ERROR: AI query failed or returned empty response");
     }
@@ -205,6 +209,10 @@ inline void queryGeminiTask(void * parameter) {
     if (!discard) {
       appState.aiResponse = personalQuote;
       appState.hasNewAIResponse = true;
+      Logger::log("BEHAVIOUR", "AI Fallback loaded: \"%s\"", personalQuote.c_str());
+    } else {
+      Logger::log("BEHAVIOUR", "AI Fallback Discarded (sessionChanged=%d userAway=%d)",
+                  (querySessionId != currentSitDownSessionId), (appState.currentPresenceState == STATE_AWAY));
     }
     xSemaphoreGive(appState.geminiMutex);
   }
@@ -216,6 +224,7 @@ inline void queryGeminiTask(void * parameter) {
 // Coordinated behaviour trigger: runs background Gemini task or picks local fallback
 inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 0) {
   appState.lastTriggeredEventType = eventType;
+  Logger::log("BEHAVIOUR", "triggerBehaviour: event=%d detail=\"%s\" force=%d", eventType, detail.c_str(), forceMode);
 
   xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
   appState.lastTriggeredEventDetail = detail;
@@ -270,6 +279,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       xSemaphoreGive(appState.geminiMutex);
       
       appState.isAILoading = true;
+      Logger::log("BEHAVIOUR", "Starting Gemini AI query task (dailyCount=%d)", appStats.dailyAiRequestCount);
       xTaskCreate(
         queryGeminiTask,
         "GeminiQuery",
@@ -278,6 +288,8 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         1,
         NULL
       );
+    } else {
+      Logger::log("BEHAVIOUR", "AI Query ignored: already loading");
     }
   } else {
     // Local Fallback selection (picks from 20 available per event type)
@@ -299,6 +311,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     }
 
     String personalQuote = resolveLocalPlaceholders(String(quote), detail);
+    Logger::log("BEHAVIOUR", "Picked local fallback: \"%s\"", personalQuote.c_str());
 
     // Immediately post fallback quote to display thread-safely
     xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
@@ -309,4 +322,4 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   }
 }
 
-#endif // GEMINI_H
+#endif // AI_H
