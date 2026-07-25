@@ -1141,6 +1141,215 @@ enum BuddyEyeMode {
   EYE_MODE_SQUINT
 };
 
+constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}
+
+struct DeskbuddyThemeConfig {
+  const char* bgRle;
+  const char* browRle;
+  const char* eyeOpenRle;
+  const char* eyeSquintRle;
+  
+  const char* timeFont;    // Font filename for the digital clock time (e.g. "7Segment50")
+  const char* dateFont;    // Font filename for the calendar date string (e.g. "Unicode.impact19")
+  const char* metricFont;  // Font filename for telemetry metrics carousel (e.g. "GoodTiming20")
+  const char* weatherFont; // Font filename for the weather display (e.g. "GoodTiming20")
+  
+  uint16_t timeColor;      // Color used for rendering the digital clock time digits
+  uint16_t dateColor;      // Color used for rendering the calendar date string
+  uint16_t metricColor;    // Color used for rendering metrics carousel text
+  uint16_t weatherColor;   // Color used for rendering weather text
+  bool useRingColorForMetric;
+  
+  int gazeXLimit;
+  int gazeYLimit;
+  unsigned long minBlinkInterval;
+  unsigned long maxBlinkInterval;
+  unsigned long minLookInterval;
+  unsigned long maxLookInterval;
+
+  // --- Layout Positioning (X/Y) & Redraw Clearing boundaries ---
+  // Note on VLW Font coordinates vs Clearing boundaries:
+  // Custom smooth (.vlw) fonts have large baseline offsets. The Y drawing coordinate passed to
+  // tft.drawString() uses MC_DATUM (middle center) which aligns to the font's internal glyph center.
+  // The clearing box Y coordinate (timeClearY, etc.) passed to tft.fillRect() represents the absolute top-left
+  // of the physical screen clearing area. Hence, drawY is often lower (e.g. Y=101) than clearY (e.g. Y=127).
+  
+  int timeX; int timeY;                                             // Time draw X/Y center (MC_DATUM)
+  int timeClearX; int timeClearY; int timeClearW; int timeClearH;   // Time clear box (top-left X/Y, Width, Height)
+  
+  int dateX; int dateY;                                             // Date draw X/Y center (MC_DATUM)
+  int dateClearX; int dateClearY; int dateClearW; int dateClearH;   // Date clear box (top-left X/Y, Width, Height)
+  
+  int weatherX; int weatherY;                                       // Weather draw X/Y center (MC_DATUM)
+  int weatherClearX; int weatherClearY; int weatherClearW; int weatherClearH; // Weather clear box
+  
+  int metricX; int metricY;                                         // Carousel metric draw X/Y center (MC_DATUM)
+  int metricClearX; int metricClearY; int metricClearW; int metricClearH; // Carousel metric clear box
+};
+
+static const char* getRlePathOrFallback(const char* themedPath, const char* defaultPath) {
+  if (LittleFS.exists(themedPath)) {
+    return themedPath;
+  }
+  return defaultPath;
+}
+
+static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
+  // Theme 0: Deskbuddy (Original, ID 5)
+  {
+    "/buddy_bg.rle",
+    "/buddy_brow.rle",
+    "/buddy_eye_o.rle",
+    "/buddy_eye_s.rle",
+    "7Segment50",        // timeFont
+    "RobotoCondensed20",  // dateFont
+    "RobotoCondensed20",      // metricFont
+    "RobotoCondensed20",      // weatherFont
+    rgb565(245, 207, 142), // timeColor
+    rgb565(142, 174, 245), // dateColor
+    rgb565(50, 220, 255),   // metricColor
+    rgb565(250, 220, 255),   // weatherColor
+    false,  // useRingColorForMetric
+    3,      // gazeXLimit
+    30,     // gazeYLimit
+    3500,   // minBlinkInterval
+    8500,   // maxBlinkInterval
+    4000,   // minLookInterval
+    10000,  // maxLookInterval
+    // Time: drawX, drawY, clearX, clearY, clearW, clearH
+    71, 101, 33, 127, 85, 26,
+    // Date: drawX, drawY, clearX, clearY, clearW, clearH
+    167, 131, 128, 128, 78, 24,
+    // Weather: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 187, 45, 165, 150, 24,
+    // Carousel Metric (uncommented helper): drawX, drawY, clearX, clearY, clearW, clearH
+    120, 168, 58, 165, 129, 20
+  },
+  // Theme 1: DeskAura (ID 6)
+  {
+    "/buddy_aura_bg.rle",
+    "/buddy_aura_brow.rle",
+    "/buddy_aura_eye_o.rle",
+    "/buddy_aura_eye_s.rle",
+    "Chaser50",          // timeFont
+    "Chaser20",          // dateFont
+    "GoodTiming20",      // metricFont
+    "GoodTiming20",      // weatherFont
+    rgb565(0, 255, 255),   // timeColor
+    rgb565(255, 0, 255),   // dateColor
+    rgb565(0, 255, 255),   // metricColor
+    rgb565(0, 255, 255),   // weatherColor
+    false,  // useRingColorForMetric
+    5,      // gazeXLimit
+    35,     // gazeYLimit
+    2000,   // minBlinkInterval
+    6000,   // maxBlinkInterval
+    3000,   // minLookInterval
+    7000,   // maxLookInterval
+    // Time: drawX, drawY, clearX, clearY, clearW, clearH
+    71, 101, 33, 127, 85, 26,
+    // Date: drawX, drawY, clearX, clearY, clearW, clearH
+    167, 131, 128, 128, 78, 24,
+    // Weather: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 167, 45, 165, 150, 24,
+    // Carousel Metric: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 188, 58, 165, 129, 20
+  },
+  // Theme 2: DeskCat (ID 7)
+  {
+    "/buddy_who_bg.rle",
+    "/buddy_cat_brow.rle",
+    "/buddy_cat_eye_o.rle",
+    "/buddy_cat_eye_s.rle",
+    "7Segment50",        // timeFont
+    "SevenSegment20",    // dateFont
+    "GoodTiming15",      // metricFont
+    "GoodTiming15",      // weatherFont
+    rgb565(255, 160, 0),   // timeColor
+    rgb565(229, 160, 0),   // dateColor
+    rgb565(255, 160, 0),   // metricColor
+    rgb565(255, 160, 0),   // weatherColor
+    false,  // useRingColorForMetric
+    2,      // gazeXLimit
+    25,     // gazeYLimit
+    4000,   // minBlinkInterval
+    10000,  // maxBlinkInterval
+    5000,   // minLookInterval
+    12000,  // maxLookInterval
+    // Time: drawX, drawY, clearX, clearY, clearW, clearH
+    71, 101, 33, 127, 85, 26,
+    // Date: drawX, drawY, clearX, clearY, clearW, clearH
+    167, 131, 128, 128, 78, 24,
+    // Weather: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 167, 45, 165, 150, 24,
+    // Carousel Metric: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 188, 58, 165, 129, 20
+  },
+  // Theme 3: DeskWho (ID 8)
+  {
+    "/buddy_who_bg.rle",
+    "/buddy_who_brow.rle",
+    "/buddy_who_eye_o.rle",
+    "/buddy_who_eye_s.rle",
+    "RobotoCondensed20",     // timeFont
+    "RobotoCondensed20",     // dateFont
+    "RobotoCondensed20",     // metricFont
+    "RobotoCondensed20",     // weatherFont
+    rgb565(46, 139, 87),  // timeColor
+    rgb565(46, 139, 87),   // dateColor
+    rgb565(218, 165, 132),  // metricColor
+    rgb565(218, 165, 132),  // weatherColor
+    true,   // useRingColorForMetric
+    3,      // gazeXLimit
+    30,     // gazeYLimit
+    3500,   // minBlinkInterval
+    8500,   // maxBlinkInterval
+    4000,   // minLookInterval
+    10000,  // maxLookInterval
+    // Time: drawX, drawY, clearX, clearY, clearW, clearH
+    71, 131, 33, 127, 85, 26,
+    // Date: drawX, drawY, clearX, clearY, clearW, clearH
+    167, 131, 128, 128, 78, 24,
+    // Weather: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 167, 45, 165, 150, 24,
+    // Carousel Metric: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 178, 58, 165, 129, 20
+  },
+  // Theme 4: DeskBit (ID 9)
+  {
+    "/buddy_bit_bg.rle",
+    "/buddy_bit_brow.rle",
+    "/buddy_bit_eye_o.rle",
+    "/buddy_bit_eye_s.rle",
+    "Unicode.impact20",   // timeFont
+    "Unicode.impact17",   // dateFont
+    "GoodTiming20",       // metricFont
+    "GoodTiming20",       // weatherFont
+    rgb565(255, 255, 255), // timeColor
+    rgb565(170, 170, 170), // dateColor
+    rgb565(255, 255, 255), // metricColor
+    rgb565(255, 255, 255), // weatherColor
+    true,   // useRingColorForMetric
+    4,      // gazeXLimit
+    20,     // gazeYLimit
+    3000,   // minBlinkInterval
+    7000,   // maxBlinkInterval
+    3500,   // minLookInterval
+    9000,   // maxLookInterval
+    // Time: drawX, drawY, clearX, clearY, clearW, clearH
+    71, 101, 33, 127, 85, 26,
+    // Date: drawX, drawY, clearX, clearY, clearW, clearH
+    167, 131, 128, 128, 78, 24,
+    // Weather: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 167, 45, 165, 150, 24,
+    // Carousel Metric: drawX, drawY, clearX, clearY, clearW, clearH
+    120, 188, 58, 165, 129, 20
+  }
+};
+
+
 /**
  * Ensure an eye sprite is allocated once in RAM with strict null checking.
  */
@@ -1165,7 +1374,12 @@ static bool loadEyeSprite100(TFT_eSprite &spr, const char *rleFile) {
 
   fs::File f = LittleFS.open(rleFile, "r");
   if (!f) {
-    Serial.printf("[BUDDY] Missing RLE: %s\n", rleFile);
+    static char lastWarnedFile[64] = "";
+    if (strcmp(lastWarnedFile, rleFile) != 0) {
+      Serial.printf("[BUDDY] Missing RLE: %s (falling back to default/black)\n", rleFile);
+      strncpy(lastWarnedFile, rleFile, sizeof(lastWarnedFile) - 1);
+      lastWarnedFile[sizeof(lastWarnedFile) - 1] = '\0';
+    }
     return false;
   }
 
@@ -1450,7 +1664,7 @@ void cleanupDeskbuddySprites() {
 /**
  * Allocate the visor canvas sprite (220x105), eye sprite (90x90) and split background cache strips.
  */
-void initDeskbuddySprite() {
+void initDeskbuddySprite(const DeskbuddyThemeConfig &cfg) {
   if (centerBgSprite.created() && (centerBgSprite.width() != BUDDY_SPR_W || centerBgSprite.height() != BUDDY_SPR_H)) {
     centerBgSprite.deleteSprite();
   }
@@ -1488,10 +1702,11 @@ void initDeskbuddySprite() {
     browSprite.setColorDepth(16);
     if (browSprite.createSprite(BUDDY_BROW_W, BUDDY_BROW_H) != nullptr) {
       browSprite.fillSprite(TFT_BLACK);
-      browSpriteLoaded = drawFullRLEToSprite(browSprite, "/buddy_brow.rle");
-      Serial.println(browSpriteLoaded
-        ? "[BUDDY] /buddy_brow.rle loaded into browSprite."
-        : "[BUDDY] /buddy_brow.rle missing — brow rendering disabled until file is added.");
+      const char* browPath = getRlePathOrFallback(cfg.browRle, "/buddy_brow.rle");
+      browSpriteLoaded = drawFullRLEToSprite(browSprite, browPath);
+      Serial.printf(browSpriteLoaded
+        ? "[BUDDY] %s loaded into browSprite.\n"
+        : "[BUDDY] %s missing — brow rendering disabled until file is added.\n", browPath);
     } else {
       Serial.println("[BUDDY] ERROR: browSprite alloc failed!");
     }
@@ -1508,7 +1723,10 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
                              bool internetAvailable, bool hasMail) {
   static bool wasEvent = false;
 
-
+  // -- Resolve Active Theme Config -------------------------------------------
+  int themeIdx = appConfig.clockFace - 5;
+  if (themeIdx < 0 || themeIdx > 4) themeIdx = 0;
+  const DeskbuddyThemeConfig &cfg = deskbuddyThemes[themeIdx];
 
   // -- Event / message overlay -----------------------------------------------
   if (showEvent) {
@@ -1528,7 +1746,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
 
   // -- Lazy visor canvas & eye sprite init (Bug 3 fix: guard prevents per-frame re-init cost) ---
   if (forceRedraw || !centerBgSprite.created()) {
-    initDeskbuddySprite();
+    initDeskbuddySprite(cfg);
   }
 
   // -- RAM Eye Sprite & Background tracking ------------------------------------
@@ -1536,6 +1754,32 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   static int  loadedRightEyeMode   = -1;  // Bug 4 fix: track right eye separately to skip redundant flash reads
   static bool hasDeskbuddyBgImage  = false;
 
+  // -- Eye Cache Invalidation on Faceplate Change -----------------------------
+  static int lastFaceplateIndex = -1;
+  int currentFaceIndex = appConfig.clockFace;
+  if (currentFaceIndex != lastFaceplateIndex) {
+    loadedEyeMode = -1;
+    loadedRightEyeMode = -1;
+    lastFaceplateIndex = currentFaceIndex;
+    deskbuddyFirstRun = true;
+  }
+
+  // -- Resolved Paths & Font existence caches (avoids continuous LittleFS.exists checks on every frame) --
+  static const char* resolvedEyeOpen   = "/buddy_eye_o.rle";
+  static const char* resolvedEyeSquint = "/buddy_eye_s.rle";
+  static bool hasTimeFont      = false;
+  static bool hasDateFont      = false;
+  static bool hasMetricFont    = false;
+  static bool hasWeatherFont   = false;
+
+  if (forceRedraw || currentFaceIndex != lastFaceplateIndex) {
+    resolvedEyeOpen   = getRlePathOrFallback(cfg.eyeOpenRle, "/buddy_eye_o.rle");
+    resolvedEyeSquint = getRlePathOrFallback(cfg.eyeSquintRle, "/buddy_eye_s.rle");
+    hasTimeFont      = LittleFS.exists("/" + String(cfg.timeFont) + ".vlw");
+    hasDateFont      = LittleFS.exists("/" + String(cfg.dateFont) + ".vlw");
+    hasMetricFont    = LittleFS.exists("/" + String(cfg.metricFont) + ".vlw");
+    hasWeatherFont   = LittleFS.exists("/" + String(cfg.weatherFont) + ".vlw");
+  }
 
   // -- Animation State & Timers ----------------------------------------------
   static unsigned long nextBlink        = 0;
@@ -1561,12 +1805,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   static float         lookTargetX      = 0.0f;
   static float         convergenceX     = 0.0f;  // Eye closeness shift (0px..6px)
 
-  // Autonomous Eyebrow Mood — physiological, timer-driven, NOT telemetry.
-  // One segment per brow, sculpted by three independent parameters:
-  //   browLiftL/R  [0..1]   vertical lift per brow
-  //   browTiltL/R  [-1..1]  pitch: +1=inner dips (interest), -1=inner rises (strangement arch)
-  //   browInset    [0..1]   shared inward slide toward nose bridge (interest)
-  // (rest of variable definitions...)
+  // Autonomous Eyebrow Mood
   static float         browLiftL       = 0.0f;
   static float         browLiftR       = 0.0f;
   static float         browTiltL       = 0.0f;
@@ -1582,8 +1821,8 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   static bool          browHolding     = false;
 
   if (deskbuddyFirstRun) {
-    nextBlink       = now + 3000UL + (unsigned long)random(4000);
-    nextLook        = now + 4000UL + (unsigned long)random(5000);
+    nextBlink       = now + cfg.minBlinkInterval + (unsigned long)random(cfg.maxBlinkInterval - cfg.minBlinkInterval);
+    nextLook        = now + cfg.minLookInterval + (unsigned long)random(cfg.maxLookInterval - cfg.minLookInterval);
     nextGlitchCheck = now + 15000UL + (unsigned long)random(15000);
     nextCameoCheck  = now + 18000UL + (unsigned long)random(10000); // First cameo in 18-28s
     nextBrowCheck   = now + 10000UL + (unsigned long)random(8000);  // First brow mood in 10-18s
@@ -1592,10 +1831,11 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   }
 
   if (forceRedraw) {
-    hasDeskbuddyBgImage = drawRLEImage("/buddy_bg.rle", 0, 0);
+    const char* bgPath = getRlePathOrFallback(cfg.bgRle, "/buddy_bg.rle");
+    hasDeskbuddyBgImage = drawRLEImage(bgPath, 0, 0);
     if (hasDeskbuddyBgImage) {
       if (visorBgCache.created()) {
-        drawRLEImageToSprite(visorBgCache, "/buddy_bg.rle", BUDDY_SPR_X, BUDDY_SPR_Y, BUDDY_SPR_W, BUDDY_SPR_H);
+        drawRLEImageToSprite(visorBgCache, bgPath, BUDDY_SPR_X, BUDDY_SPR_Y, BUDDY_SPR_W, BUDDY_SPR_H);
       }
       Serial.printf("[BUDDY] Visor background cache (%dx%d) decoded.\n", BUDDY_SPR_W, BUDDY_SPR_H);
     }
@@ -1603,47 +1843,10 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   }
 
   // ── Determine Primary Eye Mode from Presence State ───────────────────────
-  //   STATE_REGULAR / default -> OPEN   (/buddy_eye_o.rle)
-  //   STATE_FOCUS              -> CLOSED (/buddy_eye_c.rle, EXCLUDES glitches & cameos)
-  //   STATE_BUSY / DISTRACTED  -> SQUINT (/buddy_eye_s.rle)
-  //   STATE_AWAY               -> HALFED (/buddy_eye_h.rle)
   uint8_t primaryEyeMode = EYE_MODE_OPEN;
-  /* Commented out mood-driven presence state selector for diagnostics/stability
-  switch (appState.currentPresenceState) {
-    case STATE_FOCUS:
-      primaryEyeMode = EYE_MODE_CLOSED;
-      break;
-    case STATE_BUSY:
-    case STATE_DISTRACTED:
-      primaryEyeMode = EYE_MODE_SQUINT;
-      break;
-    case STATE_AWAY:
-      primaryEyeMode = EYE_MODE_HALFED;
-      break;
-    case STATE_REGULAR:
-    default:
-      primaryEyeMode = EYE_MODE_OPEN;
-      break;
-  }
-  */
 
   // ── Exclude Focus / Closed Mode from Glitches & Cameos ───────────────────
   bool allowCameosAndGlitches = (primaryEyeMode != EYE_MODE_CLOSED);
-
-  // ── 2-Second Spontaneous Mode Cameo Switcher ──────────────────────────────
-  /* Commented out cameos for diagnostic stability
-  if (allowCameosAndGlitches && !isCameoActive && !isGlitching && now >= nextCameoCheck) {
-    isCameoActive  = true;
-    cameoStart     = now;
-    // Pick an alternate mode cameo for 2 seconds (Restricted to Open and Squint only)
-    cameoMode      = (primaryEyeMode == EYE_MODE_OPEN) ? EYE_MODE_SQUINT : EYE_MODE_OPEN;
-    nextCameoCheck = now + 20000UL + (unsigned long)random(10000); // Cameo every 20-30s
-  }
-
-  if (isCameoActive && (!allowCameosAndGlitches || now - cameoStart >= 2000UL)) {
-    isCameoActive = false;
-  }
-  */
 
   // Active mode is primaryEyeMode (cameos disabled)
   uint8_t activeEyeMode = primaryEyeMode;
@@ -1653,7 +1856,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
 
   if (canBlink && blinkStart == 0 && now >= nextBlink) {
     blinkStart       = now;
-    nextBlink        = now + 3500UL + (unsigned long)random(5000);
+    nextBlink        = now + cfg.minBlinkInterval + (unsigned long)random(cfg.maxBlinkInterval - cfg.minBlinkInterval);
     rightBlinkOffset = (random(100) < 20) ? (10UL + random(15)) : 0UL;
   }
   if (blinkStart != 0 && now - blinkStart >= (220UL + rightBlinkOffset)) {
@@ -1677,90 +1880,47 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     }
   }
 
-  // ── 100ms Digital Glitch Effect (~2/min, excluded during Focus/Closed) ────
-  /* Commented out glitches for diagnostic stability
-  if (allowCameosAndGlitches && !isGlitching && now >= nextGlitchCheck) {
-    bool lowMem = (ESP.getFreeHeap() < 50000);
-    bool webBusy = (now - appState.lastWebActivityTime < 2000UL);
-    if (lowMem || webBusy) {
-      // Postpone the check by 2 seconds to retry when system is idle
-      nextGlitchCheck = now + 2000UL;
-    } else {
-      isGlitching     = true;
-      glitchStart     = now;
-      glitchJitterX   = random(-3, 4);
-      glitchJitterY   = random(-2, 3);
-      nextGlitchCheck = now + 22000UL + (unsigned long)random(16000); // ~2 per minute
-    }
-  }
-
-  if (isGlitching && (!allowCameosAndGlitches || now - glitchStart >= 100UL)) {
-    isGlitching   = false;
-    glitchJitterX = 0;
-    glitchJitterY = 0;
-  }
-  */
-
   // Determine RLE file path for Left & Right eyes (paired by default)
-  const char* leftRLE  = "/buddy_eye_o.rle";
-  const char* rightRLE = "/buddy_eye_o.rle";
+  const char* leftRLE  = resolvedEyeOpen;
+  const char* rightRLE = leftRLE;
   int leftModeID  = activeEyeMode;
   int rightModeID = activeEyeMode;
 
-  /* Commented out glitch eye swap for diagnostics
-  if (isGlitching && allowCameosAndGlitches) {
-    // During 100ms glitch, swap eye images (Restricted to Open and Squint only)
-    leftRLE     = (glitchJitterX > 0) ? "/buddy_eye_s.rle" : "/buddy_eye_o.rle";
-    rightRLE    = (glitchJitterX > 0) ? "/buddy_eye_o.rle" : "/buddy_eye_s.rle";
-    leftModeID  = 99;
-    rightModeID = 98;
-  } else {
-  */
   {
     switch (activeEyeMode) {
-      /* Commented out CLOSED and HALFED modes for diagnostic stability
       case EYE_MODE_CLOSED:
-        leftRLE = "/buddy_eye_c.rle";  rightRLE = "/buddy_eye_c.rle"; // Paired closed!
-        break;
-      */
-      case EYE_MODE_SQUINT:
-        leftRLE = "/buddy_eye_s.rle";  rightRLE = "/buddy_eye_s.rle"; // Paired squint!
-        break;
-      /*
       case EYE_MODE_HALFED:
-        leftRLE = "/buddy_eye_h.rle";  rightRLE = "/buddy_eye_h.rle"; // Paired halfed!
-        break;
-      */
       case EYE_MODE_OPEN:
       default:
-        leftRLE = "/buddy_eye_o.rle";  rightRLE = "/buddy_eye_o.rle"; // Paired open!
+        leftRLE = resolvedEyeOpen;
+        rightRLE = leftRLE;
+        break;
+      case EYE_MODE_SQUINT:
+        leftRLE = resolvedEyeSquint;
+        rightRLE = leftRLE;
         break;
     }
   }
 
-
   // ── Gaze / Radar Distance Physics ─────────────────────────────────────────
-  // 1. Horizontal Gaze: Halved (±3px drift)
+  // 1. Horizontal Gaze: Halved (±cfg.gazeXLimit drift)
   if (now >= nextLook) {
-    lookTargetX = (float)random(-BUDDY_EYE_GAZE_X_LIMIT, BUDDY_EYE_GAZE_X_LIMIT + 1);
-    nextLook    = now + 4000UL + (unsigned long)random(6000);
+    lookTargetX = (float)random(-cfg.gazeXLimit, cfg.gazeXLimit + 1);
+    nextLook    = now + cfg.minLookInterval + (unsigned long)random(cfg.maxLookInterval - cfg.minLookInterval);
   }
 
-  // 2. Vertical Gaze: 30px amplitude with resting offset above 0 (-6px):
-  //    Distance <= 45cm  -> Look all the way to top of visor (-30px)
-  //    Distance >= 120cm -> Resting position above 0 (-6px)
-  // 3. Eye Convergence: Eyes move 6px closer together as distance decreases!
+  // 2. Vertical Gaze: cfg.gazeYLimit amplitude with resting offset above 0 (-6px)
   int rawDist = appState.rawDetectionDist;
   float lookTargetY = -6.0f; // Default resting position above 0
   float targetConvergence = 0.0f;
 
   if (rawDist > 0) {
     if (rawDist <= 45) {
-      lookTargetY       = -(float)BUDDY_EYE_GAZE_Y_LIMIT; // -30px (top of visor)
+      lookTargetY       = -(float)cfg.gazeYLimit; // (top of visor)
       targetConvergence = 6.0f;                           // 6px closer together
     } else if (rawDist < 120) {
       float t = (float)(rawDist - 45) / 75.0f;             // 0.0 at 45cm -> 1.0 at 120cm
-      lookTargetY       = -(float)BUDDY_EYE_GAZE_Y_LIMIT * (1.0f - t) + (-6.0f * t);
+      lookTargetY       = -(float)cfg.gazeYLimit * (1.0f - t) + (-6.0f * t);
       targetConvergence = 6.0f * (1.0f - t);
     } else {
       lookTargetY       = -6.0f;                           // Resting position above 0
@@ -1783,14 +1943,6 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     lastEyeFrame = now;
     uint16_t visorBg = TFT_BLACK;
 
-    // ── LAYER ORDER ───────────────────────────────────────────────────────
-    // 1. Black canvas    — clear previous frame pixels
-    // 2. Eye sprites     — stamped into the visor eye holes (black = transparent areas)
-    // 3. BG overlay      — visorBgCache pushed ON TOP (TFT_BLACK = cut-through)
-    //                       visor chrome/frame sits in front of eyes naturally
-    // 4. Brows           — drawn above everything
-    // ───────────────────────────────────────────────────────────────
-    // Step 1: black canvas — clean slate for this frame.
     if (centerBgSprite.created()) {
       centerBgSprite.fillSprite(TFT_BLACK);
 
@@ -1798,9 +1950,6 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
       int gy = (int)lookY + glitchJitterY;
       int cx = (int)convergenceX;
 
-      // Top-left stamp positions for eye tiles (center - half_sprite + gaze)
-      // Using BUDDY_EYE_SPR_W/2 so that changing the eye size constant
-      // automatically adjusts all stamp positions without manual edits.
       int leftX  = (BUDDY_EYE_LX_BASE + cx) - BUDDY_EYE_SPR_W / 2 + gx;
       int leftY  = BUDDY_EYE_CY - BUDDY_EYE_SPR_H / 2 + gy;
       int rightX = (BUDDY_EYE_RX_BASE - cx) - BUDDY_EYE_SPR_W / 2 + gx;
@@ -1813,14 +1962,12 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
           loadedRightEyeMode = -1;
         }
       }
-      // Blink: pass topSkipRows to partial-stamp; background shows through from memcpy (no fillRect).
       int leftTopLidH  = (activeEyeMode == EYE_MODE_OPEN) ? (int)(leftBlinkPct  * 65.0f) : 0;
       int rightTopLidH = (activeEyeMode == EYE_MODE_OPEN) ? (int)(rightBlinkPct * 65.0f) : 0;
       stampEye100(centerBgSprite, buddyEyeSpr, leftX, leftY, leftTopLidH);
 
       // 3. Stamp Right Eye (Bug 4 fix: separate mode tracker avoids reloading every glitch frame)
       if (strcmp(leftRLE, rightRLE) != 0) {
-        // Glitch frame: different texture for right eye — only reload when rightModeID changes
         if (loadedRightEyeMode != rightModeID) {
           if (loadEyeSprite100(buddyEyeSpr, rightRLE)) {
             loadedRightEyeMode = rightModeID;
@@ -1832,9 +1979,13 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
         stampEye100(centerBgSprite, buddyEyeSpr, rightX, rightY, rightTopLidH, true);
       }
 
-      // 4. Draw expressive eyebrows over eyes (ONLY IN OPEN MODE!)
+      // 4. BG overlay: composite single visorBgCache ON TOP of eyes (to mask/clip them)
+      if (hasDeskbuddyBgImage && visorBgCache.created()) {
+        visorBgCache.pushToSprite(&centerBgSprite, 0, 0, TFT_BLACK);
+      }
+
+      // 5. Draw expressive eyebrows over eyes and the visor frame (ONLY IN OPEN MODE!)
       if (activeEyeMode == EYE_MODE_OPEN) {
-        // ── Autonomous Eyebrow Mood State Machine ───────────────────────────
         bool browAtRest = (fabsf(browLiftL) < 0.01f && fabsf(browLiftR) < 0.01f &&
                            fabsf(browTiltL) < 0.01f && fabsf(browTiltR) < 0.01f &&
                            fabsf(browInset) < 0.01f);
@@ -1926,17 +2077,10 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
         }
       }
 
-      // BG overlay: composite single visorBgCache ON TOP of eyes and brows
-      if (hasDeskbuddyBgImage && visorBgCache.created()) {
-        visorBgCache.pushToSprite(&centerBgSprite, 0, 0, TFT_BLACK);
-      }
-
-      // 5. Push completed visor patch to TFT (<1ms).
-      //    Push opaquely. The 160x95 visor patch replaces the screen area cleanly.
+      // 6. Push completed visor patch to TFT (<1ms).
       centerBgSprite.pushSprite(BUDDY_SPR_X, BUDDY_SPR_Y);
     }
   }
-
 
   // ── Bottom half: clock / date / rotating stat ────────────────────────────
   static unsigned long lastBottomUpdate = 0;
@@ -1947,6 +2091,8 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
   static uint16_t lastMetricColor = 0;
   static int     metricIdx    = 0;
   static unsigned long lastMetricSwitch = 0;
+  static int     last_temp    = -999;
+  static String  last_weatherDesc = "";
 
   bool bottomUpdate = forceRedraw || (now - lastBottomUpdate >= 500UL);
 
@@ -1968,14 +2114,6 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     uint8_t mg = appState.currentRingColor.g;
     uint8_t mb = appState.currentRingColor.b;
 
-
-
-    // ── Bottom-half text rendering — single font load per cycle (Bug 1 fix) ──────────────
-    // Previously loadFont/unloadFont was called separately for each of the three
-    // conditional blocks (time, date, metric). Each call reads the entire VLW file
-    // from LittleFS and allocates ~8-20KB on the heap, then frees it. Up to 3 alloc/
-    // free cycles per 500ms caused progressive heap fragmentation → crash.
-    // Fix: hoist all three into one load, render all changed fields, unload once.
     char timeStr[6];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
     String currentDate = String(buf);
@@ -2010,33 +2148,61 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     bool timeChanged   = forceRedraw || h != last_h   || m != last_m;
     bool dateChanged   = forceRedraw || currentDate   != last_date;
     bool metricChanged = forceRedraw || metricText    != last_metric || metricColor != lastMetricColor;
+    bool weatherChanged = forceRedraw || (appState.temp != last_temp) || (appState.weatherDesc != last_weatherDesc);
 
-    if (hasDeskbuddyBgImage && (timeChanged || dateChanged || metricChanged)) {
+    if (hasDeskbuddyBgImage && (timeChanged || dateChanged || metricChanged || weatherChanged)) {
 
       if (timeChanged) {
-        tft.fillRect(33, 127, 85, 26, TFT_BLACK);
-        tft.setTextColor(tft.color565(245, 207, 142), TFT_BLACK);
-        tft.loadFont("7Segment50", LittleFS);
-        tft.drawString(String(timeStr), 71, 101);
-        tft.unloadFont();
+        tft.fillRect(cfg.timeClearX, cfg.timeClearY, cfg.timeClearW, cfg.timeClearH, TFT_BLACK);
+        tft.setTextColor(cfg.timeColor, TFT_BLACK);
+        if (hasTimeFont) {
+          tft.loadFont(cfg.timeFont, LittleFS);
+          tft.drawString(String(timeStr), cfg.timeX, cfg.timeY);
+          tft.unloadFont();
+        } else {
+          tft.drawString(String(timeStr), cfg.timeX, cfg.timeY, FONT_BUDDY_TIME);
+        }
         last_h = h; last_m = m;
       }
       if (dateChanged) {
-        tft.fillRect(128, 128, 78, 24, TFT_BLACK);
-        tft.setTextColor(tft.color565(142, 174, 245), TFT_BLACK);
-        tft.loadFont("Unicode.impact19", LittleFS);
-        tft.drawString(currentDate, 167, 131);
-        tft.unloadFont();
+        tft.fillRect(cfg.dateClearX, cfg.dateClearY, cfg.dateClearW, cfg.dateClearH, TFT_BLACK);
+        tft.setTextColor(cfg.dateColor, TFT_BLACK);
+        if (hasDateFont) {
+          tft.loadFont(cfg.dateFont, LittleFS);
+          tft.drawString(currentDate, cfg.dateX, cfg.dateY);
+          tft.unloadFont();
+        } else {
+          tft.drawString(currentDate, cfg.dateX, cfg.dateY, FONT_BUDDY_DATE);
+        }
         last_date = currentDate;
       }
       if (metricChanged) {
-        //tft.fillRect(58, 165, 129, 20, TFT_BLACK);
-        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
-        tft.loadFont("GoodTiming20", LittleFS);
-        //tft.drawString(metricText, 120, 188);
-        tft.unloadFont();
+        tft.fillRect(cfg.metricClearX, cfg.metricClearY, cfg.metricClearW, cfg.metricClearH, TFT_BLACK);
+        tft.setTextColor(cfg.useRingColorForMetric ? metricColor : cfg.metricColor, TFT_BLACK);
+        if (hasMetricFont) {
+          tft.loadFont(cfg.metricFont, LittleFS);
+          tft.drawString(metricText, cfg.metricX, cfg.metricY);
+          tft.unloadFont();
+        } else {
+          tft.drawString(metricText, cfg.metricX, cfg.metricY, FONT_BUDDY_DATE);
+        }
         last_metric     = metricText;
         lastMetricColor = metricColor;
+      }
+      if (weatherChanged) {
+        tft.fillRect(cfg.weatherClearX, cfg.weatherClearY, cfg.weatherClearW, cfg.weatherClearH, TFT_BLACK);
+        tft.setTextColor(cfg.useRingColorForMetric ? metricColor : cfg.weatherColor, TFT_BLACK);
+        String weatherStr = String(appState.temp) + "C | " + appState.weatherDesc;
+        weatherStr.toUpperCase();
+        if (hasWeatherFont) {
+          tft.loadFont(cfg.weatherFont, LittleFS);
+          tft.drawString(weatherStr, cfg.weatherX, cfg.weatherY);
+          tft.unloadFont();
+        } else {
+          tft.drawString(weatherStr, cfg.weatherX, cfg.weatherY, FONT_BUDDY_DATE);
+        }
+        last_temp = appState.temp;
+        last_weatherDesc = appState.weatherDesc;
       }
 
     } else if (!hasDeskbuddyBgImage) {
@@ -2059,6 +2225,15 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
         tft.drawString(metricText, 120, 210, FONT_BUDDY_DATE);
         last_metric     = metricText;
         lastMetricColor = metricColor;
+      }
+      if (weatherChanged) {
+        tft.fillRect(28, 40, 184, 20, TFT_BLACK);
+        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
+        String weatherStr = String(appState.temp) + "C | " + appState.weatherDesc;
+        weatherStr.toUpperCase();
+        tft.drawString(weatherStr, 120, 50, FONT_BUDDY_DATE);
+        last_temp = appState.temp;
+        last_weatherDesc = appState.weatherDesc;
       }
     }
   }

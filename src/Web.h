@@ -1552,6 +1552,10 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           <option value="3">DEV Mode</option>
           <option value="4">Aviator</option>
           <option value="5">Deskbuddy</option>
+          <option value="6">DeskAura</option>
+          <option value="7">DeskCat</option>
+          <option value="8">DeskWho</option>
+          <option value="9">DeskBit</option>
         </select>
       </div>
       <div class="metric">
@@ -3027,7 +3031,7 @@ inline void handleFactoryReset() {
 static fs::File uploadFile;
 
 inline void handleFilesList() {
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(8192);
   JsonArray files = doc.createNestedArray("files");
   
   appStats.fsReadCount++;

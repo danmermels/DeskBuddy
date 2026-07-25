@@ -408,7 +408,7 @@ inline void updateTFTDisplay(unsigned long now) {
       secondHandSprite.deleteSprite();
       centerBgSprite.deleteSprite();
       Serial.println("[SPRITES] Aviator watch hands and center canvas deallocated from RAM.");
-    } else if (lastClockFace == 5) {
+    } else if (lastClockFace >= 5 && lastClockFace <= 9) {
       cleanupDeskbuddySprites();
     }
 
@@ -456,6 +456,10 @@ inline void updateTFTDisplay(unsigned long now) {
       drawAviatorClockFace(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
       drawDeskbuddyFaceplate(now, forceRedraw, isAlertActive, activeAlertMessage, activeAlertIsAi, wifiAvailable, internetAvailable, appConfig.hasMail);
       break;
     case 0:

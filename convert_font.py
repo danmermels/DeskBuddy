@@ -117,8 +117,17 @@ def write_vlw_files(font_path, output_dir, allowed_chars, sizes, font_class_name
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or len(sys.argv) > 4:
-        print("Usage: python convert_font.py <font_filepath> <size> [char_limiter]")
-        print("Example: python convert_font.py \"good timing bd.otf\" 15 \" 0123456789:ACDEFHIMNORSTUW\"")
+        print("Usage: python convert_font.py <font_filepath> <size> [preset_or_string_or_filepath]")
+        print("\nPresets for [char_limiter]:")
+        print("  1 - Time & Numbers only (0123456789:/)")
+        print("  2 - Abbreviations (Numbers, separators, & Uppercase Letters)")
+        print("  3 - Full text support (All printable ASCII characters)")
+        print("\nExamples:")
+        print("  python convert_font.py \"good timing bd.otf\" 15 1")
+        print("  python convert_font.py \"good timing bd.otf\" 15 2")
+        print("  python convert_font.py \"good timing bd.otf\" 15 3")
+        print("  python convert_font.py \"good timing bd.otf\" 15 charset.txt (from file)")
+        print("  python convert_font.py \"good timing bd.otf\" 15 \"custom raw string\"")
         sys.exit(1)
         
     font_file = sys.argv[1]
@@ -134,11 +143,37 @@ if __name__ == "__main__":
         
     # Character limiter (default if not supplied)
     if len(sys.argv) == 4:
-        char_set = sys.argv[3]
-        print(f"Using custom character limiter: '{char_set}'")
+        arg_val = sys.argv[3].strip()
+        if arg_val == "1":
+            char_set = "0123456789:/"
+            print(f"Using Preset 1 (Time/Numeric): '{char_set}'")
+        elif arg_val == "2":
+            char_set = " 0123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ/h"
+            print(f"Using Preset 2 (Abbreviation/Uppercase): '{char_set}'")
+        elif arg_val == "3":
+            char_set = "".join(chr(i) for i in range(32, 127))
+            print("Using Preset 3 (Full Printable ASCII): All standard letters, numbers, and symbols.")
+        elif os.path.exists(arg_val):
+            try:
+                with open(arg_val, "r", encoding="utf-8") as f:
+                    char_set = f.read()
+                print(f"Loaded custom character limiter from file '{arg_val}' ({len(char_set)} chars)")
+            except Exception as e:
+                print(f"Error reading file '{arg_val}': {e}. Using raw argument string.")
+                char_set = arg_val
+        else:
+            char_set = arg_val
+            print(f"Using custom character limiter: '{char_set}'")
+            
     else:
         char_set = " 0123456789:ACDEFHIMNORSTUW/h"
         print(f"Using default character limiter: '{char_set}'")
+        
+    # Strip matching outermost quotes if they were double-escaped or passed literally by the shell
+    if len(char_set) >= 2:
+        if (char_set.startswith('"') and char_set.endswith('"')) or (char_set.startswith("'") and char_set.endswith("'")):
+            char_set = char_set[1:-1]
+            print(f"Stripped outer quotes. Character set now: '{char_set}'")
         
     # Generate a clean font class name from base name
     # e.g., good timing bd -> GoodTiming
