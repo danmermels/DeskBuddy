@@ -28,6 +28,31 @@ struct MqttMessage {
 };
 #endif
 
+#include <queue>
+#include <freertos/semphr.h>
+
+struct MqttQueueMessage {
+  String topic;
+  String payload;
+};
+
+extern std::queue<MqttQueueMessage> mqttPublishQueue;
+extern SemaphoreHandle_t mqttPublishQueueMutex;
+
+inline void enqueueMqttPublish(const String& topic, const String& payload) {
+  if (!appState.mqttConnected) return;
+  if (mqttPublishQueueMutex == NULL) return;
+  if (xSemaphoreTake(mqttPublishQueueMutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    if (mqttPublishQueue.size() < 20) {
+      mqttPublishQueue.push({topic, payload});
+    } else {
+      mqttPublishQueue.pop(); // Discard oldest
+      mqttPublishQueue.push({topic, payload});
+    }
+    xSemaphoreGive(mqttPublishQueueMutex);
+  }
+}
+
 
 // Safe helper to append messages to history
 inline void addMqttHistory(String topic, String payload) {
@@ -82,6 +107,7 @@ inline void loopMqtt() {
   static unsigned long lastReconnectMqtt = 0;
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqttClient.connected()) {
+      appState.mqttConnected = false;
       unsigned long now = millis();
       if (now - lastReconnectMqtt > MQTT_RECONNECT_INTERVAL_MS) {
         lastReconnectMqtt = now;
@@ -89,18 +115,42 @@ inline void loopMqtt() {
         if (mqttClient.connect(MQTT_CLIENT_ID)) {
           mqttClient.publish(MQTT_STATUS_TOPIC, MQTT_STATUS_PAYLOAD);
           mqttClient.subscribe(MQTT_SUBSCRIBE_TOPIC); // Subscribe to all deskbuddy topics
+          appState.mqttConnected = true;
         }
       }
     } else {
+      appState.mqttConnected = true;
       mqttClient.loop();
+
+      // Process queued messages safely in the loopTask thread
+      while (true) {
+        MqttQueueMessage msg;
+        bool hasMsg = false;
+        if (mqttPublishQueueMutex != NULL && xSemaphoreTake(mqttPublishQueueMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+          if (!mqttPublishQueue.empty()) {
+            msg = mqttPublishQueue.front();
+            mqttPublishQueue.pop();
+            hasMsg = true;
+          }
+          xSemaphoreGive(mqttPublishQueueMutex);
+        }
+
+        if (hasMsg) {
+          mqttClient.publish(msg.topic.c_str(), msg.payload.c_str());
+        } else {
+          break;
+        }
+      }
     }
+  } else {
+    appState.mqttConnected = false;
   }
 }
 
 // Publish display alerts to MQTT echo topic (separate from input topics to avoid loops)
 inline void publishMqttMessage(String msg) {
-  if (mqttClient.connected()) {
-    mqttClient.publish(MQTT_ECHO_TOPIC, msg.c_str());
+  if (appState.mqttConnected) {
+    enqueueMqttPublish(MQTT_ECHO_TOPIC, msg);
   }
 }
 

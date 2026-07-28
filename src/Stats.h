@@ -38,6 +38,7 @@ inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
   resetSessionStats();
   
   appState.isStopByTracking = false;
+  appState.wasFirstSitThisSession = false;
   appState.originalLastAwayEpoch = 0;
   appState.totalStopByTimeMs = 0;
   appStats.previousLatestBreakDuration = 0;

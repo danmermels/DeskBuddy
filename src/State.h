@@ -128,6 +128,7 @@ struct RuntimeState {
   float filteredDetectionDist = 0.0;
   unsigned long currentBreakDurationMs = 0;
   bool isStopByTracking = false;
+  bool wasFirstSitThisSession = false;
   uint32_t originalLastAwayEpoch = 0;
   unsigned long totalStopByTimeMs = 0;
   unsigned long lastStateTransitionTime = 0;
@@ -157,6 +158,8 @@ struct RuntimeState {
   int lastTriggeredEventType = 0; // EVENT_FIRST_SIT
   
   volatile bool isAILoading = false;
+  unsigned long lastAiQueryStartTime = 0;
+  volatile bool mqttConnected = false;
   volatile bool pendingWelcomeAlert = false;
   String aiResponse = "";
   volatile bool hasNewAIResponse = false;
@@ -197,11 +200,7 @@ struct RuntimeState {
   // Web activity safety tracker
   unsigned long lastWebActivityTime = 0;
 
-  // System Log Buffer (RAM-based, optimized size 15 for stability)
-  LogEntry systemLog[SYSTEM_LOG_SIZE];
-  int systemLogHead = 0;
-  int systemLogCount = 0;
-  SemaphoreHandle_t systemLogMutex = NULL;
+
 };
 
 struct TodoState {

@@ -1131,7 +1131,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 // -- Bottom-half font aliases --------------------------------------------------
 #define FONT_BUDDY_TIME   7   // 7-segment digital font
 #define FONT_BUDDY_DATE   2   // Small crisp text font
-#define MSG_FONT_BUDDY    nullptr
+#define MSG_FONT_BUDDY    "RobotoCondensed26"
 
 // Eye State Modes
 enum BuddyEyeMode {
@@ -1233,10 +1233,10 @@ static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
     "/buddy_aura_brow.rle",
     "/buddy_aura_eye_o.rle",
     "/buddy_aura_eye_s.rle",
-    "Chaser50",          // timeFont
-    "Chaser20",          // dateFont
-    "GoodTiming20",      // metricFont
-    "GoodTiming20",      // weatherFont
+    "RobotoCondensed26",          // timeFont
+    "RobotoCondensed20",          // dateFont
+    "RobotoCondensed20",      // metricFont
+    "RobotoCondensed20",      // weatherFont
     rgb565(0, 255, 255),   // timeColor
     rgb565(255, 0, 255),   // dateColor
     rgb565(0, 255, 255),   // metricColor
@@ -1299,9 +1299,9 @@ static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
     "RobotoCondensed20",     // weatherFont
     rgb565(46, 139, 87),  // timeColor
     rgb565(46, 139, 87),   // dateColor
-    rgb565(218, 165, 132),  // metricColor
-    rgb565(218, 165, 132),  // weatherColor
-    true,   // useRingColorForMetric
+    rgb565(46, 139, 87),  // metricColor
+    rgb565(46, 139, 87),  // weatherColor
+    false,  // useRingColorForMetric
     3,      // gazeXLimit
     30,     // gazeYLimit
     3500,   // minBlinkInterval
@@ -1313,9 +1313,9 @@ static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
     // Date: drawX, drawY, clearX, clearY, clearW, clearH
     167, 131, 128, 128, 78, 24,
     // Weather: drawX, drawY, clearX, clearY, clearW, clearH
-    120, 167, 45, 165, 150, 24,
+    120, 187, 45, 165, 150, 24,
     // Carousel Metric: drawX, drawY, clearX, clearY, clearW, clearH
-    120, 178, 58, 165, 129, 20
+    120, 168, 58, 165, 129, 20
   },
   // Theme 4: DeskBit (ID 9)
   {
@@ -2209,26 +2209,26 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
       // Fallback: no background image — built-in fonts, no heap allocation needed
       if (timeChanged) {
         tft.fillRect(28, 128, 184, 46, TFT_BLACK);
-        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        tft.setTextColor(cfg.timeColor, TFT_BLACK);
         tft.drawString(String(timeStr), 120, 152, FONT_BUDDY_TIME);
         last_h = h; last_m = m;
       }
       if (dateChanged) {
         tft.fillRect(28, 177, 184, 18, TFT_BLACK);
-        tft.setTextColor(tft.color565(110, 110, 135), TFT_BLACK);
+        tft.setTextColor(cfg.dateColor, TFT_BLACK);
         tft.drawString(currentDate, 120, 186, FONT_BUDDY_DATE);
         last_date = currentDate;
       }
       if (metricChanged) {
         tft.fillRect(28, 200, 184, 20, TFT_BLACK);
-        tft.setTextColor(metricColor, TFT_BLACK);
+        tft.setTextColor(cfg.useRingColorForMetric ? metricColor : cfg.metricColor, TFT_BLACK);
         tft.drawString(metricText, 120, 210, FONT_BUDDY_DATE);
         last_metric     = metricText;
         lastMetricColor = metricColor;
       }
       if (weatherChanged) {
         tft.fillRect(28, 40, 184, 20, TFT_BLACK);
-        tft.setTextColor(tft.color565(0, 220, 255), TFT_BLACK);
+        tft.setTextColor(cfg.useRingColorForMetric ? metricColor : cfg.weatherColor, TFT_BLACK);
         String weatherStr = String(appState.temp) + "C | " + appState.weatherDesc;
         weatherStr.toUpperCase();
         tft.drawString(weatherStr, 120, 50, FONT_BUDDY_DATE);

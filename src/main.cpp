@@ -22,8 +22,8 @@
 #include "Constants.h"
 
 // Maximum AI response character count, shared with Display.h and AI.h
-extern const int AI_RESPONSE_MAX_CHARS = 45;
-extern const int DISPLAY_CHARS_PER_LINE = 13;
+extern const int AI_RESPONSE_MAX_CHARS = 90;
+extern const int DISPLAY_CHARS_PER_LINE = 19;
 
 // ============================================================
 // Subsystem Headers (extern globals are linked from this file)
@@ -86,10 +86,15 @@ void clearRecentMotionWindow() {
 // Productivity & Session Timing Metrics
 volatile uint32_t currentSitDownSessionId = 0;
 uint32_t geminiQuerySessionId = 0;
+TaskHandle_t aiQueryTaskHandle = NULL;
 
 // Network & MQTT Service Instances
 WiFiClient wifiClient;
 PubSubClient mqttClient;
+
+#include <queue>
+std::queue<MqttQueueMessage> mqttPublishQueue;
+SemaphoreHandle_t mqttPublishQueueMutex = NULL;
 
 // Persistent Settings (NVS Preferences)
 Preferences preferences;
@@ -389,8 +394,22 @@ void setup(void) {
   // Setup Mutex for MQTT History Thread Safety
   appState.mqttHistoryMutex = xSemaphoreCreateMutex();
 
+  // Setup Mutex for MQTT Publish Queue Thread Safety
+  mqttPublishQueueMutex = xSemaphoreCreateMutex();
+
   // Setup Mutex for System Logging Thread Safety
-  appState.systemLogMutex = xSemaphoreCreateMutex();
+
+  // Setup persistent background task for Gemini HTTPS Queries
+  xTaskCreate(
+    queryGeminiTask,
+    "GeminiQuery",
+    12288,
+    NULL,
+    1,
+    &aiQueryTaskHandle
+  );
+  Serial.println("[DIAGNOSTICS] GeminiQuery task created");
+
 
   // Load persistent configurations
   preferences.begin("deskbuddy", false);
@@ -537,13 +556,14 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   if (!LittleFS.exists("/todo.json")) return;
   fs::File file = LittleFS.open("/todo.json", "r");
   if (!file) return;
-  DynamicJsonDocument doc(2048);
+  DynamicJsonDocument doc(4096);
   DeserializationError err = deserializeJson(doc, file);
   file.close();
   if (err) return;
   
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
+    String dueTasksDetail = "";
     for (JsonObject task : daily) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
@@ -575,28 +595,37 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
       }
       
       if (isActiveToday && !isCompleted && tHour == currentHour && tMin == currentMin) {
-        triggerBehaviour(EVENT_TASK_DUE, taskText);
-        break;
+        if (dueTasksDetail.length() > 0) {
+          dueTasksDetail += "|";
+        }
+        dueTasksDetail += taskText;
       }
+    }
+
+    if (dueTasksDetail.length() > 0) {
+      triggerBehaviour(EVENT_TASK_DUE, dueTasksDetail);
     }
   }
 }
 
-inline bool hasHighlyOverdueTasks(String currentDayString, String currentMonthString, int currentDaysCount, int currentYear, int currentMonth) {
-  if (!LittleFS.exists("/todo.json")) return false;
+inline String getHighlyOverdueTaskNames(String currentDayString, String currentMonthString, int currentDaysCount, int currentYear, int currentMonth) {
+  if (!LittleFS.exists("/todo.json")) return "";
   fs::File file = LittleFS.open("/todo.json", "r");
-  if (!file) return false;
-  DynamicJsonDocument doc(2048);
+  if (!file) return "";
+  DynamicJsonDocument doc(4096);
   DeserializationError err = deserializeJson(doc, file);
   file.close();
-  if (err) return false;
+  if (err) return "";
   
+  String overdueNames = "";
+
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
     for (JsonObject task : daily) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
       String tDate = task["startDate"] | "";
+      String taskText = task["text"] | "";
       if (isRecurrent) {
         if (task.containsKey("completedDates")) {
           JsonArray compDates = task["completedDates"].as<JsonArray>();
@@ -614,7 +643,10 @@ inline bool hasHighlyOverdueTasks(String currentDayString, String currentMonthSt
       
       if (!isCompleted && tDate.length() == 10) {
         int diff = currentDaysCount - dateToDays(tDate);
-        if (diff > TASK_OVERDUE_DAYS_LIMIT) return true;
+        if (diff > TASK_OVERDUE_DAYS_LIMIT) {
+          if (overdueNames.length() > 0) overdueNames += ", ";
+          overdueNames += taskText;
+        }
       }
     }
   }
@@ -624,6 +656,7 @@ inline bool hasHighlyOverdueTasks(String currentDayString, String currentMonthSt
     for (JsonObject task : monthly) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
+      String taskText = task["text"] | "";
       int tMonth = 1;
       int tYear = 2026;
       if (isRecurrent) {
@@ -649,11 +682,14 @@ inline bool hasHighlyOverdueTasks(String currentDayString, String currentMonthSt
       
       if (!isCompleted) {
         int diffMonths = (currentYear - tYear) * 12 + (currentMonth - tMonth);
-        if (diffMonths > TASK_OVERDUE_MONTHS_LIMIT) return true;
+        if (diffMonths > TASK_OVERDUE_MONTHS_LIMIT) {
+          if (overdueNames.length() > 0) overdueNames += ", ";
+          overdueNames += taskText;
+        }
       }
     }
   }
-  return false;
+  return overdueNames;
 }
 
 void loop(void) {
@@ -676,6 +712,13 @@ void loop(void) {
   }
 
   unsigned long now = millis();
+  
+  // Safety timeout for AI Query (reset isAILoading if it hangs for > 45s)
+  if (appState.isAILoading && (now - appState.lastAiQueryStartTime > 45000)) {
+    Logger::log("BEHAVIOUR", "AI Query Timeout: forcing isAILoading = false");
+    appState.isAILoading = false;
+  }
+
   unsigned long elapsed = now - appState.lastLoopTime;
   appState.lastLoopTime = now;
 
@@ -741,7 +784,7 @@ void loop(void) {
       mergeCurrentDayPresence(mergeDay);
 
       appStats.lastMidnightCheckDay = currentDay;
-      saveDailyStats();
+      resetDailyStats(appStats.lastAwayEpoch, currentDay);
     }
   }
 
@@ -805,7 +848,7 @@ void loop(void) {
   }
   } // end else (non-simulation)
 
-  rawPresent = appState.sensorPresenceDetected;
+  rawPresent = appState.sensorPresenceDetected && (appState.rawDetectionDist == 0 || appState.rawDetectionDist <= appConfig.deskDistanceLimit);
   if (rawPresent) {
     // Advance 1-second rolling window bucket
     if (now - lastBucketAdvanceTime >= 1000) {
@@ -847,7 +890,12 @@ void loop(void) {
 
   // Debouncing logic to filter sensor instability/boundary jitter
   if (rawPresent != stablePresence) {
-    unsigned long debounceLimit = rawPresent ? DEBOUNCE_PRESENCE_MS : DEBOUNCE_AWAY_MS;
+    unsigned long debounceLimit = 0;
+    if (rawPresent) {
+      debounceLimit = appStats.firstSitToday ? DEBOUNCE_PRESENCE_OVERNIGHT_MS : DEBOUNCE_PRESENCE_MS;
+    } else {
+      debounceLimit = DEBOUNCE_AWAY_MS;
+    }
     if (now - lastPresenceChangeTime > debounceLimit) {
       stablePresence = rawPresent;
     }
@@ -944,8 +992,9 @@ void loop(void) {
         appStats.latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
         
         appStats.totalBreakTime = 0;
-        appState.isStopByTracking = false;
-        appState.originalLastAwayEpoch = 0;
+        appState.wasFirstSitThisSession = true;
+        appState.isStopByTracking = true;
+        appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
         appState.totalStopByTimeMs = 0;
         appStats.previousLatestBreakDuration = 0;
         Logger::log("STATE", "Away->Present: Handled firstSit: firstSitEpoch=%u overnight=%lu", appStats.firstSitEpoch, appStats.overnightBreakDuration);
@@ -1085,22 +1134,53 @@ void loop(void) {
       Logger::log("STATE", "Present->Away: prevState=%s presDur=%lu s focusDur=%lu s stopByTrack=%d", 
                   presenceStateName(appState.currentPresenceState), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
       
-      if (appState.isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS) { // 8 minutes threshold
-        // This was a STOP-BY! Roll back the break but start fresh from now.
-        int oldBreakCount = appStats.breakCount;
-        if (appStats.breakCount > 0) appStats.breakCount--;
-        appStats.latestBreakDuration = appStats.previousLatestBreakDuration;
+      bool isLateHours = true;
+      if (timeClient.isTimeSet()) {
+        int learnedStart = getLearnedWorkdayStart(ts.tm_wday);
+        int learnedEnd = getLearnedWorkdayEnd(ts.tm_wday);
+        int currentLocalMinutes = ts.tm_hour * 60 + ts.tm_min;
         
-        appStats.lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-        appState.isStopByTracking = false;
-        appState.totalStopByTimeMs = 0;
-        appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
+        int workdayStartMinutes = learnedStart * 60 - 30; // 30 minutes padding
+        int workdayEndMinutes = learnedEnd * 60;
         
-        appState.currentPresenceState = STATE_AWAY;
-        appState.lastStateTransitionTime = now;
-        Logger::log("STATE", "Present->Away: Stop-By! breakCount %d->%d restoreLatestBreak=%lu lastAwayEpoch=%s", 
-                    oldBreakCount, appStats.breakCount, appStats.latestBreakDuration / 1000UL, Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
-        saveDailyStats();
+        if (currentLocalMinutes >= workdayStartMinutes && currentLocalMinutes < workdayEndMinutes) {
+          isLateHours = false;
+        }
+      }
+
+      if (appState.isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS && isLateHours) {
+        if (appState.wasFirstSitThisSession) {
+          // This was a first-sit STOP-BY! Roll back the first sit today status and overnight break values.
+          appStats.firstSitToday = true;
+          appStats.firstSitEpoch = 0;
+          appStats.overnightBreakDuration = 0;
+          appStats.lastAwayEpoch = appState.originalLastAwayEpoch;
+          appState.isStopByTracking = false;
+          appState.wasFirstSitThisSession = false;
+          appState.totalStopByTimeMs = 0;
+          
+          appState.currentPresenceState = STATE_AWAY;
+          appState.lastStateTransitionTime = now;
+          Logger::log("STATE", "Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=%s", 
+                      Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
+          saveDailyStats();
+        } else {
+          // This was a standard STOP-BY! Roll back the break but start fresh from now.
+          int oldBreakCount = appStats.breakCount;
+          if (appStats.breakCount > 0) appStats.breakCount--;
+          appStats.latestBreakDuration = appStats.previousLatestBreakDuration;
+          
+          appStats.lastAwayEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+          appState.isStopByTracking = false;
+          appState.totalStopByTimeMs = 0;
+          appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
+          
+          appState.currentPresenceState = STATE_AWAY;
+          appState.lastStateTransitionTime = now;
+          Logger::log("STATE", "Present->Away: Stop-By! breakCount %d->%d restoreLatestBreak=%lu lastAwayEpoch=%s", 
+                      oldBreakCount, appStats.breakCount, appStats.latestBreakDuration / 1000UL, Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
+          saveDailyStats();
+        }
       } else {
         // This was a REAL presence session (>= 8 minutes) or we weren't tracking stop-bys
         appState.currentPresenceState = STATE_AWAY;
@@ -1109,6 +1189,7 @@ void loop(void) {
         appState.isStopByTracking = false;
         appState.totalStopByTimeMs = 0;
         appState.originalLastAwayEpoch = appStats.lastAwayEpoch; // Save start of this new break session
+        appState.wasFirstSitThisSession = false; // Reset first sit session flag
         Logger::log("STATE", "Present->Away: Real session completed. lastAwayEpoch=%s reset stopByTracking", Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
         saveDailyStats();
       }
@@ -1372,12 +1453,13 @@ void loop(void) {
       char mStr[8];
       snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
       
-      if (hasHighlyOverdueTasks(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth)) {
+      String overdueTaskNames = getHighlyOverdueTaskNames(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth);
+      if (overdueTaskNames.length() > 0) {
         appStats.naggingTriggeredToday = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
           EVENT_NAGGING,
-          "",
+          overdueTaskNames,
           MessageManager::P_HIGH, 0, MessageManager::R_NORMAL
         );
       }
@@ -1400,7 +1482,7 @@ void loop(void) {
   static unsigned long lastLogFlushTime = 0;
   if (now - lastLogFlushTime >= 5000) {
     lastLogFlushTime = now;
-    Logger::flushToFlash();
+
   }
 
   delay(LOOP_DELAY_MS);

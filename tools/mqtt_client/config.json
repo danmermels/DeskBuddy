@@ -1,0 +1,158 @@
+{
+    "broker_ip": "192.168.15.18",
+    "broker_port": 1883,
+    "topic_listener_1": "deskbuddy/debug/resp",
+    "topic_listener_2": "deskbuddy/debug/ai/#",
+    "buttons": [
+        {
+            "label": "GET state",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET state"
+        },
+        {
+            "label": "GET radar",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET radar"
+        },
+        {
+            "label": "GET stats",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET stats"
+        },
+        {
+            "label": "GET config",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET config"
+        },
+        {
+            "label": "GET session",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET session"
+        },
+        {
+            "label": "GET time",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET time"
+        },
+        {
+            "label": "GET system",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET system"
+        },
+        {
+            "label": "GET <any_field>",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "GET status"
+        },
+        {
+            "label": "SET config.filterWindow 5.0",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "SET config.filterWindow 5.0"
+        },
+        {
+            "label": "SET config.userName \"Dan\"",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "SET config.userName \"Dan\""
+        },
+        {
+            "label": "SET config.clockFace 0",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "SET config.clockFace 0"
+        },
+        {
+            "label": "SET config.clockFace 5",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "SET config.clockFace 5"
+        },
+        {
+            "label": "SET config.clockFace 2",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "SET config.clockFace 2"
+        },
+        {
+            "label": "SET config.clockFace 3",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "SET config.clockFace 3"
+        },
+        {
+            "label": "SIM radar 40 1 1",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim radar 40 1 1"
+        },
+        {
+            "label": "SIM away",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim away"
+        },
+        {
+            "label": "SIM sit 90",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim sit 90"
+        },
+        {
+            "label": "SIM focus 40",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim focus 40"
+        },
+        {
+            "label": "SIM busy",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim busy"
+        },
+        {
+            "label": "SIM state AWAY",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim away"
+        },
+        {
+            "label": "SIM loop",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim loop"
+        },
+        {
+            "label": "SIM stop",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sim stop"
+        },
+        {
+            "label": "SYS reboot",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sys reboot"
+        },
+        {
+            "label": "SYS reset_stats",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sys reset_stats"
+        },
+        {
+            "label": "SYS factory_reset",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "sys factory_reset"
+        },
+        {
+            "label": "Empty 26",
+            "topic": "test",
+            "payload": ""
+        },
+        {
+            "label": "Empty 27",
+            "topic": "test",
+            "payload": ""
+        },
+        {
+            "label": "Empty 28",
+            "topic": "test",
+            "payload": ""
+        },
+        {
+            "label": "Empty 29",
+            "topic": "test",
+            "payload": ""
+        },
+        {
+            "label": "Empty 30",
+            "topic": "test",
+            "payload": ""
+        }
+    ]
+}

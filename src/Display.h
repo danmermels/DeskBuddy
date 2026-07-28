@@ -49,6 +49,7 @@ extern void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw, bool sho
 
 extern TFT_eSprite hourHandSprite;
 extern TFT_eSprite minuteHandSprite;
+
 extern TFT_eSprite secondHandSprite;
 extern TFT_eSprite centerBgSprite;
 
@@ -263,46 +264,229 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
     tft.fillScreen(bgColor);
   }
 
-  bool fontLoaded = false;
-  if (fontName != nullptr && strlen(fontName) > 0) {
-    tft.loadFont(fontName, LittleFS);
-    fontLoaded = true;
+  // 1. Identify screen/page type
+  enum PageType { PAGE_STANDARD, PAGE_JOURNAL_DASHBOARD, PAGE_JOURNAL_TASKS, PAGE_DUE_NOW };
+  PageType pType = PAGE_STANDARD;
+  
+  if (appState.lastTriggeredEventType == EVENT_JOURNAL) {
+    if (text.indexOf("TODO") != -1) {
+      pType = PAGE_JOURNAL_DASHBOARD;
+    } else {
+      pType = PAGE_JOURNAL_TASKS;
+    }
+  } else if (appState.lastTriggeredEventType == EVENT_TASK_DUE) {
+    pType = PAGE_DUE_NOW;
   }
 
-  tft.setTextColor(textColor, bgColor);
+  // 2. Load layout configurations
+  int startY = 45;
+  int lineHeight = 28;
+  int baseCharsPerLine = DISPLAY_CHARS_PER_LINE;
+  const char* titleFont = fontName;
+  const char* contentFont = fontName;
+  uint16_t titleColorDefault = textColor;
+  uint16_t contentColorDefault = textColor;
+
+  if (pType == PAGE_JOURNAL_DASHBOARD) {
+    startY = JournalConfig::pageOneTitleY;
+    lineHeight = 18;
+    baseCharsPerLine = 28;
+    titleFont = JournalConfig::pageOneTitleFont;
+    contentFont = JournalConfig::pageOneTaskFont;
+    titleColorDefault = tft.color565(JournalConfig::pageOneTitleColor.r, JournalConfig::pageOneTitleColor.g, JournalConfig::pageOneTitleColor.b);
+    contentColorDefault = tft.color565(JournalConfig::pageOneTaskColor.r, JournalConfig::pageOneTaskColor.g, JournalConfig::pageOneTaskColor.b);
+  } else if (pType == PAGE_JOURNAL_TASKS) {
+    startY = JournalConfig::tasksTitleY;
+    lineHeight = 18;
+    baseCharsPerLine = 28;
+    titleFont = JournalConfig::tasksTitleFont;
+    contentFont = JournalConfig::tasksTaskFont;
+    titleColorDefault = tft.color565(JournalConfig::tasksTitleColor.r, JournalConfig::tasksTitleColor.g, JournalConfig::tasksTitleColor.b);
+    contentColorDefault = tft.color565(JournalConfig::tasksTaskColor.r, JournalConfig::tasksTaskColor.g, JournalConfig::tasksTaskColor.b);
+  } else if (pType == PAGE_DUE_NOW) {
+    startY = JournalConfig::dueTitleY;
+    lineHeight = 18;
+    baseCharsPerLine = 28;
+    titleFont = JournalConfig::dueTitleFont;
+    contentFont = JournalConfig::dueTitleFont;
+    titleColorDefault = tft.color565(JournalConfig::dueTitleColor.r, JournalConfig::dueTitleColor.g, JournalConfig::dueTitleColor.b);
+    contentColorDefault = tft.color565(JournalConfig::dueTextColor.r, JournalConfig::dueTextColor.g, JournalConfig::dueTextColor.b);
+  }
+
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
   
-  int y = 45;
+  int y = startY;
   String line = "";
   int startIdx = 0;
+  int lineIndex = 0;
   
-  // Wrap string into lines of up to DISPLAY_CHARS_PER_LINE characters
+  // Wrap string into lines, dynamically adjusting line capacity for round display tapering
   while (startIdx < text.length()) {
-    int endIdx = startIdx + DISPLAY_CHARS_PER_LINE;
-    if (endIdx >= text.length()) {
-      line = text.substring(startIdx);
-      startIdx = text.length();
+    int yc = y + (lineHeight / 2);              // Center of current line vertically
+    int dy = yc - 120;            // Distance from screen center (120)
+    float widthAtY = 240.0f;
+    if (abs(dy) < 120) {
+      widthAtY = 2.0f * sqrt(14400.0f - (float)(dy * dy));
     } else {
-      int spaceIdx = text.lastIndexOf(' ', endIdx);
-      if (spaceIdx > startIdx) {
-        line = text.substring(startIdx, spaceIdx);
-        startIdx = spaceIdx + 1;
+      widthAtY = 80.0f;           // Safeguard minimum width
+    }
+    
+    // Scale allowed chars based on relative width (with a minor safety margin of 95%)
+    int charsForThisLine = (int)(baseCharsPerLine * (widthAtY / 240.0f) * 0.95f);
+    if (charsForThisLine < 8) charsForThisLine = 8; // Guarantee a minimum wrap width
+
+    int nextNewline = text.indexOf('\n', startIdx);
+    bool useExplicitNewline = (pType != PAGE_STANDARD);
+    if (useExplicitNewline) {
+      if (nextNewline != -1) {
+        line = text.substring(startIdx, nextNewline);
+        startIdx = nextNewline + 1;
       } else {
-        line = text.substring(startIdx, endIdx);
-        startIdx = endIdx;
+        line = text.substring(startIdx);
+        startIdx = text.length();
+      }
+    } else {
+      int endIdx = startIdx + charsForThisLine;
+      if (nextNewline != -1 && nextNewline < endIdx) {
+        line = text.substring(startIdx, nextNewline);
+        startIdx = nextNewline + 1;
+      } else if (endIdx >= text.length()) {
+        line = text.substring(startIdx);
+        startIdx = text.length();
+      } else {
+        int spaceIdx = text.lastIndexOf(' ', endIdx);
+        if (spaceIdx > startIdx) {
+          line = text.substring(startIdx, spaceIdx);
+          startIdx = spaceIdx + 1;
+        } else {
+          line = text.substring(startIdx, endIdx);
+          startIdx = endIdx;
+        }
       }
     }
-    if (fontLoaded) {
-      tft.drawString(line, 120, y);
-    } else {
-      tft.drawString(line, 120, y, 4);
-    }
-    y += 28;
-    if (y > 200) break; // Avoid vertical overflow (up to ~5 lines)
-  }
+    // Determine font & default color for this line
+    const char* activeFont = (lineIndex == 0) ? titleFont : contentFont;
+    uint16_t currentLineColor = (lineIndex == 0) ? titleColorDefault : contentColorDefault;
+    int currentY = y;
 
-  if (fontLoaded) {
-    tft.unloadFont();
+    if (pType == PAGE_DUE_NOW) {
+      // Check if this line is the time field (starts with [RED] or is the last line)
+      bool isTimeField = (line.indexOf("[RED]") != -1) || (startIdx >= text.length());
+      if (lineIndex == 0) {
+        activeFont = JournalConfig::dueTitleFont;
+        currentLineColor = tft.color565(JournalConfig::dueTitleColor.r, JournalConfig::dueTitleColor.g, JournalConfig::dueTitleColor.b);
+      } else if (isTimeField) {
+        activeFont = JournalConfig::dueTimeFont;
+        currentLineColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b);
+        currentY = JournalConfig::dueTimeY;
+      } else {
+        activeFont = contentFont;
+        currentLineColor = tft.color565(JournalConfig::dueTextColor.r, JournalConfig::dueTextColor.g, JournalConfig::dueTextColor.b);
+      }
+    }
+
+    // Load dynamic font if configured
+    bool fontLoaded = false;
+    if (activeFont != nullptr && strlen(activeFont) > 0) {
+      tft.loadFont(activeFont, LittleFS);
+      fontLoaded = true;
+    }
+
+    // Color code support
+    if (line.indexOf("[RED]") != -1) { 
+      currentLineColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b); 
+      line.replace("[RED]", ""); 
+    }
+    else if (line.indexOf("[GREEN]") != -1) { currentLineColor = tft.color565(34, 197, 94); line.replace("[GREEN]", ""); }
+    else if (line.indexOf("[YELLOW]") != -1) { currentLineColor = tft.color565(245, 158, 11); line.replace("[YELLOW]", ""); }
+    else if (line.indexOf("[BLUE]") != -1) { currentLineColor = tft.color565(56, 189, 248); line.replace("[BLUE]", ""); }
+    else if (line.indexOf("[ORANGE]") != -1) { currentLineColor = tft.color565(249, 115, 22); line.replace("[ORANGE]", ""); }
+    else if (line.indexOf("[GREY]") != -1) { currentLineColor = tft.color565(148, 163, 184); line.replace("[GREY]", ""); }
+    else if (line.indexOf("[GRAY]") != -1) { currentLineColor = tft.color565(148, 163, 184); line.replace("[GRAY]", ""); }
+    else if (line.indexOf("[WHITE]") != -1) { currentLineColor = TFT_WHITE; line.replace("[WHITE]", ""); }
+
+    line.replace("\r", "");
+    tft.setTextColor(currentLineColor, bgColor);
+
+    int fontIndex = (pType != PAGE_STANDARD) ? 2 : 4;
+
+    int splitIdx = line.indexOf('|');
+    if (splitIdx != -1) {
+      String colLeft = line.substring(0, splitIdx);
+      String colRight = line.substring(splitIdx + 1);
+
+      uint16_t leftColor = currentLineColor;
+      if (colLeft.indexOf("[RED]") != -1) { 
+        leftColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b); 
+        colLeft.replace("[RED]", ""); 
+      }
+      else if (colLeft.indexOf("[GREEN]") != -1) { leftColor = tft.color565(34, 197, 94); colLeft.replace("[GREEN]", ""); }
+      else if (colLeft.indexOf("[YELLOW]") != -1) { leftColor = tft.color565(245, 158, 11); colLeft.replace("[YELLOW]", ""); }
+      else if (colLeft.indexOf("[BLUE]") != -1) { leftColor = tft.color565(56, 189, 248); colLeft.replace("[BLUE]", ""); }
+      else if (colLeft.indexOf("[ORANGE]") != -1) { leftColor = tft.color565(249, 115, 22); colLeft.replace("[ORANGE]", ""); }
+      else if (colLeft.indexOf("[GREY]") != -1) { leftColor = tft.color565(148, 163, 184); colLeft.replace("[GREY]", ""); }
+      else if (colLeft.indexOf("[GRAY]") != -1) { leftColor = tft.color565(148, 163, 184); colLeft.replace("[GRAY]", ""); }
+      else if (colLeft.indexOf("[WHITE]") != -1) { leftColor = TFT_WHITE; colLeft.replace("[WHITE]", ""); }
+
+      uint16_t rightColor = currentLineColor;
+      if (colRight.indexOf("[RED]") != -1) { 
+        rightColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b); 
+        colRight.replace("[RED]", ""); 
+      }
+      else if (colRight.indexOf("[GREEN]") != -1) { rightColor = tft.color565(34, 197, 94); colRight.replace("[GREEN]", ""); }
+      else if (colRight.indexOf("[YELLOW]") != -1) { rightColor = tft.color565(245, 158, 11); colRight.replace("[YELLOW]", ""); }
+      else if (colRight.indexOf("[BLUE]") != -1) { rightColor = tft.color565(56, 189, 248); colRight.replace("[BLUE]", ""); }
+      else if (colRight.indexOf("[ORANGE]") != -1) { rightColor = tft.color565(249, 115, 22); colRight.replace("[ORANGE]", ""); }
+      else if (colRight.indexOf("[GREY]") != -1) { rightColor = tft.color565(148, 163, 184); colRight.replace("[GREY]", ""); }
+      else if (colRight.indexOf("[GRAY]") != -1) { rightColor = tft.color565(148, 163, 184); colRight.replace("[GRAY]", ""); }
+      else if (colRight.indexOf("[WHITE]") != -1) { rightColor = TFT_WHITE; colRight.replace("[WHITE]", ""); }
+
+      colLeft.trim();
+      colRight.trim();
+
+      // Column split coordinates (keep standard 2-column alignments for screen dimensions)
+      int leftAlignX = 70;
+      int rightAlignX = 78;
+      if (colLeft.indexOf("Due Today") != -1) {
+        leftAlignX = 115;
+        rightAlignX = 125;
+      }
+
+      // Draw left column right-aligned at leftAlignX
+      tft.setTextColor(leftColor, bgColor);
+      tft.setTextDatum(MR_DATUM);
+      if (fontLoaded) {
+        tft.drawString(colLeft, leftAlignX, currentY);
+      } else {
+        tft.drawString(colLeft, leftAlignX, currentY, fontIndex);
+      }
+
+      // Draw right column left-aligned at rightAlignX
+      tft.setTextColor(rightColor, bgColor);
+      tft.setTextDatum(ML_DATUM);
+      if (fontLoaded) {
+        tft.drawString(colRight, rightAlignX, currentY);
+      } else {
+        tft.drawString(colRight, rightAlignX, currentY, fontIndex);
+      }
+      
+      tft.setTextDatum(MC_DATUM); // Restore default
+    } else {
+      tft.setTextColor(currentLineColor, bgColor);
+      if (fontLoaded) {
+        tft.drawString(line, 120, currentY);
+      } else {
+        tft.drawString(line, 120, currentY, fontIndex);
+      }
+    }
+
+    if (fontLoaded) {
+      tft.unloadFont();
+    }
+
+    y += lineHeight;
+    lineIndex++;
+    if (y > 228) break; // Avoid vertical overflow
   }
 
   if (isAi) {
@@ -356,7 +540,21 @@ inline void updateTFTDisplay(unsigned long now) {
     } else {
       activeAlertMessage = msg;
       activeAlertIsAi = isAi;
-      appState.aiScreenEndTime = now + 8000;
+      if (appState.lastTriggeredEventType == EVENT_JOURNAL) {
+        int lineCount = 0;
+        int idx = 0;
+        while ((idx = msg.indexOf('\n', idx)) != -1) {
+          lineCount++;
+          idx++;
+        }
+        if (msg.length() > 0 && msg[msg.length() - 1] != '\n') {
+          lineCount++;
+        }
+        bool isPage1 = (msg.indexOf("[YELLOW]TODO") != -1);
+        appState.aiScreenEndTime = now + getAlertDurationMs(lineCount, isPage1);
+      } else {
+        appState.aiScreenEndTime = now + 8000;
+      }
       newAlert = true;
     }
   }

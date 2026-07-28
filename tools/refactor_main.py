@@ -1,8 +1,13 @@
 """Refactor main.cpp to use State.h structs instead of global variables."""
 
 import re
+import os
 
-with open('src/main.cpp', 'r') as f:
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+main_cpp_path = os.path.join(project_root, 'src', 'main.cpp')
+
+with open(main_cpp_path, 'r') as f:
     content = f.read()
 
 # ===== STEP 1: Add State.h include =====

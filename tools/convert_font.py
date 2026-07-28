@@ -184,7 +184,15 @@ if __name__ == "__main__":
     
     # Save directly to data directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    output_dir = os.path.join(script_dir, "data")
+    project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+    output_dir = os.path.join(project_root, "data")
+    
+    # Resolve font_file relative to project root if it doesn't exist locally
+    if not os.path.isabs(font_file) and not os.path.exists(font_file):
+        resolved_path = os.path.join(project_root, font_file)
+        if os.path.exists(resolved_path):
+            font_file = resolved_path
+
     font_sizes = [font_size]
     
     write_vlw_files(font_file, output_dir, char_set, font_sizes, font_class_name)

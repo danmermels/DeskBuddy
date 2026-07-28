@@ -1,8 +1,11 @@
 import os
 from PIL import Image
 
-image_path = 'DeskBuddyFace1Small.png'
-header_path = 'src/AwayImage.h'
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+
+image_path = os.path.join(project_root, 'DeskBuddyFace1Small.png')
+header_path = os.path.join(project_root, 'src', 'AwayImage.h')
 
 if not os.path.exists(image_path):
     print(f"Error: {image_path} not found.")

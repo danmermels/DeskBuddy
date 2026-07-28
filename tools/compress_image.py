@@ -95,8 +95,15 @@ if __name__ == '__main__':
     
     # Save the output directly to the project's data/ directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(script_dir, "data")
+    project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+    data_dir = os.path.join(project_root, "data")
     
+    # Resolve image_path relative to project root if it doesn't exist locally
+    if not os.path.isabs(image_path) and not os.path.exists(image_path):
+        resolved_path = os.path.join(project_root, image_path)
+        if os.path.exists(resolved_path):
+            image_path = resolved_path
+
     filename = os.path.basename(image_path)
     base, _ = os.path.splitext(filename)
     rle_path = os.path.join(data_dir, base + ".rle")

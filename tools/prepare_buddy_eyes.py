@@ -63,13 +63,14 @@ def compress_rle_565(img_rgb, out_rle_path):
     return len(rle)
 
 def main():
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.join(root_dir, "data")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+    data_dir = os.path.join(project_root, "data")
     rle_files = ['buddy_eye_o.rle', 'buddy_eye_h.rle', 'buddy_eye_c.rle', 'buddy_eye_s.rle']
 
     total_bytes = 0
     for rname in rle_files:
-        src_path = os.path.join(root_dir, rname)
+        src_path = os.path.join(project_root, rname)
         dst_path = os.path.join(data_dir, rname)
         if not os.path.exists(src_path):
             print(f"Skipping {src_path} (not found)")

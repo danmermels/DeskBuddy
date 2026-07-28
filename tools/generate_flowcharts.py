@@ -231,7 +231,10 @@ diagrams = {
     DefaultThrottle -- Yes/No --> DefaultDraw[Draw Default Clock: Large time, weather, cycling metrics & Mood Ring]"""
 }
 
-os.makedirs("flowcharts", exist_ok=True)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+flowcharts_dir = os.path.join(project_root, "flowcharts")
+os.makedirs(flowcharts_dir, exist_ok=True)
 
 for name, source in diagrams.items():
     print(f"Rendering {name}...")
@@ -254,8 +257,8 @@ for name, source in diagrams.items():
         )
         with urllib.request.urlopen(req) as response:
             svg_content = response.read()
-            with open(f"flowcharts/{name}.svg", "wb") as f:
+            with open(os.path.join(flowcharts_dir, f"{name}.svg"), "wb") as f:
                 f.write(svg_content)
-        print(f"Successfully saved flowcharts/{name}.svg")
+        print(f"Successfully saved {os.path.join(flowcharts_dir, name + '.svg')}")
     except Exception as e:
         print(f"Failed to render {name}: {e}")

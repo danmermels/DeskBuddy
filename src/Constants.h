@@ -10,6 +10,7 @@
 
 // --- Timing Constants (milliseconds) ---
 #define DEBOUNCE_PRESENCE_MS      2000UL
+#define DEBOUNCE_PRESENCE_OVERNIGHT_MS 5000UL
 #define DEBOUNCE_AWAY_MS         10000UL
 #define BREAK_MINIMUM_MS         180000UL   // 3 min minimum for break counting
 #define STOP_BY_THRESHOLD_MS     480000UL   // 8 min threshold for stop-by detection
@@ -17,7 +18,7 @@
 #define SLACKER_INTERVAL_MS     3600000UL   // 1 hr between slacker roasts
 #define STREAK_MINIMUM_MS        900000UL   // 15 min minimum for streak tracking
 #define FOCUS_MINIMUM_MS           15000UL  // 15s minimum focus session
-#define WELCOME_DELAY_MS           5000UL   // 5s delay before welcome alert on sit-down
+#define WELCOME_DELAY_MS           3000UL   // 3s delay before welcome alert on sit-down
 #define AWAY_GRACE_MS              60000UL  // 1 min grace period showing clock after away
 #define ALERT_DURATION_MS           8000UL  // 8s alert message display
 #define SAVE_INTERVAL_MS          600000UL  // 10 min between stats saves
@@ -100,5 +101,49 @@
 
 // --- Captive Portal ---
 #define AP_SSID                 "DeskBuddy-Setup"
+
+inline unsigned long getAlertDurationMs(int lineCount, bool isPage1 = false) {
+  if (isPage1) {
+    return 4000UL; // Dashboard summary page lasts exactly 4 seconds
+  }
+  unsigned long ms = 3000 + (lineCount * 1800);
+  if (ms < 5000) ms = 5000;
+  if (ms > 10000) ms = 10000; // Capped at 10 seconds
+  return ms;
+}
+
+struct RGB {
+  uint8_t r, g, b;
+};
+
+// ============================================================================
+// TASK JOURNAL & DUE NOW SCREEN CONFIGURATIONS
+// ============================================================================
+namespace JournalConfig {
+  // --- Page One Overview (Dashboard) ---
+  constexpr int pageOneTitleY = 17;
+  constexpr const char* pageOneTitleFont = "";          // Empty string "" defaults to small system font
+  constexpr RGB pageOneTitleColor = {245, 158, 11}; // Yellow
+  constexpr const char* pageOneTaskFont = "";           // Empty string "" defaults to small system font
+  constexpr RGB pageOneTaskColor = {255, 255, 255};  // White
+
+  // --- Tasks Page (Journal Page 2+) ---
+  constexpr int tasksTitleY = 17;
+  constexpr const char* tasksTitleFont = "";            // Empty string "" defaults to small system font
+  constexpr RGB tasksTitleColor = {245, 158, 11};   // Yellow
+  constexpr const char* tasksTaskFont = "";             // Empty string "" defaults to small system font
+  constexpr RGB tasksTaskColor = {255, 255, 255};    // White
+
+  // --- DUE Now Page ---
+  constexpr int dueTitleY = 17;
+  constexpr const char* dueTitleFont = "";              // Empty string "" defaults to small system font
+  constexpr RGB dueTitleColor = {245, 158, 11};     // Yellow
+  constexpr RGB dueTextColor = {255, 255, 255};     // White
+  
+  // Hour / Time Field
+  constexpr int dueTimeY = 200;                       // Position Y for the time
+  constexpr const char* dueTimeFont = "";             // Font for the time
+  constexpr RGB dueTimeColor = {239, 68, 68};       // Red
+}
 
 #endif // CONSTANTS_H

@@ -258,6 +258,12 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
         </svg>
         TODO
       </a>
+      <a href="#" onclick="triggerJournalDisplay()" style="color: #94a3b8; text-decoration: none; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 4px; transition: color 0.2s;" onmouseover="this.style.color='#38bdf8'" onmouseout="this.style.color='#94a3b8'" title="Journal Overview">
+        <svg style="width: 18px; height: 18px; fill: currentColor;" viewBox="0 0 24 24">
+          <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/>
+        </svg>
+        JOURNAL
+      </a>
       <a href="/settings" class="cog-btn" title="Settings & Calibration">
         <svg viewBox="0 0 24 24">
           <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
@@ -399,42 +405,8 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     </div>
   </div>
 
-  <div class="card">
-    <div class="panel-header-row">
-      <h1 style="margin: 0; font-size: 1.5rem; color: #38bdf8;">MQTT Terminal</h1>
-      <div class="mqtt-status" id="mqttStatus">
-        <span class="status-dot status-disconnected"></span>
-        <span id="mqttStatusText">Offline</span>
-      </div>
-    </div>
-    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
-      <select id="mqttTopic" class="settings-input" style="flex: 1; min-width: 140px; text-align: left; box-sizing: border-box; height: 38px; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 0 8px;">
-        <option value="deskbuddy/debug/cmd">deskbuddy/debug/cmd</option>
-        <option value="deskbuddy/message">deskbuddy/message</option>
-      </select>
-      <input type="text" id="mqttPayload" placeholder="Type command..." class="settings-input" style="flex: 2; min-width: 180px; text-align: left; box-sizing: border-box;" onkeydown="if(event.key === 'Enter') sendMqttMessage()">
-      <button class="btn" onclick="sendMqttMessage()" style="padding: 6px 15px; height: 38px;">Send</button>
-    </div>
-    <div id="mqttConsole" style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid #334155; height: 180px; overflow-y: auto; padding: 10px; font-family: 'Fira Code', monospace; font-size: 0.85rem; color: #38bdf8; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
-      <div style="color: #64748b; font-style: italic;">Console initialized. Awaiting MQTT updates...</div>
-    </div>
-    <div style="display: flex; gap: 8px; margin-top: 8px;">
-      <button class="btn btn-secondary" onclick="clearMqttHistory()" style="padding: 5px 12px; font-size: 0.85rem;">Clear History</button>
-    </div>
-  </div>
 
-  <div class="card">
-    <div class="panel-header-row">
-      <h1 style="margin: 0; font-size: 1.5rem; color: #f472b6;">System Logs</h1>
-      <div class="mqtt-status" style="font-size: 0.8rem; color: #64748b;">Real-time diagnostics</div>
-    </div>
-    <div id="logsConsole" style="background: rgba(15, 23, 42, 0.6); border-radius: 8px; border: 1px solid #334155; height: 240px; overflow-y: auto; padding: 10px; font-family: 'Fira Code', monospace; font-size: 0.82rem; color: #a7f3d0; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; text-align: left;">
-      <div style="color: #64748b; font-style: italic;">System logs initializing...</div>
-    </div>
-    <div style="display: flex; gap: 8px; margin-top: 8px;">
-      <button class="btn btn-secondary" onclick="clearSystemLogs()" style="padding: 5px 12px; font-size: 0.85rem;">Clear Logs</button>
-    </div>
-  </div>
+
 
 
   <script>
@@ -447,6 +419,14 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     function aiNav(dir) {
       aiIndex = Math.max(0, Math.min(aiIndex + dir, aiMessages.length - 1));
       renderAiMessage();
+    }
+
+    function triggerJournalDisplay() {
+      fetch('/trigger-event?type=10&detail=&mode=0')
+        .then(response => {
+          if (!response.ok) alert("Failed to trigger Journal.");
+        })
+        .catch(err => console.error("Failed to trigger Journal.", err));
     }
 
     function renderAiMessage() {
@@ -612,17 +592,6 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
           let isAi = data.isAiGenerated;
           document.getElementById('aiBadge').style.display = isAi ? "block" : "none";
           
-          // Update MQTT Status
-          let statusDot = document.querySelector('#mqttStatus .status-dot');
-          let statusText = document.getElementById('mqttStatusText');
-          if (data.mqttConnected) {
-            statusDot.className = "status-dot status-connected";
-            statusText.innerText = data.mqttBroker ? `Broker: ${data.mqttBroker}` : 'Connected';
-          } else {
-            statusDot.className = "status-dot status-disconnected";
-            statusText.innerText = 'Disconnected';
-          }
-          
           setTimeout(updateMetrics, 250);
         })
         .catch(err => {
@@ -632,140 +601,6 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     }
     updateMetrics();
 
-    let lastMqttCount = -1;
-    function updateMqttHistory() {
-      fetch('/mqtt-history')
-        .then(response => response.json())
-        .then(data => {
-          let consoleDiv = document.getElementById('mqttConsole');
-          if (data.messages && data.messages.length !== lastMqttCount) {
-            consoleDiv.innerHTML = '';
-            if (data.messages.length === 0) {
-              consoleDiv.innerHTML = '<div style="color: #64748b; font-style: italic;">No messages in history.</div>';
-            } else {
-              data.messages.forEach(msg => {
-                let log = document.createElement('div');
-                let elapsedSec = Math.floor(msg.timestamp / 1000);
-                let h = Math.floor(elapsedSec / 3600);
-                let m = Math.floor((elapsedSec % 3600) / 60);
-                let s = elapsedSec % 60;
-                let timeFormatted = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-                
-                log.innerHTML = `<span style="color: #64748b;">[${timeFormatted}]</span> <span style="color: #fbbf24; font-weight: bold;">${msg.topic}:</span> <span style="color: #f8fafc;">${msg.payload}</span>`;
-                consoleDiv.appendChild(log);
-              });
-            }
-            consoleDiv.scrollTop = consoleDiv.scrollHeight;
-            lastMqttCount = data.messages.length;
-          }
-          setTimeout(updateMqttHistory, 1000);
-        })
-        .catch(err => {
-          console.error("Error fetching MQTT history:", err);
-          setTimeout(updateMqttHistory, 2000);
-        });
-    }
-    updateMqttHistory();
-
-    let lastLogCount = -1;
-    function updateSystemLogs() {
-      fetch('/api/logs')
-        .then(response => response.json())
-        .then(data => {
-          let consoleDiv = document.getElementById('logsConsole');
-          if (data.logs && data.logs.length !== lastLogCount) {
-            consoleDiv.innerHTML = '';
-            if (data.logs.length === 0) {
-              consoleDiv.innerHTML = '<div style="color: #64748b; font-style: italic;">No logs recorded.</div>';
-            } else {
-              data.logs.forEach(log => {
-                let row = document.createElement('div');
-                let ts = log.timestamp;
-                let timeStr = "";
-                
-                if (ts > 1000000000) {
-                  let d = new Date(ts * 1000);
-                  let hours = String(d.getHours()).padStart(2, '0');
-                  let minutes = String(d.getMinutes()).padStart(2, '0');
-                  let seconds = String(d.getSeconds()).padStart(2, '0');
-                  timeStr = hours + ':' + minutes + ':' + seconds;
-                } else {
-                  let h = Math.floor(ts / 3600);
-                  let m = Math.floor((ts % 3600) / 60);
-                  let s = ts % 60;
-                  timeStr = "UP:" + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-                }
-                
-                let color = "#10b981"; // green for system
-                if (log.category === "ERROR") color = "#ef4444"; // red
-                else if (log.category === "STATE") color = "#f59e0b"; // amber
-                else if (log.category === "RADAR") color = "#3b82f6"; // blue
-                else if (log.category === "BEHAVIOUR") color = "#ec4899"; // pink
-                else if (log.category === "MQTT") color = "#8b5cf6"; // purple
-                
-                row.innerHTML = `<span style="color: #64748b;">[${timeStr}]</span> <span style="color: ${color}; font-weight: bold;">[${log.category}]</span> <span class="log-msg" style="color: #f8fafc;"></span>`;
-                row.querySelector('.log-msg').textContent = log.message;
-                consoleDiv.appendChild(row);
-              });
-            }
-            consoleDiv.scrollTop = consoleDiv.scrollHeight;
-            lastLogCount = data.logs.length;
-          }
-          setTimeout(updateSystemLogs, 1000);
-        })
-        .catch(err => {
-          console.error("Error fetching system logs:", err);
-          let consoleDiv = document.getElementById('logsConsole');
-          if (consoleDiv) {
-            consoleDiv.innerHTML = `<div style="color: #f87171; font-style: italic;">Error loading logs: ${err.message || err}</div>`;
-          }
-          setTimeout(updateSystemLogs, 3000);
-        });
-    }
-    updateSystemLogs();
-
-    function clearSystemLogs() {
-      fetch('/api/logs/clear', { method: 'POST' })
-        .then(() => {
-          lastLogCount = -1;
-        })
-        .catch(err => console.error('Failed to clear system logs:', err));
-    }
-
-
-    function sendMqttMessage() {
-      let topic = document.getElementById('mqttTopic').value;
-      let payload = document.getElementById('mqttPayload').value;
-      if (!payload) return;
-      
-      let formData = new FormData();
-      formData.append('topic', topic);
-      formData.append('payload', payload);
-      
-      fetch('/mqtt-publish', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => {
-        if (response.ok) {
-          document.getElementById('mqttPayload').value = '';
-          lastMqttCount = -1; // trigger immediate poll refresh
-        } else {
-          alert('Failed to publish. Is MQTT broker connected?');
-        }
-      })
-      .catch(err => {
-        alert('Error publishing: ' + err);
-      });
-    }
-
-    function clearMqttHistory() {
-      fetch('/mqtt-clear', { method: 'POST' })
-        .then(() => {
-          lastMqttCount = -1;
-        })
-        .catch(err => console.error('Failed to clear MQTT history:', err));
-    }
   </script>
 </body>
 </html>
@@ -2900,90 +2735,13 @@ inline void handleResetStats() {
 }
 
 inline void handleSystemLogs() {
-  DynamicJsonDocument doc(8192);
-  JsonArray arr = doc.createNestedArray("logs");
-  
-  if (appState.systemLogMutex != NULL) {
-    if (xSemaphoreTake(appState.systemLogMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
-      int idx = appState.systemLogHead;
-      int count = appState.systemLogCount;
-
-      for (int i = 0; i < count; i++) {
-        int curIdx = (idx - count + i + SYSTEM_LOG_SIZE) % SYSTEM_LOG_SIZE;
-        JsonObject obj = arr.createNestedObject();
-        obj["timestamp"] = (double)appState.systemLog[curIdx].timestamp;
-        obj["category"] = appState.systemLog[curIdx].category;
-        obj["message"] = appState.systemLog[curIdx].message;
-      }
-      xSemaphoreGive(appState.systemLogMutex);
-    }
-  }
-
-  String response;
-  serializeJson(doc, response);
-  server.send(200, "application/json", response);
+  server.send(200, "application/json", "{\"logs\":[]}");
 }
 
 inline void handleSystemLogsClear() {
-  if (appState.systemLogMutex != NULL) {
-    xSemaphoreTake(appState.systemLogMutex, portMAX_DELAY);
-    appState.systemLogHead = 0;
-    appState.systemLogCount = 0;
-    xSemaphoreGive(appState.systemLogMutex);
-  }
   server.send(200, "text/plain", "Logs Cleared");
 }
 
-inline void handleMqttHistory() {
-  DynamicJsonDocument doc(4096);
-  JsonArray arr = doc.createNestedArray("messages");
-  
-  if (appState.mqttHistoryMutex != NULL) {
-    xSemaphoreTake(appState.mqttHistoryMutex, portMAX_DELAY);
-    int idx = appState.mqttHistoryHead;
-    int count = appState.mqttHistoryCount;
-
-    // Return in chronological order (oldest to newest)
-    for (int i = 0; i < count; i++) {
-      int curIdx = (idx - count + i + MQTT_HISTORY_SIZE) % MQTT_HISTORY_SIZE;
-      JsonObject obj = arr.createNestedObject();
-      obj["topic"] = appState.mqttHistory[curIdx].topic;
-      obj["payload"] = appState.mqttHistory[curIdx].payload;
-      obj["timestamp"] = (double)appState.mqttHistory[curIdx].timestamp;
-    }
-    xSemaphoreGive(appState.mqttHistoryMutex);
-  }
-
-  String response;
-  serializeJson(doc, response);
-  server.send(200, "application/json", response);
-}
-
-inline void handleMqttPublish() {
-  if (server.hasArg("payload")) {
-    String topic = server.hasArg("topic") ? server.arg("topic") : "deskbuddy/message";
-    String payload = server.arg("payload");
-    
-    if (mqttClient.connected()) {
-      mqttClient.publish(topic.c_str(), payload.c_str());
-      server.send(200, "text/plain", "Published");
-    } else {
-      server.send(503, "text/plain", "MQTT client disconnected");
-    }
-  } else {
-    server.send(400, "text/plain", "Missing payload");
-  }
-}
-
-inline void handleMqttClear() {
-  if (appState.mqttHistoryMutex != NULL) {
-    xSemaphoreTake(appState.mqttHistoryMutex, portMAX_DELAY);
-    appState.mqttHistoryHead = 0;
-    appState.mqttHistoryCount = 0;
-    xSemaphoreGive(appState.mqttHistoryMutex);
-  }
-  server.send(200, "text/plain", "Cleared");
-}
 
 inline void handleTriggerEvent() {
   if (server.hasArg("type")) {
@@ -3528,9 +3286,6 @@ inline void setupWebServer() {
   server.on("/trigger-event", handleTriggerEvent);
   server.on("/api/logs", HTTP_GET, handleSystemLogs);
   server.on("/api/logs/clear", HTTP_POST, handleSystemLogsClear);
-  server.on("/mqtt-history", handleMqttHistory);
-  server.on("/mqtt-publish", handleMqttPublish);
-  server.on("/mqtt-clear", HTTP_POST, handleMqttClear);
   server.on("/reset-esp", []() {
     server.send(200, "text/plain", "Rebooting");
     delay(500);

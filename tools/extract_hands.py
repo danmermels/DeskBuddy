@@ -1,8 +1,12 @@
+import os
 from PIL import Image
 import numpy as np
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+
 # Load original image
-img = Image.open('FaceplateAviatorwithOrange.png').convert('RGBA')
+img = Image.open(os.path.join(project_root, 'FaceplateAviatorwithOrange.png')).convert('RGBA')
 w, h = img.size
 center = (120, 120)
 
@@ -47,9 +51,9 @@ rot_sec = rotate_image(orange_img, 174.0, center)
 sec_hand = rot_sec.crop((116, 25, 124, 120))
 
 # Save cropped hand images
-hour_hand.save('hour_hand.png')
-min_hand.save('min_hand.png')
-sec_hand.save('sec_hand.png')
+hour_hand.save(os.path.join(project_root, 'hour_hand.png'))
+min_hand.save(os.path.join(project_root, 'min_hand.png'))
+sec_hand.save(os.path.join(project_root, 'sec_hand.png'))
 
 print("Hands extracted successfully with PIL:")
 print("hour_hand.png size:", hour_hand.size)
