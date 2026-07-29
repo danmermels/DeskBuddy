@@ -109,4 +109,3 @@ if __name__ == '__main__':
     rle_path = os.path.join(data_dir, base + ".rle")
     
     compress_image_to_rle(image_path, rle_path)
-

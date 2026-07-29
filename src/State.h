@@ -2,7 +2,10 @@
 #define STATE_H
 
 #include <Arduino.h>
+#include <NTPClient.h>
 #include "Constants.h"
+
+extern NTPClient timeClient;
 
 // RGB Color structure
 #ifndef RGB_COLOR_STRUCT
@@ -177,7 +180,7 @@ struct RuntimeState {
   unsigned long ringTransitionStart = 0;
   unsigned long ringTransitionDuration = RING_TRANSITION_MS;
   
-  SemaphoreHandle_t geminiMutex = NULL;
+  SemaphoreHandle_t aiMutex = NULL;
   
   // MQTT History Buffer
   MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
@@ -207,10 +210,35 @@ struct TodoState {
   String rawJson = "{\"daily\":[],\"monthly\":[]}";
 };
 
+struct TftMessageRecord {
+  uint32_t epoch;
+  char text[96];
+  uint8_t eventType;
+  bool isAi;
+};
+
+struct TftMessageHistory {
+  static constexpr int MAX_MSGS = 15;
+  TftMessageRecord buffer[MAX_MSGS];
+  int head = 0;
+  int count = 0;
+
+  void record(const char* text, uint8_t eventType, bool isAi) {
+    buffer[head].epoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : (millis() / 1000);
+    strncpy(buffer[head].text, text, sizeof(buffer[head].text) - 1);
+    buffer[head].text[sizeof(buffer[head].text) - 1] = '\0';
+    buffer[head].eventType = eventType;
+    buffer[head].isAi = isAi;
+    head = (head + 1) % MAX_MSGS;
+    if (count < MAX_MSGS) count++;
+  }
+};
+
 // Global State extern declarations (instantiated in main.cpp)
 extern ConfigState appConfig;
 extern StatsState appStats;
 extern RuntimeState appState;
 extern TodoState appTodo;
+extern TftMessageHistory tftMsgHistory;
 
 #endif // STATE_H

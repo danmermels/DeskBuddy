@@ -52,6 +52,7 @@ ConfigState appConfig;
 StatsState appStats;
 RuntimeState appState;
 TodoState appTodo;
+TftMessageHistory tftMsgHistory;
 
 // Hardware Instances
 TFT_eSPI tft = TFT_eSPI();
@@ -85,7 +86,7 @@ void clearRecentMotionWindow() {
 
 // Productivity & Session Timing Metrics
 volatile uint32_t currentSitDownSessionId = 0;
-uint32_t geminiQuerySessionId = 0;
+uint32_t aiQuerySessionId = 0;
 TaskHandle_t aiQueryTaskHandle = NULL;
 
 // Network & MQTT Service Instances
@@ -387,8 +388,8 @@ void setup(void) {
   mqttClient.setClient(wifiClient);
   Serial.println("[DIAGNOSTICS] mqttClient bound");
 
-  // Setup Mutex for Gemini Thread Safety
-  appState.geminiMutex = xSemaphoreCreateMutex();
+  // Setup Mutex for AI Thread Safety
+  appState.aiMutex = xSemaphoreCreateMutex();
   Serial.println("[DIAGNOSTICS] Mutex created");
 
   // Setup Mutex for MQTT History Thread Safety
@@ -399,16 +400,16 @@ void setup(void) {
 
   // Setup Mutex for System Logging Thread Safety
 
-  // Setup persistent background task for Gemini HTTPS Queries
+  // Setup persistent background task for AI HTTPS Queries
   xTaskCreate(
-    queryGeminiTask,
-    "GeminiQuery",
+    aiQueryTask,
+    "AIQuery",
     12288,
     NULL,
     1,
     &aiQueryTaskHandle
   );
-  Serial.println("[DIAGNOSTICS] GeminiQuery task created");
+  Serial.println("[DIAGNOSTICS] AIQuery task created");
 
 
   // Load persistent configurations

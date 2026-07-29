@@ -1005,20 +1005,19 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     drawRLEImageToSprite(centerBgSprite, "/aviator_bg.rle", 10, 10, 220, 220);
     
     // Draw weather (TFT Y=54 -> relative Y=44)
-    centerBgSprite.setTextColor(TFT_WHITE);
     centerBgSprite.setTextDatum(MC_DATUM);
-    centerBgSprite.drawString(String(appState.temp) + "C", 110, 44, 2);
+    centerBgSprite.drawString(String(appState.temp) + "C", 162, 110, 2);
 
     // Draw Date Badge (TFT X=70, Y=68 -> relative X=60, Y=58)
-    char dayStr[3];
-    snprintf(dayStr, sizeof(dayStr), "%d", ts.tm_mday);
-    centerBgSprite.drawString(dayStr, 60, 58, 2);
+    //char dayStr[3];
+    //snprintf(dayStr, sizeof(dayStr), "%d", ts.tm_mday);
+    //centerBgSprite.drawString(dayStr, 60, 58, 2);
 
     // Draw Top Month/Day (TFT Y=74 -> relative Y=64)
     char monthDayStr[12];
     const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
     snprintf(monthDayStr, sizeof(monthDayStr), "%02d %s", ts.tm_mday, months[ts.tm_mon]);
-    centerBgSprite.drawString(monthDayStr, 110, 64, 2);
+    centerBgSprite.drawString(monthDayStr, 86, 63, 2);
 
     // Draw Digital Time (HH:MM) centered at Y=93 (relative Y=83)
     int display_h = h;
@@ -1028,7 +1027,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     }
     char timeStr[9];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
-    centerBgSprite.drawString(timeStr, 110, 83, 4);
+    centerBgSprite.drawString(timeStr, 96, 85, 4);
 
     // Draw Focus Progress (TFT Y=182 -> relative Y=172)
     char stepsGoalStr[32];
@@ -1249,13 +1248,13 @@ static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
     3000,   // minLookInterval
     7000,   // maxLookInterval
     // Time: drawX, drawY, clearX, clearY, clearW, clearH
-    71, 101, 33, 127, 85, 26,
+    71, 125, 33, 127, 85, 26,
     // Date: drawX, drawY, clearX, clearY, clearW, clearH
     167, 131, 128, 128, 78, 24,
     // Weather: drawX, drawY, clearX, clearY, clearW, clearH
-    120, 167, 45, 165, 150, 24,
+    120, 197, 45, 165, 150, 24,
     // Carousel Metric: drawX, drawY, clearX, clearY, clearW, clearH
-    120, 188, 58, 165, 129, 20
+    120, 163, 58, 165, 129, 20
   },
   // Theme 2: DeskCat (ID 7)
   {

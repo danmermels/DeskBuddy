@@ -16,7 +16,7 @@
 
 extern NTPClient timeClient;
 extern volatile uint32_t currentSitDownSessionId;
-extern uint32_t geminiQuerySessionId;
+extern uint32_t aiQuerySessionId;
 extern TaskHandle_t aiQueryTaskHandle;
 
 extern String formatTime(unsigned long ms);
@@ -155,16 +155,16 @@ void publishMqttDebugResponse(int httpCode, const String& payload) {
   }
 }
 
-// Asynchronous FreeRTOS Task for Gemini HTTPS Queries (Persistent background worker)
-void queryGeminiTask(void * parameter) {
+// Asynchronous FreeRTOS Task for AI HTTPS Queries (Persistent background worker)
+void aiQueryTask(void * parameter) {
   while (true) {
     // Wait for task notification to execute a query
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
     String prompt = appState.currentPrompt;
-    uint32_t querySessionId = geminiQuerySessionId;
-    xSemaphoreGive(appState.geminiMutex);
+    uint32_t querySessionId = aiQuerySessionId;
+    xSemaphoreGive(appState.aiMutex);
 
     Logger::log("BEHAVIOUR", "AI Request: session=%u promptLen=%d", querySessionId, prompt.length());
 
@@ -196,7 +196,7 @@ void queryGeminiTask(void * parameter) {
           }
         }
         
-        xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+        xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
         if (!discard) {
           appState.lastResponseIsAi = true;
           appState.aiResponse = response;
@@ -205,12 +205,12 @@ void queryGeminiTask(void * parameter) {
           Logger::log("BEHAVIOUR", "AI Response Discarded (sessionChanged=%d userAway=%d)", 
                       (querySessionId != currentSitDownSessionId), (appState.currentPresenceState == STATE_AWAY));
         }
-        xSemaphoreGive(appState.geminiMutex);
+        xSemaphoreGive(appState.aiMutex);
         success = true;
       }
     }
 
-    // Graceful fallback: If Gemini query fails, load a local fallback quote immediately
+    // Graceful fallback: If AI query fails, load a local fallback quote immediately
     if (!success) {
       String wifiStatusStr = "UNKNOWN";
       wl_status_t status = WiFi.status();
@@ -243,10 +243,10 @@ void queryGeminiTask(void * parameter) {
         default:                  quote = localWelcomeBack[persona][randIdx]; break;
       }
       
-      xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+      xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
       appState.lastResponseIsAi = false;
       String nameCopy = appState.currentUserName;
-      xSemaphoreGive(appState.geminiMutex);
+      xSemaphoreGive(appState.aiMutex);
 
       String personalQuote = resolveLocalPlaceholders(String(quote), appState.lastTriggeredEventDetail);
       
@@ -257,7 +257,7 @@ void queryGeminiTask(void * parameter) {
         }
       }
       
-      xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+      xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
       if (!discard) {
         appState.aiResponse = personalQuote;
         appState.hasNewAIResponse = true;
@@ -266,14 +266,14 @@ void queryGeminiTask(void * parameter) {
         Logger::log("BEHAVIOUR", "AI Fallback Discarded (sessionChanged=%d userAway=%d)",
                     (querySessionId != currentSitDownSessionId), (appState.currentPresenceState == STATE_AWAY));
       }
-      xSemaphoreGive(appState.geminiMutex);
+      xSemaphoreGive(appState.aiMutex);
     }
     
     appState.isAILoading = false;
   }
 }
 
-// Coordinated behaviour trigger: runs background Gemini task or picks local fallback
+// Coordinated behaviour trigger: runs background AI task or picks local fallback
 inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 0) {
   appState.lastTriggeredEventType = eventType;
   Logger::log("BEHAVIOUR", "triggerBehaviour: event=%d detail=\"%s\" force=%d", eventType, detail.c_str(), forceMode);
@@ -300,11 +300,11 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
 
         Logger::log("BEHAVIOUR", "Journal trigger: showing page %d (lines=%d)", pageIdx, pLines);
 
-        xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+        xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
         appState.lastResponseIsAi = false;
         appState.aiResponse = pageContent;
         appState.hasNewAIResponse = true;
-        xSemaphoreGive(appState.geminiMutex);
+        xSemaphoreGive(appState.aiMutex);
 
         if (nextPages.length() > 0) {
           unsigned long currentDurationMs = getAlertDurationMs(pLines);
@@ -327,11 +327,11 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       Logger::log("BEHAVIOUR", "Journal trigger: generated %d pages", pages.size());
 
       if (pages.size() > 0) {
-        xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+        xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
         appState.lastResponseIsAi = false;
         appState.aiResponse = pages[0];
         appState.hasNewAIResponse = true;
-        xSemaphoreGive(appState.geminiMutex);
+        xSemaphoreGive(appState.aiMutex);
 
         if (pages.size() > 1) {
           String serialized = "";
@@ -388,18 +388,18 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     }
     pageContent += "\n\n[RED]" + timeStr;
 
-    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
     appState.lastResponseIsAi = false;
     appState.aiResponse = pageContent;
     appState.hasNewAIResponse = true;
-    xSemaphoreGive(appState.geminiMutex);
+    xSemaphoreGive(appState.aiMutex);
     return;
   }
 
-  xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+  xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
   appState.lastTriggeredEventDetail = detail;
   appState.currentUserName = appConfig.userName;
-  xSemaphoreGive(appState.geminiMutex);
+  xSemaphoreGive(appState.aiMutex);
 
   bool useAI = false;
   if (forceMode == 1) {
@@ -451,19 +451,19 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       if (forceMode != 1) {
         appStats.dailyAiRequestCount++;
       }
-      xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+      xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
       appState.currentPrompt = basePrompt;
-      geminiQuerySessionId = currentSitDownSessionId;
-      xSemaphoreGive(appState.geminiMutex);
+      aiQuerySessionId = currentSitDownSessionId;
+      xSemaphoreGive(appState.aiMutex);
       
       appState.isAILoading = true;
       appState.lastAiQueryStartTime = millis();
-      Logger::log("BEHAVIOUR", "Starting Gemini AI query task (dailyCount=%d)", appStats.dailyAiRequestCount);
+      Logger::log("BEHAVIOUR", "Starting AI query task (dailyCount=%d)", appStats.dailyAiRequestCount);
       
       if (aiQueryTaskHandle != NULL) {
         xTaskNotifyGive(aiQueryTaskHandle);
       } else {
-        Logger::log("BEHAVIOUR", "ERROR: Gemini Query Task handle is NULL. Using local fallback.");
+        Logger::log("BEHAVIOUR", "ERROR: AI Query Task handle is NULL. Using local fallback.");
         appState.isAILoading = false;
         
         // Immediately load fallback
@@ -488,11 +488,11 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         }
 
         String personalQuote = resolveLocalPlaceholders(String(quote), detail);
-        xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+        xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
         appState.lastResponseIsAi = false;
         appState.aiResponse = personalQuote;
         appState.hasNewAIResponse = true;
-        xSemaphoreGive(appState.geminiMutex);
+        xSemaphoreGive(appState.aiMutex);
       }
     } else {
       Logger::log("BEHAVIOUR", "AI Query ignored: already loading");
@@ -523,11 +523,11 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     Logger::log("BEHAVIOUR", "Picked local fallback: \"%s\"", personalQuote.c_str());
 
     // Immediately post fallback quote to display thread-safely
-    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
     appState.lastResponseIsAi = false;
     appState.aiResponse = personalQuote;
     appState.hasNewAIResponse = true;
-    xSemaphoreGive(appState.geminiMutex);
+    xSemaphoreGive(appState.aiMutex);
   }
 }
 

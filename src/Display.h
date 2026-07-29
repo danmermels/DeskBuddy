@@ -524,11 +524,11 @@ inline void updateTFTDisplay(unsigned long now) {
 
   bool newAlert = false;
   if (appState.hasNewAIResponse) {
-    xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
     String msg = appState.aiResponse;
     bool isAi = appState.lastResponseIsAi;
     appState.hasNewAIResponse = false;
-    xSemaphoreGive(appState.geminiMutex);
+    xSemaphoreGive(appState.aiMutex);
 
     // Publish to MQTT immediately when any message is triggered
     publishMqttMessage(msg);
@@ -556,6 +556,9 @@ inline void updateTFTDisplay(unsigned long now) {
         appState.aiScreenEndTime = now + 8000;
       }
       newAlert = true;
+      if (appState.lastTriggeredEventType != EVENT_JOURNAL) {
+        tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
+      }
     }
   }
 
@@ -565,6 +568,9 @@ inline void updateTFTDisplay(unsigned long now) {
     activeAlertIsAi = welcomeAlertIsAi;
     appState.aiScreenEndTime = now + 8000;
     newAlert = true;
+    if (appState.lastTriggeredEventType != EVENT_JOURNAL) {
+      tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
+    }
   }
 
   bool isAlertActive = (now < appState.aiScreenEndTime);

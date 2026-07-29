@@ -1440,3 +1440,894 @@
 [22:37:58] [STATE] [22:38:09] ResetCheck: false (diff-day, abs < 4h)
 [22:37:58] [STATE] [22:38:09] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
 [22:37:58] [STATE] [22:38:09] Away->Present: Ignored brief return (breakMs=6000 < min=180000)
+[23:07:27] [STATE] [23:07:38] Present->Away: prevState=Distracted presDur=1769 s focusDur=0 s stopByTrack=0
+[23:07:27] [STATE] [23:07:38] Present->Away: Real session completed. lastAwayEpoch=23:07:38 reset stopByTracking
+[23:42:02] [STATE] [23:42:13] Away->Present: sit=13906390 epoch=23:42:13 session=22 state=Distracted
+[23:42:02] [STATE] [23:42:13] Away->Present: refAway=23:07:38 gross=2075 s break=2075 s stopBy=0 s
+[23:42:02] [STATE] [23:42:13] ResetCheck: cur=23:42:13 ref=23:07:38 curDay=1 refDay=0
+[23:42:02] [STATE] [23:42:13] ResetCheck: abs=2075 s (0 h 34 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[23:42:02] [STATE] [23:42:13] ResetCheck: false (diff-day, abs < 4h)
+[23:42:02] [STATE] [23:42:13] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[23:42:02] [STATE] [23:42:13] Away->Present: Handled standard break return: breakCount=19 duration=2075 s
+[23:42:05] [BEHAVIOUR] [23:42:17] triggerBehaviour: event=1 detail="34m" force=0
+[23:42:05] [BEHAVIOUR] [23:42:17] Picked local fallback: "Glad you're back, Human! Was your 34m break peaceful?"
+[23:42:19] [STATE] [23:42:30] Present->Away: prevState= <?  presDur=16 s focusDur=0 s stopByTrack=1
+[23:42:19] [STATE] [23:42:30] Present->Away: Stop-By! breakCount 19->18 restoreLatestBreak=1349 lastAwayEpoch=23:42:30
+[23:43:17] [STATE] [23:43:29] Away->Present: sit=13981435 epoch=23:43:29 session=23 state=Focus
+[23:43:17] [STATE] [23:43:29] Away->Present: refAway=23:42:30 gross=59 s break=59 s stopBy=0 s
+[23:43:17] [STATE] [23:43:29] ResetCheck: cur=23:43:29 ref=23:42:30 curDay=1 refDay=0
+[23:43:17] [STATE] [23:43:29] ResetCheck: abs=59 s (0 h 0 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[23:43:17] [STATE] [23:43:29] ResetCheck: false (diff-day, abs < 4h)
+[23:43:17] [STATE] [23:43:29] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[23:43:17] [STATE] [23:43:29] Away->Present: Ignored brief return (breakMs=59000 < min=180000)
+[23:43:30] [STATE] [23:43:42] Present->Away: prevState=Focus presDur=13 s focusDur=13 s stopByTrack=0
+[23:43:30] [STATE] [23:43:42] Present->Away: Real session completed. lastAwayEpoch=23:43:42 reset stopByTracking
+[23:43:35] [STATE] [23:43:46] Away->Present: sit=13999220 epoch=23:43:46 session=24 state= ? 
+[23:43:35] [STATE] [23:43:46] Away->Present: refAway=23:43:42 gross=4 s break=4 s stopBy=0 s
+[23:43:35] [STATE] [23:43:46] ResetCheck: cur=23:43:46 ref=23:43:42 curDay=1 refDay=0
+[23:43:35] [STATE] [23:43:46] ResetCheck: abs=4 s (0 h 0 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[23:43:35] [STATE] [23:43:46] ResetCheck: false (diff-day, abs < 4h)
+[23:43:35] [STATE] [23:43:46] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[23:43:35] [STATE] [23:43:46] Away->Present: Ignored brief return (breakMs=4000 < min=180000)
+[23:43:48] [STATE] [23:43:59] Present->Away: prevState= presDur=13 s focusDur=0 s stopByTrack=0
+[23:43:48] [STATE] [23:43:59] Present->Away: Real session completed. lastAwayEpoch=23:43:59 reset stopByTracking
+[23:45:04] [STATE] [23:45:15] Away->Present: sit=14088107 epoch=23:45:15 session=25 state=? 
+[23:45:04] [STATE] [23:45:15] Away->Present: refAway=23:43:59 gross=76 s break=76 s stopBy=0 s
+[23:45:04] [STATE] [23:45:15] ResetCheck: cur=23:45:15 ref=23:43:59 curDay=1 refDay=0
+[23:45:04] [STATE] [23:45:15] ResetCheck: abs=76 s (0 h 1 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[23:45:04] [STATE] [23:45:15] ResetCheck: false (diff-day, abs < 4h)
+[23:45:04] [STATE] [23:45:15] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[23:45:04] [STATE] [23:45:15] Away->Present: Ignored brief return (breakMs=76000 < min=180000)
+[23:45:21] [STATE] [23:45:32] Present->Away: prevState=$?  presDur=17 s focusDur=0 s stopByTrack=0
+[23:45:21] [STATE] [23:45:32] Present->Away: Real session completed. lastAwayEpoch=23:45:32 reset stopByTracking
+[23:46:26] [STATE] [23:46:38] Away->Present: sit=14170700 epoch=23:46:38 session=26 state= ? 
+[23:46:26] [STATE] [23:46:38] Away->Present: refAway=23:45:32 gross=66 s break=66 s stopBy=0 s
+[23:46:26] [STATE] [23:46:38] ResetCheck: cur=23:46:38 ref=23:45:32 curDay=1 refDay=0
+[23:46:26] [STATE] [23:46:38] ResetCheck: abs=66 s (0 h 1 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[23:46:26] [STATE] [23:46:38] ResetCheck: false (diff-day, abs < 4h)
+[23:46:26] [STATE] [23:46:38] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[23:46:26] [STATE] [23:46:38] Away->Present: Ignored brief return (breakMs=66000 < min=180000)
+[23:46:43] [STATE] [23:46:54] Present->Away: prevState=?  presDur=16 s focusDur=0 s stopByTrack=0
+[23:46:43] [STATE] [23:46:54] Present->Away: Real session completed. lastAwayEpoch=23:46:54 reset stopByTracking
+[23:47:02] [STATE] [23:47:14] Away->Present: sit=14206574 epoch=23:47:14 session=27 state=
+[23:47:02] [STATE] [23:47:14] Away->Present: refAway=23:46:54 gross=20 s break=20 s stopBy=0 s
+[23:47:02] [STATE] [23:47:14] ResetCheck: cur=23:47:14 ref=23:46:54 curDay=1 refDay=0
+[23:47:02] [STATE] [23:47:14] ResetCheck: abs=20 s (0 h 0 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[23:47:02] [STATE] [23:47:14] ResetCheck: false (diff-day, abs < 4h)
+[23:47:02] [STATE] [23:47:14] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[23:47:02] [STATE] [23:47:14] Away->Present: Ignored brief return (breakMs=20000 < min=180000)
+[23:47:16] [STATE] [23:47:27] Present->Away: prevState= presDur=13 s focusDur=0 s stopByTrack=0
+[23:47:16] [STATE] [23:47:27] Present->Away: Real session completed. lastAwayEpoch=23:47:27 reset stopByTracking
+[00:27:42] [STATE] [00:27:53] Away->Present: sit=16645613 epoch=00:27:53 session=28 state=Distracted
+[00:27:42] [STATE] [00:27:53] Away->Present: refAway=23:47:27 gross=2426 s break=2426 s stopBy=0 s
+[00:27:42] [STATE] [00:27:53] ResetCheck: cur=00:27:53 ref=23:47:27 curDay=2 refDay=2
+[00:27:42] [STATE] [00:27:53] ResetCheck: abs=2426 s (0 h 40 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[00:27:42] [STATE] [00:27:53] ResetCheck: false (same-day, resume session)
+[00:27:42] [STATE] [00:27:53] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=1
+[00:27:42] [STATE] [00:27:53] Away->Present: Handled firstSit: firstSitEpoch=1785198473 overnight=2426
+[00:27:42] [BEHAVIOUR] [00:27:53] triggerBehaviour: event=0 detail="" force=0
+[00:27:42] [BEHAVIOUR] [00:27:53] Starting Gemini AI query task (dailyCount=1)
+[00:27:42] [BEHAVIOUR] [00:27:53] AI Request: session=28 promptLen=1111
+[00:27:43] [BEHAVIOUR] [00:27:53] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-64. Loading local fallback.
+[00:27:43] [BEHAVIOUR] [00:27:53] AI Fallback loaded: "Rise and shine, Human! A warm welcome back after a while. Take care today."
+[00:27:56] [STATE] [00:28:07] Present->Away: prevState=Distracted presDur=14 s focusDur=0 s stopByTrack=1
+[00:27:56] [STATE] [00:28:07] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=23:47:27
+[00:35:52] [STATE] [00:36:03] Away->Present: sit=17135801 epoch=00:36:03 session=29 state=$? 
+[00:35:52] [STATE] [00:36:03] Away->Present: refAway=23:47:27 gross=2916 s break=2916 s stopBy=0 s
+[00:35:52] [STATE] [00:36:03] ResetCheck: cur=00:36:03 ref=23:47:27 curDay=2 refDay=2
+[00:35:52] [STATE] [00:36:03] ResetCheck: abs=2916 s (0 h 48 m) dep=23:00 depDay=1 depWork=0 th=25200 s (7 h)
+[00:35:52] [STATE] [00:36:03] ResetCheck: false (same-day, resume session)
+[00:35:52] [STATE] [00:36:03] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=1
+[00:35:52] [STATE] [00:36:03] Away->Present: Handled firstSit: firstSitEpoch=1785198963 overnight=2916
+[00:35:52] [BEHAVIOUR] [00:36:03] triggerBehaviour: event=0 detail="" force=0
+[00:35:52] [BEHAVIOUR] [00:36:03] Starting Gemini AI query task (dailyCount=2)
+[00:35:52] [BEHAVIOUR] [00:36:03] AI Request: session=29 promptLen=1213
+[05:27:00] [STATE] [05:27:12] Present->Away: prevState=Distracted presDur=261 s focusDur=0 s stopByTrack=0
+[05:27:00] [STATE] [05:27:12] Present->Away: Real session completed. lastAwayEpoch=05:27:12 reset stopByTracking
+[05:27:10] [STATE] [05:27:22] Away->Present: sit=277231 epoch=05:27:22 session=2 state=Distracted
+[05:27:10] [STATE] [05:27:22] Away->Present: refAway=05:27:12 gross=10 s break=10 s stopBy=0 s
+[05:27:10] [STATE] [05:27:22] ResetCheck: cur=05:27:22 ref=05:27:12 curDay=2 refDay=2
+[05:27:10] [STATE] [05:27:22] ResetCheck: abs=10 s (0 h 0 m) dep=05:00 depDay=2 depWork=0 th=25200 s (7 h)
+[05:27:10] [STATE] [05:27:22] ResetCheck: false (same-day, resume session)
+[05:27:10] [STATE] [05:27:22] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[05:27:10] [STATE] [05:27:22] Away->Present: Ignored brief return (breakMs=10000 < min=180000)
+[05:32:10] [BEHAVIOUR] [05:32:22] triggerBehaviour: event=10 detail="" force=0
+[05:32:10] [BEHAVIOUR] [05:32:22] Journal trigger: generated 3 pages
+[05:32:10] [BEHAVIOUR] [05:32:22] Journal trigger: scheduled remaining pages in 4000 ms
+[05:32:16] [BEHAVIOUR] [05:32:28] triggerBehaviour: event=10 detail="PAGE:2|12|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]25/07 | WAKE UP [RED]25/07 | out of
+[05:32:16] [BEHAVIOUR] [05:32:28] Journal trigger: showing page 2 (lines=12)
+[05:32:16] [BEHAVIOUR] [05:32:28] Journal trigger: scheduled next pages in 10000 ms
+[05:32:26] [BEHAVIOUR] [05:32:38] triggerBehaviour: event=10 detail="PAGE:3|7|[YELLOW]TASK LIST (2) [RED]27/07 | ssdssdf [YELLOW]-- MONTHLY -- [RED]10/07 | Alice
+[05:32:26] [BEHAVIOUR] [05:32:38] Journal trigger: showing page 3 (lines=7)
+[05:33:49] [STATE] [05:34:00] Present->Away: prevState=Distracted presDur=398 s focusDur=0 s stopByTrack=0
+[05:33:49] [STATE] [05:34:00] Present->Away: Real session completed. lastAwayEpoch=05:34:00 reset stopByTracking
+[05:33:51] [STATE] [05:34:03] Away->Present: sit=678960 epoch=05:34:03 session=3 state=Distracted
+[05:33:52] [STATE] [05:34:03] Away->Present: refAway=05:34:00 gross=3 s break=3 s stopBy=0 s
+[05:33:52] [STATE] [05:34:03] ResetCheck: cur=05:34:03 ref=05:34:00 curDay=2 refDay=2
+[05:33:52] [STATE] [05:34:03] ResetCheck: abs=3 s (0 h 0 m) dep=05:00 depDay=2 depWork=0 th=25200 s (7 h)
+[05:33:52] [STATE] [05:34:03] ResetCheck: false (same-day, resume session)
+[05:33:52] [STATE] [05:34:03] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[05:33:52] [STATE] [05:34:03] Away->Present: Ignored brief return (breakMs=3000 < min=180000)
+[05:36:05] [STATE] [05:36:17] Present->Away: prevState=Distracted presDur=133 s focusDur=0 s stopByTrack=0
+[05:36:05] [STATE] [05:36:17] Present->Away: Real session completed. lastAwayEpoch=05:36:17 reset stopByTracking
+[05:43:46] [STATE] [05:43:58] Away->Present: sit=1273430 epoch=05:43:58 session=4 state=Distracted
+[05:43:46] [STATE] [05:43:58] Away->Present: refAway=05:36:17 gross=461 s break=461 s stopBy=0 s
+[05:43:46] [STATE] [05:43:58] ResetCheck: cur=05:43:58 ref=05:36:17 curDay=2 refDay=2
+[05:43:46] [STATE] [05:43:58] ResetCheck: abs=461 s (0 h 7 m) dep=05:00 depDay=2 depWork=0 th=25200 s (7 h)
+[05:43:46] [STATE] [05:43:58] ResetCheck: false (same-day, resume session)
+[05:43:46] [STATE] [05:43:58] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[05:43:46] [STATE] [05:43:58] Away->Present: Handled standard break return: breakCount=1 duration=461 s
+[05:43:49] [BEHAVIOUR] [05:44:01] triggerBehaviour: event=1 detail="7m" force=0
+[05:43:49] [BEHAVIOUR] [05:44:01] Starting Gemini AI query task (dailyCount=2)
+[05:43:49] [BEHAVIOUR] [05:44:01] AI Request: session=4 promptLen=1230
+[05:43:52] [BEHAVIOUR] [05:44:03] AI Response Success: len=39 resp="Darling, back after 7m, let's catch up."
+[05:44:14] [STATE] [05:44:26] Present->Away: prevState=Distracted presDur=27 s focusDur=0 s stopByTrack=1
+[05:44:14] [STATE] [05:44:26] Present->Away: Stop-By! breakCount 1->0 restoreLatestBreak=0 lastAwayEpoch=05:44:26
+[07:26:43] [STATE] [07:26:54] Away->Present: sit=7449948 epoch=07:26:54 session=5 state= ? 
+[07:26:43] [STATE] [07:26:54] Away->Present: refAway=05:44:26 gross=6148 s break=6148 s stopBy=0 s
+[07:26:43] [STATE] [07:26:54] ResetCheck: cur=07:26:54 ref=05:44:26 curDay=2 refDay=2
+[07:26:43] [STATE] [07:26:54] ResetCheck: abs=6148 s (1 h 42 m) dep=05:00 depDay=2 depWork=0 th=25200 s (7 h)
+[07:26:43] [STATE] [07:26:54] ResetCheck: false (same-day, resume session)
+[07:26:43] [STATE] [07:26:54] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[07:26:43] [STATE] [07:26:54] Away->Present: Handled standard break return: breakCount=1 duration=6148 s
+[07:26:46] [BEHAVIOUR] [07:26:57] triggerBehaviour: event=1 detail="1h42m" force=0
+[07:26:46] [BEHAVIOUR] [07:26:57] Starting Gemini AI query task (dailyCount=3)
+[07:26:46] [BEHAVIOUR] [07:26:57] AI Request: session=5 promptLen=1362
+[07:26:48] [BEHAVIOUR] [07:26:59] AI Response Success: len=42 resp="Darlin', 1h42m is quite a break, isn't it?"
+[07:26:57] [STATE] [07:27:08] Present->Away: prevState=dp?  presDur=14 s focusDur=0 s stopByTrack=1
+[07:26:57] [STATE] [07:27:08] Present->Away: Stop-By! breakCount 1->0 restoreLatestBreak=0 lastAwayEpoch=07:27:08
+[07:46:59] [STATE] [07:47:11] Away->Present: sit=8666349 epoch=07:47:11 session=6 state=Distracted
+[07:46:59] [STATE] [07:47:11] Away->Present: refAway=07:27:08 gross=1203 s break=1203 s stopBy=0 s
+[07:46:59] [STATE] [07:47:11] ResetCheck: cur=07:47:11 ref=07:27:08 curDay=2 refDay=2
+[07:46:59] [STATE] [07:47:11] ResetCheck: abs=1203 s (0 h 20 m) dep=07:00 depDay=2 depWork=0 th=25200 s (7 h)
+[07:46:59] [STATE] [07:47:11] ResetCheck: false (same-day, resume session)
+[07:46:59] [STATE] [07:47:11] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[07:46:59] [STATE] [07:47:11] Away->Present: Handled standard break return: breakCount=1 duration=1203 s
+[07:47:02] [BEHAVIOUR] [07:47:14] triggerBehaviour: event=1 detail="20m" force=0
+[07:47:02] [BEHAVIOUR] [07:47:14] Starting Gemini AI query task (dailyCount=4)
+[07:47:02] [BEHAVIOUR] [07:47:14] AI Request: session=6 promptLen=1130
+[07:47:04] [BEHAVIOUR] [07:47:16] AI Response Success: len=39 resp="Darling, back after 20m, let's refocus."
+[07:47:45] [STATE] [07:47:57] Present->Away: prevState=Distracted presDur=46 s focusDur=0 s stopByTrack=1
+[07:47:45] [STATE] [07:47:57] Present->Away: Real session completed. lastAwayEpoch=07:47:57 reset stopByTracking
+[07:56:18] [STATE] [07:56:29] Away->Present: sit=9225317 epoch=07:56:29 session=7 state=Distracted
+[07:56:18] [STATE] [07:56:29] Away->Present: refAway=07:47:57 gross=512 s break=512 s stopBy=0 s
+[07:56:18] [STATE] [07:56:29] ResetCheck: cur=07:56:29 ref=07:47:57 curDay=2 refDay=2
+[07:56:18] [STATE] [07:56:29] ResetCheck: abs=512 s (0 h 8 m) dep=07:00 depDay=2 depWork=0 th=25200 s (7 h)
+[07:56:18] [STATE] [07:56:29] ResetCheck: false (same-day, resume session)
+[07:56:18] [STATE] [07:56:29] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[07:56:18] [STATE] [07:56:29] Away->Present: Handled standard break return: breakCount=2 duration=512 s
+[07:56:21] [BEHAVIOUR] [07:56:33] triggerBehaviour: event=1 detail="8m" force=0
+[07:56:21] [BEHAVIOUR] [07:56:33] Starting Gemini AI query task (dailyCount=5)
+[07:56:21] [BEHAVIOUR] [07:56:33] AI Request: session=7 promptLen=1230
+[07:56:23] [BEHAVIOUR] [07:56:35] AI Response Success: len=40 resp="Back after 8m, lovely, let's get moving."
+[07:57:23] [STATE] [07:57:35] Present->Away: prevState=Distracted presDur=65 s focusDur=0 s stopByTrack=1
+[07:57:23] [STATE] [07:57:35] Present->Away: Real session completed. lastAwayEpoch=07:57:35 reset stopByTracking
+[07:58:01] [STATE] [07:58:12] Away->Present: sit=9328230 epoch=07:58:12 session=8 state=Distracted
+[07:58:01] [STATE] [07:58:12] Away->Present: refAway=07:57:35 gross=37 s break=37 s stopBy=0 s
+[07:58:01] [STATE] [07:58:12] ResetCheck: cur=07:58:12 ref=07:57:35 curDay=2 refDay=2
+[07:58:01] [STATE] [07:58:12] ResetCheck: abs=37 s (0 h 0 m) dep=07:00 depDay=2 depWork=0 th=25200 s (7 h)
+[07:58:01] [STATE] [07:58:12] ResetCheck: false (same-day, resume session)
+[07:58:01] [STATE] [07:58:12] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[07:58:01] [STATE] [07:58:12] Away->Present: Ignored brief return (breakMs=37000 < min=180000)
+[08:13:01] [BEHAVIOUR] [08:13:12] triggerBehaviour: event=5 detail="15m" force=0
+[08:13:01] [BEHAVIOUR] [08:13:12] Picked local fallback: "Streak beaten, Human! You are on fire today!"
+[08:16:21] [STATE] [08:16:33] Present->Away: prevState=Distracted presDur=1100 s focusDur=0 s stopByTrack=0
+[08:16:21] [STATE] [08:16:33] Present->Away: Real session completed. lastAwayEpoch=08:16:33 reset stopByTracking
+[08:16:37] [STATE] [08:16:49] Away->Present: sit=10444397 epoch=08:16:49 session=9 state=Distracted
+[08:16:37] [STATE] [08:16:49] Away->Present: refAway=08:16:33 gross=16 s break=16 s stopBy=0 s
+[08:16:37] [STATE] [08:16:49] ResetCheck: cur=08:16:49 ref=08:16:33 curDay=2 refDay=2
+[08:16:37] [STATE] [08:16:49] ResetCheck: abs=16 s (0 h 0 m) dep=08:00 depDay=2 depWork=0 th=25200 s (7 h)
+[08:16:37] [STATE] [08:16:49] ResetCheck: false (same-day, resume session)
+[08:16:37] [STATE] [08:16:49] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:16:37] [STATE] [08:16:49] Away->Present: Ignored brief return (breakMs=16000 < min=180000)
+[08:17:44] [STATE] [08:17:55] Present->Away: prevState=Busy presDur=34 s focusDur=0 s stopByTrack=0
+[08:17:44] [STATE] [08:17:55] Present->Away: Real session completed. lastAwayEpoch=08:17:55 reset stopByTracking
+[08:17:49] [STATE] [08:18:00] Away->Present: sit=45850 epoch=08:18:00 session=2 state=Distracted
+[08:17:49] [STATE] [08:18:00] Away->Present: refAway=08:17:55 gross=5 s break=5 s stopBy=0 s
+[08:17:49] [STATE] [08:18:00] ResetCheck: cur=08:18:00 ref=08:17:55 curDay=2 refDay=2
+[08:17:49] [STATE] [08:18:00] ResetCheck: abs=5 s (0 h 0 m) dep=08:00 depDay=2 depWork=0 th=25200 s (7 h)
+[08:17:49] [STATE] [08:18:00] ResetCheck: false (same-day, resume session)
+[08:17:49] [STATE] [08:18:00] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:17:49] [STATE] [08:18:00] Away->Present: Ignored brief return (breakMs=5000 < min=180000)
+[08:29:55] [STATE] [08:30:06] Present->Away: prevState=Distracted presDur=725 s focusDur=0 s stopByTrack=0
+[08:29:55] [STATE] [08:30:06] Present->Away: Real session completed. lastAwayEpoch=08:30:06 reset stopByTracking
+[08:30:13] [STATE] [08:30:25] Away->Present: sit=790221 epoch=08:30:25 session=3 state=\? 
+[08:30:13] [STATE] [08:30:25] Away->Present: refAway=08:30:06 gross=19 s break=19 s stopBy=0 s
+[08:30:13] [STATE] [08:30:25] ResetCheck: cur=08:30:25 ref=08:30:06 curDay=2 refDay=2
+[08:30:13] [STATE] [08:30:25] ResetCheck: abs=19 s (0 h 0 m) dep=08:00 depDay=2 depWork=0 th=25200 s (7 h)
+[08:30:13] [STATE] [08:30:25] ResetCheck: false (same-day, resume session)
+[08:30:13] [STATE] [08:30:25] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:30:13] [STATE] [08:30:25] Away->Present: Ignored brief return (breakMs=19000 < min=180000)
+[08:48:56] [BEHAVIOUR] [08:49:08] triggerBehaviour: event=5 detail="18m" force=0
+[08:48:56] [BEHAVIOUR] [08:49:08] Picked local fallback: "Streak record broken, ! Outstanding persistence!"
+[09:04:17] [STATE] [09:04:28] Present->Away: prevState=Busy presDur=2020 s focusDur=0 s stopByTrack=0
+[09:04:17] [STATE] [09:04:28] Present->Away: Real session completed. lastAwayEpoch=09:04:28 reset stopByTracking
+[09:44:39] [STATE] [09:44:50] Away->Present: sit=4448736 epoch=09:44:50 session=2 state=Distracted
+[09:44:39] [STATE] [09:44:50] Away->Present: refAway=09:04:28 gross=2422 s break=2422 s stopBy=0 s
+[09:44:39] [STATE] [09:44:50] ResetCheck: cur=09:44:50 ref=09:04:28 curDay=2 refDay=2
+[09:44:39] [STATE] [09:44:50] ResetCheck: abs=2422 s (0 h 40 m) dep=09:00 depDay=2 depWork=0 th=25200 s (7 h)
+[09:44:39] [STATE] [09:44:50] ResetCheck: false (same-day, resume session)
+[09:44:39] [STATE] [09:44:50] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:44:39] [STATE] [09:44:50] Away->Present: Handled standard break return: breakCount=3 duration=2422 s
+[09:44:42] [BEHAVIOUR] [09:44:53] triggerBehaviour: event=8 detail="40m" force=0
+[09:44:42] [BEHAVIOUR] [09:44:53] Picked local fallback: "Let's try a longer work block this time, . Settle down."
+[10:00:29] [STATE] [10:00:40] Present->Away: prevState=Busy presDur=950 s focusDur=0 s stopByTrack=1
+[10:00:29] [STATE] [10:00:40] Present->Away: Real session completed. lastAwayEpoch=10:00:40 reset stopByTracking
+[10:00:31] [STATE] [10:00:43] Away->Present: sit=5401725 epoch=10:00:43 session=3 state=Distracted
+[10:00:32] [STATE] [10:00:43] Away->Present: refAway=10:00:40 gross=3 s break=3 s stopBy=0 s
+[10:00:32] [STATE] [10:00:43] ResetCheck: cur=10:00:43 ref=10:00:40 curDay=2 refDay=2
+[10:00:32] [STATE] [10:00:43] ResetCheck: abs=3 s (0 h 0 m) dep=10:00 depDay=2 depWork=0 th=25200 s (7 h)
+[10:00:32] [STATE] [10:00:43] ResetCheck: false (same-day, resume session)
+[10:00:32] [STATE] [10:00:43] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[10:00:32] [STATE] [10:00:43] Away->Present: Ignored brief return (breakMs=3000 < min=180000)
+[10:02:10] [STATE] [10:02:22] Present->Away: prevState=Distracted presDur=98 s focusDur=0 s stopByTrack=0
+[10:02:10] [STATE] [10:02:22] Present->Away: Real session completed. lastAwayEpoch=10:02:22 reset stopByTracking
+[10:03:30] [STATE] [10:03:41] Away->Present: sit=5580125 epoch=10:03:41 session=4 state=Distracted
+[10:03:30] [STATE] [10:03:41] Away->Present: refAway=10:02:22 gross=79 s break=79 s stopBy=0 s
+[10:03:30] [STATE] [10:03:41] ResetCheck: cur=10:03:41 ref=10:02:22 curDay=2 refDay=2
+[10:03:30] [STATE] [10:03:41] ResetCheck: abs=79 s (0 h 1 m) dep=10:00 depDay=2 depWork=0 th=25200 s (7 h)
+[10:03:30] [STATE] [10:03:41] ResetCheck: false (same-day, resume session)
+[10:03:30] [STATE] [10:03:41] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[10:03:30] [STATE] [10:03:41] Away->Present: Ignored brief return (breakMs=79000 < min=180000)
+[10:05:01] [STATE] [10:05:13] Present->Away: prevState= o?  presDur=91 s focusDur=0 s stopByTrack=0
+[10:05:01] [STATE] [10:05:13] Present->Away: Real session completed. lastAwayEpoch=10:05:13 reset stopByTracking
+[10:12:32] [STATE] [10:12:43] Away->Present: sit=6121422 epoch=10:12:43 session=5 state=Focus
+[10:12:32] [STATE] [10:12:43] Away->Present: refAway=10:05:13 gross=450 s break=450 s stopBy=0 s
+[10:12:32] [STATE] [10:12:43] ResetCheck: cur=10:12:43 ref=10:05:13 curDay=2 refDay=2
+[10:12:32] [STATE] [10:12:43] ResetCheck: abs=450 s (0 h 7 m) dep=10:00 depDay=2 depWork=0 th=25200 s (7 h)
+[10:12:32] [STATE] [10:12:43] ResetCheck: false (same-day, resume session)
+[10:12:32] [STATE] [10:12:43] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[10:12:32] [STATE] [10:12:43] Away->Present: Handled standard break return: breakCount=4 duration=450 s
+[10:12:35] [BEHAVIOUR] [10:12:46] triggerBehaviour: event=1 detail="7m" force=0
+[10:12:35] [BEHAVIOUR] [10:12:46] Picked local fallback: "Break over, . 7m was your recovery window — now let's work."
+[10:13:08] [BEHAVIOUR] [10:13:19] triggerBehaviour: event=3 detail="0m" force=0
+[10:13:08] [BEHAVIOUR] [10:13:19] Picked local fallback: "Solid focus session, . Now raise the bar for the next one."
+[10:13:08] [STATE] [10:13:19] Present->Away: prevState=Focus presDur=36 s focusDur=36 s stopByTrack=1
+[10:13:08] [STATE] [10:13:19] Present->Away: Real session completed. lastAwayEpoch=10:13:19 reset stopByTracking
+[10:15:04] [STATE] [10:15:15] Away->Present: sit=6273838 epoch=10:15:15 session=6 state=D ? 
+[10:15:04] [STATE] [10:15:15] Away->Present: refAway=10:13:19 gross=116 s break=116 s stopBy=0 s
+[10:15:04] [STATE] [10:15:15] ResetCheck: cur=10:15:15 ref=10:13:19 curDay=2 refDay=2
+[10:15:04] [STATE] [10:15:15] ResetCheck: abs=116 s (0 h 1 m) dep=10:00 depDay=2 depWork=0 th=25200 s (7 h)
+[10:15:04] [STATE] [10:15:15] ResetCheck: false (same-day, resume session)
+[10:15:04] [STATE] [10:15:15] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[10:15:04] [STATE] [10:15:15] Away->Present: Ignored brief return (breakMs=116000 < min=180000)
+[10:15:30] [STATE] [10:15:41] Present->Away: prevState= o?  presDur=25 s focusDur=0 s stopByTrack=0
+[10:15:30] [STATE] [10:15:41] Present->Away: Real session completed. lastAwayEpoch=10:15:41 reset stopByTracking
+[10:52:07] [STATE] [10:52:18] Away->Present: sit=8496934 epoch=10:52:18 session=7 state=Focus
+[10:52:07] [STATE] [10:52:18] Away->Present: refAway=10:15:41 gross=2197 s break=2197 s stopBy=0 s
+[10:52:07] [STATE] [10:52:18] ResetCheck: cur=10:52:18 ref=10:15:41 curDay=2 refDay=2
+[10:52:07] [STATE] [10:52:18] ResetCheck: abs=2197 s (0 h 36 m) dep=10:00 depDay=2 depWork=0 th=25200 s (7 h)
+[10:52:07] [STATE] [10:52:18] ResetCheck: false (same-day, resume session)
+[10:52:07] [STATE] [10:52:18] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[10:52:07] [STATE] [10:52:18] Away->Present: Handled standard break return: breakCount=5 duration=2197 s
+[10:52:10] [BEHAVIOUR] [10:52:21] triggerBehaviour: event=1 detail="36m" force=0
+[10:52:10] [BEHAVIOUR] [10:52:21] Picked local fallback: "Time to execute, . You've been away for 36m. Focus!"
+[10:52:21] [STATE] [10:52:32] Present->Away: prevState=Focus presDur=13 s focusDur=13 s stopByTrack=1
+[10:52:21] [STATE] [10:52:32] Present->Away: Real session completed. lastAwayEpoch=10:52:32 reset stopByTracking
+[10:59:48] [BEHAVIOUR] [11:00:00] triggerBehaviour: event=12 detail="Arrumar a cama" force=0
+[11:39:25] [STATE] [11:39:36] Away->Present: sit=11334758 epoch=11:39:36 session=8 state=D ? 
+[11:39:25] [STATE] [11:39:36] Away->Present: refAway=10:52:32 gross=2824 s break=2824 s stopBy=0 s
+[11:39:25] [STATE] [11:39:36] ResetCheck: cur=11:39:36 ref=10:52:32 curDay=2 refDay=2
+[11:39:25] [STATE] [11:39:36] ResetCheck: abs=2824 s (0 h 47 m) dep=10:00 depDay=2 depWork=0 th=25200 s (7 h)
+[11:39:25] [STATE] [11:39:36] ResetCheck: false (same-day, resume session)
+[11:39:25] [STATE] [11:39:36] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[11:39:25] [STATE] [11:39:36] Away->Present: Handled standard break return: breakCount=6 duration=2824 s
+[11:39:25] [BEHAVIOUR] [11:39:36] triggerBehaviour: event=6 detail="" force=0
+[11:39:25] [BEHAVIOUR] [11:39:36] Picked local fallback: "Lunch break, ! Step away, eat, and get ready to push."
+[11:39:32] [BEHAVIOUR] [11:39:44] triggerBehaviour: event=1 detail="47m" force=0
+[11:39:33] [BEHAVIOUR] [11:39:44] Picked local fallback: "Back in the seat, . That 47m break is done. Lock in now."
+[11:44:49] [BEHAVIOUR] [11:45:00] triggerBehaviour: event=10 detail="" force=0
+[11:44:49] [BEHAVIOUR] [11:45:00] Journal trigger: generated 3 pages
+[11:44:49] [BEHAVIOUR] [11:45:00] Journal trigger: scheduled remaining pages in 4000 ms
+[11:44:54] [BEHAVIOUR] [11:45:05] triggerBehaviour: event=10 detail="PAGE:2|12|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]25/07 | WAKE UP [RED]25/07 | out of
+[11:44:54] [BEHAVIOUR] [11:45:05] Journal trigger: showing page 2 (lines=12)
+[11:44:54] [BEHAVIOUR] [11:45:05] Journal trigger: scheduled next pages in 10000 ms
+[11:45:05] [BEHAVIOUR] [11:45:17] triggerBehaviour: event=10 detail="PAGE:3|7|[YELLOW]TASK LIST (2) [RED]27/07 | ssdssdf [YELLOW]-- MONTHLY -- [RED]10/07 | Alice
+[11:45:05] [BEHAVIOUR] [11:45:17] Journal trigger: showing page 3 (lines=7)
+[11:49:48] [BEHAVIOUR] [11:50:00] triggerBehaviour: event=12 detail="Check Mail" force=0
+[11:50:34] [BEHAVIOUR] [11:50:46] triggerBehaviour: event=10 detail="" force=0
+[11:50:34] [BEHAVIOUR] [11:50:46] Journal trigger: generated 3 pages
+[11:50:34] [BEHAVIOUR] [11:50:46] Journal trigger: scheduled remaining pages in 4000 ms
+[11:50:38] [BEHAVIOUR] [11:50:50] triggerBehaviour: event=10 detail="PAGE:2|12|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]25/07 | WAKE UP [RED]25/07 | out of
+[11:50:38] [BEHAVIOUR] [11:50:50] Journal trigger: showing page 2 (lines=12)
+[11:50:38] [BEHAVIOUR] [11:50:50] Journal trigger: scheduled next pages in 10000 ms
+[11:50:48] [BEHAVIOUR] [11:51:00] triggerBehaviour: event=10 detail="PAGE:3|7|[YELLOW]TASK LIST (2) [RED]27/07 | ssdssdf [YELLOW]-- MONTHLY -- [RED]10/07 | Alice
+[11:50:48] [BEHAVIOUR] [11:51:00] Journal trigger: showing page 3 (lines=7)
+[11:55:50] [BEHAVIOUR] [11:56:02] triggerBehaviour: event=10 detail="" force=0
+[11:55:50] [BEHAVIOUR] [11:56:02] Journal trigger: generated 2 pages
+[11:55:50] [BEHAVIOUR] [11:56:02] Journal trigger: scheduled remaining pages in 4000 ms
+[11:55:54] [BEHAVIOUR] [11:56:06] triggerBehaviour: event=10 detail="PAGE:2|9|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]27/07 | 
+[11:55:54] [BEHAVIOUR] [11:56:06] Journal trigger: showing page 2 (lines=9)
+[11:56:08] [BEHAVIOUR] [11:56:20] triggerBehaviour: event=10 detail="" force=0
+[11:56:08] [BEHAVIOUR] [11:56:20] Journal trigger: generated 2 pages
+[11:56:08] [BEHAVIOUR] [11:56:20] Journal trigger: scheduled remaining pages in 4000 ms
+[11:56:12] [BEHAVIOUR] [11:56:24] triggerBehaviour: event=10 detail="PAGE:2|9|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]27/07 | 
+[11:56:12] [BEHAVIOUR] [11:56:24] Journal trigger: showing page 2 (lines=9)
+[11:56:49] [BEHAVIOUR] [11:57:00] triggerBehaviour: event=10 detail="" force=0
+[11:56:49] [BEHAVIOUR] [11:57:00] Journal trigger: generated 2 pages
+[11:56:49] [BEHAVIOUR] [11:57:00] Journal trigger: scheduled remaining pages in 4000 ms
+[11:56:53] [BEHAVIOUR] [11:57:04] triggerBehaviour: event=10 detail="PAGE:2|9|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]27/07 | 
+[11:56:53] [BEHAVIOUR] [11:57:04] Journal trigger: showing page 2 (lines=9)
+[11:57:28] [BEHAVIOUR] [11:57:39] triggerBehaviour: event=10 detail="" force=0
+[11:57:28] [BEHAVIOUR] [11:57:39] Journal trigger: generated 2 pages
+[11:57:28] [BEHAVIOUR] [11:57:39] Journal trigger: scheduled remaining pages in 4000 ms
+[11:57:32] [BEHAVIOUR] [11:57:43] triggerBehaviour: event=10 detail="PAGE:2|8|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[11:57:32] [BEHAVIOUR] [11:57:43] Journal trigger: showing page 2 (lines=8)
+[12:02:52] [STATE] [12:03:03] Present->Away: prevState=Busy presDur=1407 s focusDur=0 s stopByTrack=1
+[12:02:52] [STATE] [12:03:03] Present->Away: Real session completed. lastAwayEpoch=12:03:03 reset stopByTracking
+[12:02:58] [STATE] [12:03:10] Away->Present: sit=12748607 epoch=12:03:10 session=9 state=Busy
+[12:02:58] [STATE] [12:03:10] Away->Present: refAway=12:03:03 gross=7 s break=7 s stopBy=0 s
+[12:02:58] [STATE] [12:03:10] ResetCheck: cur=12:03:10 ref=12:03:03 curDay=2 refDay=2
+[12:02:58] [STATE] [12:03:10] ResetCheck: abs=7 s (0 h 0 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:02:58] [STATE] [12:03:10] ResetCheck: false (same-day, resume session)
+[12:02:58] [STATE] [12:03:10] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:02:58] [STATE] [12:03:10] Away->Present: Ignored brief return (breakMs=7000 < min=180000)
+[12:04:10] [STATE] [12:04:21] Present->Away: prevState=Distracted presDur=71 s focusDur=0 s stopByTrack=0
+[12:04:10] [STATE] [12:04:21] Present->Away: Real session completed. lastAwayEpoch=12:04:21 reset stopByTracking
+[12:04:51] [STATE] [12:05:02] Away->Present: sit=12861113 epoch=12:05:02 session=10 state=Distracted
+[12:04:51] [STATE] [12:05:02] Away->Present: refAway=12:04:21 gross=41 s break=41 s stopBy=0 s
+[12:04:51] [STATE] [12:05:02] ResetCheck: cur=12:05:02 ref=12:04:21 curDay=2 refDay=2
+[12:04:51] [STATE] [12:05:02] ResetCheck: abs=41 s (0 h 0 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:04:51] [STATE] [12:05:02] ResetCheck: false (same-day, resume session)
+[12:04:51] [STATE] [12:05:02] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:04:51] [STATE] [12:05:02] Away->Present: Ignored brief return (breakMs=41000 < min=180000)
+[12:06:19] [STATE] [12:06:31] Present->Away: prevState=Busy presDur=67 s focusDur=0 s stopByTrack=0
+[12:06:19] [STATE] [12:06:31] Present->Away: Real session completed. lastAwayEpoch=12:06:31 reset stopByTracking
+[12:06:22] [STATE] [12:06:34] Away->Present: sit=76248 epoch=12:06:34 session=2 state=Busy
+[12:06:22] [STATE] [12:06:34] Away->Present: refAway=12:06:31 gross=3 s break=3 s stopBy=0 s
+[12:06:22] [STATE] [12:06:34] ResetCheck: cur=12:06:34 ref=12:06:31 curDay=2 refDay=2
+[12:06:22] [STATE] [12:06:34] ResetCheck: abs=3 s (0 h 0 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:06:22] [STATE] [12:06:34] ResetCheck: false (same-day, resume session)
+[12:06:22] [STATE] [12:06:34] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:06:22] [STATE] [12:06:34] Away->Present: Ignored brief return (breakMs=3000 < min=180000)
+[12:07:33] [STATE] [12:07:45] Present->Away: prevState=Distracted presDur=71 s focusDur=0 s stopByTrack=0
+[12:07:34] [STATE] [12:07:45] Present->Away: Real session completed. lastAwayEpoch=12:07:45 reset stopByTracking
+[12:08:10] [STATE] [12:08:22] Away->Present: sit=184708 epoch=12:08:22 session=3 state=Distracted
+[12:08:11] [STATE] [12:08:22] Away->Present: refAway=12:07:45 gross=37 s break=37 s stopBy=0 s
+[12:08:11] [STATE] [12:08:22] ResetCheck: cur=12:08:22 ref=12:07:45 curDay=2 refDay=2
+[12:08:11] [STATE] [12:08:22] ResetCheck: abs=37 s (0 h 0 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:08:11] [STATE] [12:08:22] ResetCheck: false (same-day, resume session)
+[12:08:11] [STATE] [12:08:22] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:08:11] [STATE] [12:08:22] Away->Present: Ignored brief return (breakMs=37000 < min=180000)
+[12:21:12] [STATE] [12:21:23] Present->Away: prevState=Busy presDur=128 s focusDur=0 s stopByTrack=0
+[12:21:12] [STATE] [12:21:23] Present->Away: Real session completed. lastAwayEpoch=12:21:23 reset stopByTracking
+[12:29:56] [STATE] [12:30:07] Away->Present: sit=659004 epoch=12:30:07 session=2 state=Distracted
+[12:29:56] [STATE] [12:30:07] Away->Present: refAway=12:21:23 gross=524 s break=524 s stopBy=0 s
+[12:29:56] [STATE] [12:30:07] ResetCheck: cur=12:30:07 ref=12:21:23 curDay=2 refDay=2
+[12:29:56] [STATE] [12:30:07] ResetCheck: abs=524 s (0 h 8 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:29:56] [STATE] [12:30:07] ResetCheck: false (same-day, resume session)
+[12:29:56] [STATE] [12:30:07] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:29:56] [STATE] [12:30:07] Away->Present: Handled standard break return: breakCount=7 duration=524 s
+[12:29:59] [BEHAVIOUR] [12:30:10] triggerBehaviour: event=1 detail="8m" force=0
+[12:29:59] [BEHAVIOUR] [12:30:10] Picked local fallback: "Time to execute, . You've been away for 8m. Focus!"
+[12:30:56] [BEHAVIOUR] [12:31:07] triggerBehaviour: event=10 detail="" force=0
+[12:30:56] [BEHAVIOUR] [12:31:07] Journal trigger: generated 2 pages
+[12:30:56] [BEHAVIOUR] [12:31:07] Journal trigger: scheduled remaining pages in 4000 ms
+[12:31:00] [BEHAVIOUR] [12:31:11] triggerBehaviour: event=10 detail="PAGE:2|8|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[12:31:00] [BEHAVIOUR] [12:31:11] Journal trigger: showing page 2 (lines=8)
+[12:39:24] [BEHAVIOUR] [12:39:35] triggerBehaviour: event=3 detail="1m" force=0
+[12:39:24] [BEHAVIOUR] [12:39:35] Picked local fallback: "Solid focus session, . Now raise the bar for the next one."
+[12:39:24] [STATE] [12:39:35] Present->Away: prevState=Focus presDur=412 s focusDur=71 s stopByTrack=0
+[12:39:24] [STATE] [12:39:35] Present->Away: Real session completed. lastAwayEpoch=12:39:35 reset stopByTracking
+[12:39:42] [STATE] [12:39:53] Away->Present: sit=436726 epoch=12:39:53 session=2 state=i? 
+[12:39:43] [STATE] [12:39:53] Away->Present: refAway=12:39:35 gross=18 s break=18 s stopBy=0 s
+[12:39:43] [STATE] [12:39:53] ResetCheck: cur=12:39:53 ref=12:39:35 curDay=2 refDay=2
+[12:39:43] [STATE] [12:39:53] ResetCheck: abs=18 s (0 h 0 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:39:43] [STATE] [12:39:53] ResetCheck: false (same-day, resume session)
+[12:39:43] [STATE] [12:39:53] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:39:43] [STATE] [12:39:53] Away->Present: Ignored brief return (breakMs=18000 < min=180000)
+[12:44:01] [STATE] [12:44:12] Present->Away: prevState=Busy presDur=258 s focusDur=0 s stopByTrack=0
+[12:44:01] [STATE] [12:44:12] Present->Away: Real session completed. lastAwayEpoch=12:44:12 reset stopByTracking
+[12:45:19] [STATE] [12:45:30] Away->Present: sit=773622 epoch=12:45:30 session=3 state=Distracted
+[12:45:19] [STATE] [12:45:30] Away->Present: refAway=12:44:12 gross=78 s break=78 s stopBy=0 s
+[12:45:19] [STATE] [12:45:30] ResetCheck: cur=12:45:30 ref=12:44:12 curDay=2 refDay=2
+[12:45:19] [STATE] [12:45:30] ResetCheck: abs=78 s (0 h 1 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[12:45:19] [STATE] [12:45:30] ResetCheck: false (same-day, resume session)
+[12:45:19] [STATE] [12:45:30] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:45:19] [STATE] [12:45:30] Away->Present: Ignored brief return (breakMs=78000 < min=180000)
+[12:58:48] [STATE] [12:58:59] Present->Away: prevState=Busy presDur=429 s focusDur=0 s stopByTrack=0
+[12:58:48] [STATE] [12:58:59] Present->Away: Real session completed. lastAwayEpoch=12:58:59 reset stopByTracking
+[13:28:14] [STATE] [13:28:25] Away->Present: sit=2201510 epoch=13:28:25 session=2 state=Busy
+[13:28:14] [STATE] [13:28:25] Away->Present: refAway=12:58:59 gross=1766 s break=1766 s stopBy=0 s
+[13:28:14] [STATE] [13:28:25] ResetCheck: cur=13:28:25 ref=12:58:59 curDay=2 refDay=2
+[13:28:14] [STATE] [13:28:25] ResetCheck: abs=1766 s (0 h 29 m) dep=12:00 depDay=2 depWork=0 th=25200 s (7 h)
+[13:28:14] [STATE] [13:28:25] ResetCheck: false (same-day, resume session)
+[13:28:14] [STATE] [13:28:25] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[13:28:14] [STATE] [13:28:25] Away->Present: Handled standard break return: breakCount=8 duration=1766 s
+[13:28:17] [BEHAVIOUR] [13:28:28] triggerBehaviour: event=1 detail="29m" force=0
+[13:28:17] [BEHAVIOUR] [13:28:28] Picked local fallback: "Welcome back, . You took 29m off — now earn that progress."
+[13:49:49] [BEHAVIOUR] [13:50:00] triggerBehaviour: event=12 detail="Catraca livre" force=0
+[13:52:31] [STATE] [13:52:42] Present->Away: prevState=Busy presDur=366 s focusDur=0 s stopByTrack=0
+[13:52:31] [STATE] [13:52:42] Present->Away: Real session completed. lastAwayEpoch=13:52:42 reset stopByTracking
+[13:52:37] [STATE] [13:52:48] Away->Present: sit=378695 epoch=13:52:48 session=2 state=Distracted
+[13:52:37] [STATE] [13:52:48] Away->Present: refAway=13:52:42 gross=6 s break=6 s stopBy=0 s
+[13:52:37] [STATE] [13:52:48] ResetCheck: cur=13:52:48 ref=13:52:42 curDay=2 refDay=2
+[13:52:37] [STATE] [13:52:48] ResetCheck: abs=6 s (0 h 0 m) dep=13:00 depDay=2 depWork=0 th=25200 s (7 h)
+[13:52:37] [STATE] [13:52:48] ResetCheck: false (same-day, resume session)
+[13:52:37] [STATE] [13:52:48] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[13:52:37] [STATE] [13:52:48] Away->Present: Ignored brief return (breakMs=6000 < min=180000)
+[13:54:39] [STATE] [13:54:49] Present->Away: prevState=0?  presDur=121 s focusDur=0 s stopByTrack=0
+[13:54:39] [STATE] [13:54:49] Present->Away: Real session completed. lastAwayEpoch=13:54:49 reset stopByTracking
+[14:01:55] [STATE] [14:02:05] Away->Present: sit=936394 epoch=14:02:05 session=3 state=?? 
+[14:01:55] [STATE] [14:02:05] Away->Present: refAway=13:54:49 gross=436 s break=436 s stopBy=0 s
+[14:01:55] [STATE] [14:02:05] ResetCheck: cur=14:02:05 ref=13:54:49 curDay=2 refDay=2
+[14:01:55] [STATE] [14:02:05] ResetCheck: abs=436 s (0 h 7 m) dep=13:00 depDay=2 depWork=0 th=25200 s (7 h)
+[14:01:55] [STATE] [14:02:05] ResetCheck: false (same-day, resume session)
+[14:01:55] [STATE] [14:02:05] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[14:01:55] [STATE] [14:02:05] Away->Present: Handled standard break return: breakCount=9 duration=436 s
+[14:01:58] [BEHAVIOUR] [14:02:09] triggerBehaviour: event=1 detail="7m" force=0
+[14:01:58] [BEHAVIOUR] [14:02:09] Picked local fallback: "Back in the seat, . That 7m break is done. Lock in now."
+[14:02:45] [STATE] [14:02:55] Present->Away: prevState=f?  presDur=49 s focusDur=0 s stopByTrack=1
+[14:02:45] [STATE] [14:02:55] Present->Away: Real session completed. lastAwayEpoch=14:02:55 reset stopByTracking
+[14:14:36] [STATE] [14:14:46] Away->Present: sit=1697392 epoch=14:14:46 session=4 state=Focus
+[14:14:36] [STATE] [14:14:46] Away->Present: refAway=14:02:55 gross=711 s break=711 s stopBy=0 s
+[14:14:36] [STATE] [14:14:46] ResetCheck: cur=14:14:46 ref=14:02:55 curDay=2 refDay=2
+[14:14:36] [STATE] [14:14:46] ResetCheck: abs=711 s (0 h 11 m) dep=14:00 depDay=2 depWork=0 th=25200 s (7 h)
+[14:14:36] [STATE] [14:14:46] ResetCheck: false (same-day, resume session)
+[14:14:36] [STATE] [14:14:46] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[14:14:36] [STATE] [14:14:46] Away->Present: Handled standard break return: breakCount=10 duration=711 s
+[14:14:39] [BEHAVIOUR] [14:14:50] triggerBehaviour: event=1 detail="11m" force=0
+[14:14:39] [BEHAVIOUR] [14:14:50] Picked local fallback: "Welcome back, . You took 11m off — now earn that progress."
+[14:15:03] [BEHAVIOUR] [14:15:14] triggerBehaviour: event=3 detail="0m" force=0
+[14:15:03] [BEHAVIOUR] [14:15:14] Picked local fallback: "Solid focus session, . Now raise the bar for the next one."
+[14:15:03] [STATE] [14:15:14] Present->Away: prevState=Focus presDur=27 s focusDur=27 s stopByTrack=1
+[14:15:03] [STATE] [14:15:14] Present->Away: Real session completed. lastAwayEpoch=14:15:14 reset stopByTracking
+[16:28:57] [STATE] [16:29:07] Away->Present: sit=9757927 epoch=16:29:07 session=5 state=Focus
+[16:28:57] [STATE] [16:29:07] Away->Present: refAway=14:15:14 gross=8033 s break=8033 s stopBy=0 s
+[16:28:57] [STATE] [16:29:07] ResetCheck: cur=16:29:07 ref=14:15:14 curDay=2 refDay=2
+[16:28:57] [STATE] [16:29:07] ResetCheck: abs=8033 s (2 h 13 m) dep=14:00 depDay=2 depWork=0 th=25200 s (7 h)
+[16:28:57] [STATE] [16:29:07] ResetCheck: false (same-day, resume session)
+[16:28:57] [STATE] [16:29:07] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:28:57] [STATE] [16:29:07] Away->Present: Handled standard break return: breakCount=11 duration=8033 s
+[16:29:00] [BEHAVIOUR] [16:29:10] triggerBehaviour: event=1 detail="2h13m" force=0
+[16:29:00] [BEHAVIOUR] [16:29:10] Picked local fallback: "Time to execute, . You've been away for 2h13m. Focus!"
+[16:41:31] [STATE] [16:41:42] Present->Away: prevState=Busy presDur=755 s focusDur=0 s stopByTrack=1
+[16:41:31] [STATE] [16:41:42] Present->Away: Real session completed. lastAwayEpoch=16:41:42 reset stopByTracking
+[16:41:42] [STATE] [16:41:53] Away->Present: sit=10523823 epoch=16:41:53 session=6 state=Distracted
+[16:41:42] [STATE] [16:41:53] Away->Present: refAway=16:41:42 gross=11 s break=11 s stopBy=0 s
+[16:41:42] [STATE] [16:41:53] ResetCheck: cur=16:41:53 ref=16:41:42 curDay=2 refDay=2
+[16:41:42] [STATE] [16:41:53] ResetCheck: abs=11 s (0 h 0 m) dep=16:00 depDay=2 depWork=0 th=25200 s (7 h)
+[16:41:42] [STATE] [16:41:53] ResetCheck: false (same-day, resume session)
+[16:41:42] [STATE] [16:41:53] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:41:42] [STATE] [16:41:53] Away->Present: Ignored brief return (breakMs=11000 < min=180000)
+[16:42:47] [STATE] [16:42:58] Present->Away: prevState=Distracted presDur=64 s focusDur=0 s stopByTrack=0
+[16:42:47] [STATE] [16:42:58] Present->Away: Real session completed. lastAwayEpoch=16:42:58 reset stopByTracking
+[16:42:57] [STATE] [16:43:08] Away->Present: sit=10598928 epoch=16:43:08 session=7 state=Busy
+[16:42:57] [STATE] [16:43:08] Away->Present: refAway=16:42:58 gross=10 s break=10 s stopBy=0 s
+[16:42:57] [STATE] [16:43:08] ResetCheck: cur=16:43:08 ref=16:42:58 curDay=2 refDay=2
+[16:42:57] [STATE] [16:43:08] ResetCheck: abs=10 s (0 h 0 m) dep=16:00 depDay=2 depWork=0 th=25200 s (7 h)
+[16:42:57] [STATE] [16:43:08] ResetCheck: false (same-day, resume session)
+[16:42:57] [STATE] [16:43:08] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:42:57] [STATE] [16:43:08] Away->Present: Ignored brief return (breakMs=10000 < min=180000)
+[16:59:49] [BEHAVIOUR] [17:00:00] triggerBehaviour: event=10 detail="" force=0
+[16:59:50] [BEHAVIOUR] [17:00:00] Journal trigger: generated 2 pages
+[16:59:50] [BEHAVIOUR] [17:00:00] Journal trigger: scheduled remaining pages in 4000 ms
+[16:59:54] [BEHAVIOUR] [17:00:06] triggerBehaviour: event=10 detail="PAGE:2|8|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[16:59:54] [BEHAVIOUR] [17:00:06] Journal trigger: showing page 2 (lines=8)
+[17:16:38] [BEHAVIOUR] [17:16:49] triggerBehaviour: event=5 detail="33m" force=0
+[17:16:38] [BEHAVIOUR] [17:16:49] Picked local fallback: "New record, ! High standard established."
+[17:27:57] [BEHAVIOUR] [17:28:08] triggerBehaviour: event=2 detail="" force=0
+[17:27:57] [BEHAVIOUR] [17:28:08] Picked local fallback: "Stand up, ! Shake it out. High energy breeds high output."
+[17:31:32] [STATE] [17:31:43] Present->Away: prevState=Busy presDur=2914 s focusDur=0 s stopByTrack=0
+[17:31:32] [STATE] [17:31:43] Present->Away: Real session completed. lastAwayEpoch=17:31:43 reset stopByTracking
+[17:32:09] [STATE] [17:32:20] Away->Present: sit=13551022 epoch=17:32:20 session=8 state=Distracted
+[17:32:09] [STATE] [17:32:20] Away->Present: refAway=17:31:43 gross=37 s break=37 s stopBy=0 s
+[17:32:09] [STATE] [17:32:20] ResetCheck: cur=17:32:20 ref=17:31:43 curDay=2 refDay=2
+[17:32:09] [STATE] [17:32:20] ResetCheck: abs=37 s (0 h 0 m) dep=17:00 depDay=2 depWork=0 th=25200 s (7 h)
+[17:32:09] [STATE] [17:32:20] ResetCheck: false (same-day, resume session)
+[17:32:09] [STATE] [17:32:20] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[17:32:09] [STATE] [17:32:20] Away->Present: Ignored brief return (breakMs=37000 < min=180000)
+[18:10:35] [STATE] [18:10:45] Present->Away: prevState=Busy presDur=1967 s focusDur=0 s stopByTrack=0
+[18:10:35] [STATE] [18:10:45] Present->Away: Real session completed. lastAwayEpoch=18:10:45 reset stopByTracking
+[18:10:54] [STATE] [18:11:05] Away->Present: sit=1993707 epoch=18:11:05 session=2 state=Distracted
+[18:10:54] [STATE] [18:11:05] Away->Present: refAway=18:10:45 gross=20 s break=20 s stopBy=0 s
+[18:10:54] [STATE] [18:11:05] ResetCheck: cur=18:11:05 ref=18:10:45 curDay=2 refDay=2
+[18:10:54] [STATE] [18:11:05] ResetCheck: abs=20 s (0 h 0 m) dep=18:00 depDay=2 depWork=0 th=25200 s (7 h)
+[18:10:54] [STATE] [18:11:05] ResetCheck: false (same-day, resume session)
+[18:10:54] [STATE] [18:11:05] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:10:54] [STATE] [18:11:05] Away->Present: Ignored brief return (breakMs=20000 < min=180000)
+[18:12:44] [STATE] [18:12:55] Present->Away: prevState=Distracted presDur=109 s focusDur=0 s stopByTrack=0
+[18:12:44] [STATE] [18:12:55] Present->Away: Real session completed. lastAwayEpoch=18:12:55 reset stopByTracking
+[18:12:52] [STATE] [18:13:03] Away->Present: sit=2111350 epoch=18:13:03 session=3 state=Busy
+[18:12:52] [STATE] [18:13:03] Away->Present: refAway=18:12:55 gross=8 s break=8 s stopBy=0 s
+[18:12:52] [STATE] [18:13:03] ResetCheck: cur=18:13:03 ref=18:12:55 curDay=2 refDay=2
+[18:12:52] [STATE] [18:13:03] ResetCheck: abs=8 s (0 h 0 m) dep=18:00 depDay=2 depWork=0 th=25200 s (7 h)
+[18:12:52] [STATE] [18:13:03] ResetCheck: false (same-day, resume session)
+[18:12:52] [STATE] [18:13:03] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:12:52] [STATE] [18:13:03] Away->Present: Ignored brief return (breakMs=8000 < min=180000)
+[18:22:40] [STATE] [18:22:50] Present->Away: prevState=Busy presDur=587 s focusDur=0 s stopByTrack=0
+[18:22:40] [STATE] [18:22:50] Present->Away: Real session completed. lastAwayEpoch=18:22:50 reset stopByTracking
+[18:23:23] [STATE] [18:23:34] Away->Present: sit=2743009 epoch=18:23:34 session=4 state=Distracted
+[18:23:23] [STATE] [18:23:34] Away->Present: refAway=18:22:50 gross=44 s break=44 s stopBy=0 s
+[18:23:23] [STATE] [18:23:34] ResetCheck: cur=18:23:34 ref=18:22:50 curDay=2 refDay=2
+[18:23:23] [STATE] [18:23:34] ResetCheck: abs=44 s (0 h 0 m) dep=18:00 depDay=2 depWork=0 th=25200 s (7 h)
+[18:23:23] [STATE] [18:23:34] ResetCheck: false (same-day, resume session)
+[18:23:23] [STATE] [18:23:34] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:23:23] [STATE] [18:23:34] Away->Present: Ignored brief return (breakMs=44000 < min=180000)
+[18:24:23] [STATE] [18:24:34] Present->Away: prevState=Busy presDur=60 s focusDur=0 s stopByTrack=0
+[18:24:23] [STATE] [18:24:34] Present->Away: Real session completed. lastAwayEpoch=18:24:34 reset stopByTracking
+[18:35:01] [STATE] [18:35:12] Away->Present: sit=3440713 epoch=18:35:12 session=5 state=Distracted
+[18:35:01] [STATE] [18:35:12] Away->Present: refAway=18:24:34 gross=638 s break=638 s stopBy=0 s
+[18:35:01] [STATE] [18:35:12] ResetCheck: cur=18:35:12 ref=18:24:34 curDay=2 refDay=2
+[18:35:01] [STATE] [18:35:12] ResetCheck: abs=638 s (0 h 10 m) dep=18:00 depDay=2 depWork=0 th=25200 s (7 h)
+[18:35:01] [STATE] [18:35:12] ResetCheck: false (same-day, resume session)
+[18:35:01] [STATE] [18:35:12] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:35:01] [STATE] [18:35:12] Away->Present: Handled standard break return: breakCount=12 duration=638 s
+[18:35:04] [BEHAVIOUR] [18:35:15] triggerBehaviour: event=1 detail="10m" force=0
+[18:35:04] [BEHAVIOUR] [18:35:15] Picked local fallback: "Welcome back, . You took 10m off — now earn that progress."
+[18:35:14] [STATE] [18:35:25] Present->Away: prevState=_?  presDur=13 s focusDur=0 s stopByTrack=1
+[18:35:14] [STATE] [18:35:25] Present->Away: Stop-By! breakCount 12->11 restoreLatestBreak=8033 lastAwayEpoch=18:35:25
+[18:38:23] [STATE] [18:38:34] Away->Present: sit=3642618 epoch=18:38:34 session=6 state=, ? 
+[18:38:23] [STATE] [18:38:34] Away->Present: refAway=18:35:25 gross=189 s break=189 s stopBy=0 s
+[18:38:23] [STATE] [18:38:34] ResetCheck: cur=18:38:34 ref=18:35:25 curDay=2 refDay=2
+[18:38:23] [STATE] [18:38:34] ResetCheck: abs=189 s (0 h 3 m) dep=18:00 depDay=2 depWork=0 th=25200 s (7 h)
+[18:38:23] [STATE] [18:38:34] ResetCheck: false (same-day, resume session)
+[18:38:23] [STATE] [18:38:34] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:38:23] [STATE] [18:38:34] Away->Present: Handled standard break return: breakCount=12 duration=189 s
+[18:38:26] [BEHAVIOUR] [18:38:37] triggerBehaviour: event=1 detail="3m" force=0
+[18:38:26] [BEHAVIOUR] [18:38:37] Picked local fallback: "Recharged after 3m, ? Let's pick up the pace."
+[18:38:52] [STATE] [18:39:03] Present->Away: prevState=j?  presDur=29 s focusDur=0 s stopByTrack=1
+[18:38:52] [STATE] [18:39:03] Present->Away: Stop-By! breakCount 12->11 restoreLatestBreak=8033 lastAwayEpoch=18:39:03
+[07:52:48] [MQTT] [07:53:03] CMD: "GET radar"
+[07:53:44] [MQTT] [07:53:59] CMD: "sim away"
+[07:53:56] [STATE] [07:54:09] Present->Away: prevState=Busy presDur=283 s focusDur=0 s stopByTrack=0
+[07:53:56] [STATE] [07:54:09] Present->Away: Real session completed. lastAwayEpoch=07:54:09 reset stopByTracking
+[07:55:17] [MQTT] [07:55:32] CMD: "sim stop"
+[07:55:19] [STATE] [07:55:34] Away->Present: sit=46560379 epoch=07:55:34 session=37 state=Busy
+[07:55:19] [STATE] [07:55:34] Away->Present: refAway=07:54:09 gross=85 s break=85 s stopBy=0 s
+[07:55:19] [STATE] [07:55:34] ResetCheck: cur=07:55:34 ref=07:54:09 curDay=3 refDay=3
+[07:55:19] [STATE] [07:55:34] ResetCheck: abs=85 s (0 h 1 m) dep=07:00 depDay=3 depWork=0 th=25200 s (7 h)
+[07:55:19] [STATE] [07:55:34] ResetCheck: false (same-day, resume session)
+[07:55:19] [STATE] [07:55:34] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[07:55:19] [STATE] [07:55:34] Away->Present: Ignored brief return (breakMs=85000 < min=180000)
+[08:36:08] [STATE] [08:36:22] Present->Away: prevState=_?  presDur=160 s focusDur=0 s stopByTrack=0
+[08:36:08] [STATE] [08:36:22] Present->Away: Real session completed. lastAwayEpoch=08:36:22 reset stopByTracking
+[08:36:33] [STATE] [08:36:47] Away->Present: sit=191833 epoch=08:36:47 session=2 state=_? 
+[08:36:33] [STATE] [08:36:47] Away->Present: refAway=08:36:22 gross=25 s break=25 s stopBy=0 s
+[08:36:33] [STATE] [08:36:47] ResetCheck: cur=08:36:47 ref=08:36:22 curDay=3 refDay=3
+[08:36:33] [STATE] [08:36:47] ResetCheck: abs=25 s (0 h 0 m) dep=08:00 depDay=3 depWork=0 th=25200 s (7 h)
+[08:36:33] [STATE] [08:36:47] ResetCheck: false (same-day, resume session)
+[08:36:33] [STATE] [08:36:47] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:36:33] [STATE] [08:36:47] Away->Present: Ignored brief return (breakMs=25000 < min=180000)
+[08:37:49] [STATE] [08:38:03] Present->Away: prevState=?  presDur=75 s focusDur=0 s stopByTrack=0
+[08:37:49] [STATE] [08:38:03] Present->Away: Real session completed. lastAwayEpoch=08:38:03 reset stopByTracking
+[08:38:38] [STATE] [08:38:53] Away->Present: sit=317235 epoch=08:38:53 session=3 state=? 
+[08:38:38] [STATE] [08:38:53] Away->Present: refAway=08:38:03 gross=50 s break=50 s stopBy=0 s
+[08:38:38] [STATE] [08:38:53] ResetCheck: cur=08:38:53 ref=08:38:03 curDay=3 refDay=3
+[08:38:38] [STATE] [08:38:53] ResetCheck: abs=50 s (0 h 0 m) dep=08:00 depDay=3 depWork=0 th=25200 s (7 h)
+[08:38:38] [STATE] [08:38:53] ResetCheck: false (same-day, resume session)
+[08:38:38] [STATE] [08:38:53] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:38:38] [STATE] [08:38:53] Away->Present: Ignored brief return (breakMs=50000 < min=180000)
+[08:39:53] [STATE] [08:40:07] Present->Away: prevState=xf?  presDur=74 s focusDur=0 s stopByTrack=0
+[08:39:53] [STATE] [08:40:07] Present->Away: Real session completed. lastAwayEpoch=08:40:07 reset stopByTracking
+[08:39:57] [STATE] [08:40:12] Away->Present: sit=396143 epoch=08:40:12 session=4 state=? 
+[08:39:57] [STATE] [08:40:12] Away->Present: refAway=08:40:07 gross=5 s break=5 s stopBy=0 s
+[08:39:57] [STATE] [08:40:12] ResetCheck: cur=08:40:12 ref=08:40:07 curDay=3 refDay=3
+[08:39:57] [STATE] [08:40:12] ResetCheck: abs=5 s (0 h 0 m) dep=08:00 depDay=3 depWork=0 th=25200 s (7 h)
+[08:39:57] [STATE] [08:40:12] ResetCheck: false (same-day, resume session)
+[08:39:57] [STATE] [08:40:12] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:39:57] [STATE] [08:40:12] Away->Present: Ignored brief return (breakMs=5000 < min=180000)
+[08:40:26] [STATE] [08:40:40] Present->Away: prevState=?  presDur=28 s focusDur=0 s stopByTrack=0
+[08:40:26] [STATE] [08:40:40] Present->Away: Real session completed. lastAwayEpoch=08:40:40 reset stopByTracking
+[09:05:00] [STATE] [09:05:13] Away->Present: sit=1898034 epoch=09:05:13 session=5 state=? 
+[09:05:00] [STATE] [09:05:13] Away->Present: refAway=08:40:40 gross=1473 s break=1473 s stopBy=0 s
+[09:05:00] [STATE] [09:05:13] ResetCheck: cur=09:05:13 ref=08:40:40 curDay=3 refDay=3
+[09:05:00] [STATE] [09:05:13] ResetCheck: abs=1473 s (0 h 24 m) dep=08:00 depDay=3 depWork=0 th=25200 s (7 h)
+[09:05:00] [STATE] [09:05:13] ResetCheck: false (same-day, resume session)
+[09:05:00] [STATE] [09:05:13] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:05:00] [STATE] [09:05:13] Away->Present: Handled standard break return: breakCount=2 duration=1473 s
+[09:05:03] [BEHAVIOUR] [09:05:17] triggerBehaviour: event=8 detail="24m" force=0
+[09:05:05] [BEHAVIOUR] [09:05:17] Picked local fallback: "Let's try a longer work block this time, . Settle down."
+[09:06:41] [BEHAVIOUR] [09:06:55] triggerBehaviour: event=10 detail="" force=0
+[09:06:41] [BEHAVIOUR] [09:06:55] Journal trigger: generated 2 pages
+[09:06:41] [BEHAVIOUR] [09:06:55] Journal trigger: scheduled remaining pages in 4000 ms
+[09:06:45] [BEHAVIOUR] [09:06:59] triggerBehaviour: event=10 detail="PAGE:2|7|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [GREEN]11:00 | Arrumar a cama [GREEN]11:5
+[09:06:45] [BEHAVIOUR] [09:06:59] Journal trigger: showing page 2 (lines=7)
+[09:07:51] [STATE] [09:08:05] Present->Away: prevState=Busy presDur=171 s focusDur=0 s stopByTrack=1
+[09:07:51] [STATE] [09:08:05] Present->Away: Real session completed. lastAwayEpoch=09:08:05 reset stopByTracking
+[09:08:27] [STATE] [09:08:42] Away->Present: sit=2106131 epoch=09:08:42 session=6 state=Distracted
+[09:08:27] [STATE] [09:08:42] Away->Present: refAway=09:08:05 gross=37 s break=37 s stopBy=0 s
+[09:08:27] [STATE] [09:08:42] ResetCheck: cur=09:08:42 ref=09:08:05 curDay=3 refDay=3
+[09:08:27] [STATE] [09:08:42] ResetCheck: abs=37 s (0 h 0 m) dep=09:00 depDay=3 depWork=0 th=25200 s (7 h)
+[09:08:27] [STATE] [09:08:42] ResetCheck: false (same-day, resume session)
+[09:08:27] [STATE] [09:08:42] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:08:27] [STATE] [09:08:42] Away->Present: Ignored brief return (breakMs=37000 < min=180000)
+[09:17:07] [STATE] [09:17:21] Present->Away: prevState=Busy presDur=444 s focusDur=0 s stopByTrack=0
+[09:17:07] [STATE] [09:17:21] Present->Away: Real session completed. lastAwayEpoch=09:17:21 reset stopByTracking
+[09:17:41] [STATE] [09:17:56] Away->Present: sit=485474 epoch=09:17:56 session=2 state=Busy
+[09:17:41] [STATE] [09:17:56] Away->Present: refAway=09:17:21 gross=35 s break=35 s stopBy=0 s
+[09:17:41] [STATE] [09:17:56] ResetCheck: cur=09:17:56 ref=09:17:21 curDay=3 refDay=3
+[09:17:41] [STATE] [09:17:56] ResetCheck: abs=35 s (0 h 0 m) dep=09:00 depDay=3 depWork=0 th=25200 s (7 h)
+[09:17:41] [STATE] [09:17:56] ResetCheck: false (same-day, resume session)
+[09:17:41] [STATE] [09:17:56] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:17:41] [STATE] [09:17:56] Away->Present: Ignored brief return (breakMs=35000 < min=180000)
+[09:24:49] [STATE] [09:25:03] Present->Away: prevState=Busy presDur=427 s focusDur=0 s stopByTrack=0
+[09:24:49] [STATE] [09:25:03] Present->Away: Real session completed. lastAwayEpoch=09:25:03 reset stopByTracking
+[09:24:54] [STATE] [09:25:08] Away->Present: sit=918032 epoch=09:25:08 session=3 state=Distracted
+[09:24:54] [STATE] [09:25:08] Away->Present: refAway=09:25:03 gross=5 s break=5 s stopBy=0 s
+[09:24:54] [STATE] [09:25:08] ResetCheck: cur=09:25:08 ref=09:25:03 curDay=3 refDay=3
+[09:24:54] [STATE] [09:25:08] ResetCheck: abs=5 s (0 h 0 m) dep=09:00 depDay=3 depWork=0 th=25200 s (7 h)
+[09:24:54] [STATE] [09:25:08] ResetCheck: false (same-day, resume session)
+[09:24:54] [STATE] [09:25:08] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:24:54] [STATE] [09:25:08] Away->Present: Ignored brief return (breakMs=5000 < min=180000)
+[09:26:50] [STATE] [09:27:04] Present->Away: prevState=Busy presDur=116 s focusDur=0 s stopByTrack=0
+[09:26:50] [STATE] [09:27:04] Present->Away: Real session completed. lastAwayEpoch=09:27:04 reset stopByTracking
+[10:59:45] [BEHAVIOUR] [11:00:00] triggerBehaviour: event=12 detail="Arrumar a cama" force=0
+[11:20:58] [STATE] [11:21:12] Away->Present: sit=7881829 epoch=11:21:12 session=4 state=Distracted
+[11:20:58] [STATE] [11:21:12] Away->Present: refAway=09:27:04 gross=6848 s break=6848 s stopBy=0 s
+[11:20:58] [STATE] [11:21:12] ResetCheck: cur=11:21:12 ref=09:27:04 curDay=3 refDay=3
+[11:20:58] [STATE] [11:21:12] ResetCheck: abs=6848 s (1 h 54 m) dep=09:00 depDay=3 depWork=0 th=25200 s (7 h)
+[11:20:58] [STATE] [11:21:12] ResetCheck: false (same-day, resume session)
+[11:20:58] [STATE] [11:21:12] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[11:20:58] [STATE] [11:21:12] Away->Present: Handled standard break return: breakCount=3 duration=6848 s
+[11:20:58] [BEHAVIOUR] [11:21:12] triggerBehaviour: event=6 detail="" force=0
+[11:20:58] [BEHAVIOUR] [11:21:12] Picked local fallback: "Time for lunch, ! Refuel your body for the next half."
+[11:21:05] [BEHAVIOUR] [11:21:20] triggerBehaviour: event=1 detail="1h54m" force=0
+[11:21:05] [BEHAVIOUR] [11:21:20] Picked local fallback: "Time to execute, . You've been away for 1h54m. Focus!"
+[11:35:57] [BEHAVIOUR] [11:36:12] triggerBehaviour: event=5 detail="15m" force=0
+[11:35:57] [BEHAVIOUR] [11:36:12] Picked local fallback: "Streak record smashed, ! You're setting the pace."
+[11:41:50] [BEHAVIOUR] [11:42:04] triggerBehaviour: event=3 detail="1m" force=0
+[11:41:50] [BEHAVIOUR] [11:42:04] Starting AI query task (dailyCount=1)
+[11:41:50] [STATE] [11:42:04] Present->Away: prevState=Focus presDur=1252 s focusDur=71 s stopByTrack=1
+[11:41:50] [STATE] [11:42:04] Present->Away: Real session completed. lastAwayEpoch=11:42:04 reset stopByTracking
+[11:41:50] [BEHAVIOUR] [11:42:04] AI Request: session=4 promptLen=1176
+[11:41:50] [BEHAVIOUR] [11:42:04] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-62. Loading local fallback.
+[11:41:50] [BEHAVIOUR] [11:42:04] AI Fallback loaded: "Focus session complete! Great execution, Dev Master."
+[11:42:05] [STATE] [11:42:20] Away->Present: sit=9149530 epoch=11:42:20 session=5 state=<5? 
+[11:42:05] [STATE] [11:42:20] Away->Present: refAway=11:42:04 gross=16 s break=16 s stopBy=0 s
+[11:42:05] [STATE] [11:42:20] ResetCheck: cur=11:42:20 ref=11:42:04 curDay=3 refDay=3
+[11:42:05] [STATE] [11:42:20] ResetCheck: abs=16 s (0 h 0 m) dep=11:00 depDay=3 depWork=0 th=25200 s (7 h)
+[11:42:05] [STATE] [11:42:20] ResetCheck: false (same-day, resume session)
+[11:42:05] [STATE] [11:42:20] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[11:42:05] [STATE] [11:42:20] Away->Present: Ignored brief return (breakMs=16000 < min=180000)
+[11:42:51] [STATE] [11:43:05] Present->Away: prevState=?  presDur=45 s focusDur=0 s stopByTrack=0
+[11:42:51] [STATE] [11:43:05] Present->Away: Real session completed. lastAwayEpoch=11:43:05 reset stopByTracking
+[11:49:45] [BEHAVIOUR] [11:50:00] triggerBehaviour: event=12 detail="Check Mail" force=0
+[11:59:45] [STATE] [12:00:00] Away->Present: sit=10209741 epoch=12:00:00 session=6 state=Distracted
+[11:59:45] [STATE] [12:00:00] Away->Present: refAway=11:43:05 gross=1015 s break=1015 s stopBy=0 s
+[11:59:45] [STATE] [12:00:00] ResetCheck: cur=12:00:00 ref=11:43:05 curDay=3 refDay=3
+[11:59:46] [STATE] [12:00:00] ResetCheck: abs=1015 s (0 h 16 m) dep=11:00 depDay=3 depWork=0 th=25200 s (7 h)
+[11:59:46] [STATE] [12:00:00] ResetCheck: false (same-day, resume session)
+[11:59:46] [STATE] [12:00:00] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[11:59:46] [STATE] [12:00:00] Away->Present: Handled standard break return: breakCount=4 duration=1015 s
+[11:59:48] [BEHAVIOUR] [12:00:03] triggerBehaviour: event=1 detail="16m" force=0
+[11:59:49] [BEHAVIOUR] [12:00:03] Starting AI query task (dailyCount=2)
+[11:59:49] [BEHAVIOUR] [12:00:03] AI Request: session=6 promptLen=1463
+[11:59:49] [BEHAVIOUR] [12:00:03] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-62. Loading local fallback.
+[11:59:49] [BEHAVIOUR] [12:00:03] AI Fallback loaded: "Recharged after 16m, Dev Master? Let's pick up the pace."
+[12:04:04] [BEHAVIOUR] [12:04:18] triggerBehaviour: event=10 detail="PAGE:2|7|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[12:04:04] [BEHAVIOUR] [12:04:18] Journal trigger: showing page 2 (lines=7)
+[12:04:28] [BEHAVIOUR] [12:04:43] triggerBehaviour: event=10 detail="" force=0
+[12:04:28] [BEHAVIOUR] [12:04:43] Journal trigger: generated 2 pages
+[12:04:28] [BEHAVIOUR] [12:04:43] Journal trigger: scheduled remaining pages in 4000 ms
+[12:04:32] [BEHAVIOUR] [12:04:47] triggerBehaviour: event=10 detail="PAGE:2|7|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[12:04:32] [BEHAVIOUR] [12:04:47] Journal trigger: showing page 2 (lines=7)
+[12:09:14] [STATE] [12:09:28] Present->Away: prevState=Busy presDur=317 s focusDur=0 s stopByTrack=0
+[12:09:14] [STATE] [12:09:28] Present->Away: Real session completed. lastAwayEpoch=12:09:28 reset stopByTracking
+[12:09:27] [STATE] [12:09:42] Away->Present: sit=337810 epoch=12:09:42 session=2 state=Distracted
+[12:09:27] [STATE] [12:09:42] Away->Present: refAway=12:09:28 gross=14 s break=14 s stopBy=0 s
+[12:09:27] [STATE] [12:09:42] ResetCheck: cur=12:09:42 ref=12:09:28 curDay=3 refDay=3
+[12:09:27] [STATE] [12:09:42] ResetCheck: abs=14 s (0 h 0 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:09:27] [STATE] [12:09:42] ResetCheck: false (same-day, resume session)
+[12:09:27] [STATE] [12:09:42] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:09:27] [STATE] [12:09:42] Away->Present: Ignored brief return (breakMs=14000 < min=180000)
+[12:10:38] [STATE] [12:10:52] Present->Away: prevState=Busy presDur=70 s focusDur=0 s stopByTrack=0
+[12:10:38] [STATE] [12:10:52] Present->Away: Real session completed. lastAwayEpoch=12:10:52 reset stopByTracking
+[12:10:40] [STATE] [12:10:55] Away->Present: sit=410720 epoch=12:10:55 session=3 state=Distracted
+[12:10:40] [STATE] [12:10:55] Away->Present: refAway=12:10:52 gross=3 s break=3 s stopBy=0 s
+[12:10:40] [STATE] [12:10:55] ResetCheck: cur=12:10:55 ref=12:10:52 curDay=3 refDay=3
+[12:10:40] [STATE] [12:10:55] ResetCheck: abs=3 s (0 h 0 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:10:40] [STATE] [12:10:55] ResetCheck: false (same-day, resume session)
+[12:10:40] [STATE] [12:10:55] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:10:40] [STATE] [12:10:55] Away->Present: Ignored brief return (breakMs=3000 < min=180000)
+[12:16:41] [STATE] [12:16:55] Away->Present: sit=14343 epoch=12:16:55 session=1 state=Busy
+[12:16:41] [STATE] [12:16:55] Away->Present: refAway=12:16:49 gross=6 s break=6 s stopBy=0 s
+[12:16:41] [STATE] [12:16:55] ResetCheck: cur=12:16:55 ref=12:16:49 curDay=3 refDay=3
+[12:16:41] [STATE] [12:16:55] ResetCheck: abs=6 s (0 h 0 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:16:41] [STATE] [12:16:55] ResetCheck: false (same-day, resume session)
+[12:16:41] [STATE] [12:16:55] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:16:41] [STATE] [12:16:55] Away->Present: Ignored brief return (breakMs=6000 < min=180000)
+[12:24:58] [STATE] [12:25:12] Present->Away: prevState=Busy presDur=497 s focusDur=0 s stopByTrack=0
+[12:24:59] [STATE] [12:25:12] Present->Away: Real session completed. lastAwayEpoch=12:25:12 reset stopByTracking
+[12:32:25] [STATE] [12:32:39] Away->Present: sit=958827 epoch=12:32:39 session=2 state=Distracted
+[12:32:25] [STATE] [12:32:39] Away->Present: refAway=12:25:12 gross=447 s break=447 s stopBy=0 s
+[12:32:25] [STATE] [12:32:39] ResetCheck: cur=12:32:39 ref=12:25:12 curDay=3 refDay=3
+[12:32:25] [STATE] [12:32:39] ResetCheck: abs=447 s (0 h 7 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:32:25] [STATE] [12:32:39] ResetCheck: false (same-day, resume session)
+[12:32:25] [STATE] [12:32:39] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:32:25] [STATE] [12:32:39] Away->Present: Handled standard break return: breakCount=5 duration=447 s
+[12:32:28] [BEHAVIOUR] [12:32:42] triggerBehaviour: event=1 detail="7m" force=0
+[12:32:28] [BEHAVIOUR] [12:32:42] Starting AI query task (dailyCount=2)
+[12:32:28] [BEHAVIOUR] [12:32:42] AI Request: session=2 promptLen=1463
+[12:32:29] [BEHAVIOUR] [12:32:43] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-63. Loading local fallback.
+[12:32:29] [BEHAVIOUR] [12:32:43] AI Fallback loaded: "Break over, Dev Master. 7m was your recovery window — now let's work."
+[12:45:07] [STATE] [12:45:21] Present->Away: prevState=Busy presDur=643 s focusDur=0 s stopByTrack=0
+[12:45:07] [STATE] [12:45:21] Present->Away: Real session completed. lastAwayEpoch=12:45:21 reset stopByTracking
+[12:46:39] [STATE] [12:46:52] Away->Present: sit=741139 epoch=12:46:52 session=2 state=Distracted
+[12:46:39] [STATE] [12:46:52] Away->Present: refAway=12:45:21 gross=91 s break=91 s stopBy=0 s
+[12:46:39] [STATE] [12:46:52] ResetCheck: cur=12:46:52 ref=12:45:21 curDay=3 refDay=3
+[12:46:39] [STATE] [12:46:52] ResetCheck: abs=91 s (0 h 1 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:46:39] [STATE] [12:46:52] ResetCheck: false (same-day, resume session)
+[12:46:39] [STATE] [12:46:52] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:46:39] [STATE] [12:46:52] Away->Present: Ignored brief return (breakMs=91000 < min=180000)
+[12:46:57] [STATE] [12:47:11] Present->Away: prevState=Distracted presDur=18 s focusDur=0 s stopByTrack=0
+[12:46:57] [STATE] [12:47:11] Present->Away: Real session completed. lastAwayEpoch=12:47:11 reset stopByTracking
+[12:47:15] [STATE] [12:47:29] Away->Present: sit=777917 epoch=12:47:29 session=3 state=Distracted
+[12:47:15] [STATE] [12:47:29] Away->Present: refAway=12:47:11 gross=18 s break=18 s stopBy=0 s
+[12:47:15] [STATE] [12:47:29] ResetCheck: cur=12:47:29 ref=12:47:11 curDay=3 refDay=3
+[12:47:15] [STATE] [12:47:29] ResetCheck: abs=18 s (0 h 0 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:47:15] [STATE] [12:47:29] ResetCheck: false (same-day, resume session)
+[12:47:15] [STATE] [12:47:29] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:47:15] [STATE] [12:47:29] Away->Present: Ignored brief return (breakMs=18000 < min=180000)
+[12:47:42] [STATE] [12:47:56] Present->Away: prevState=Distracted presDur=27 s focusDur=0 s stopByTrack=0
+[12:47:43] [STATE] [12:47:56] Present->Away: Real session completed. lastAwayEpoch=12:47:56 reset stopByTracking
+[12:49:01] [STATE] [12:49:15] Away->Present: sit=883421 epoch=12:49:15 session=4 state=Busy
+[12:49:01] [STATE] [12:49:15] Away->Present: refAway=12:47:56 gross=79 s break=79 s stopBy=0 s
+[12:49:01] [STATE] [12:49:15] ResetCheck: cur=12:49:15 ref=12:47:56 curDay=3 refDay=3
+[12:49:01] [STATE] [12:49:15] ResetCheck: abs=79 s (0 h 1 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:49:01] [STATE] [12:49:15] ResetCheck: false (same-day, resume session)
+[12:49:01] [STATE] [12:49:15] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:49:01] [STATE] [12:49:15] Away->Present: Ignored brief return (breakMs=79000 < min=180000)
+[12:49:36] [STATE] [12:49:50] Present->Away: prevState=Busy presDur=34 s focusDur=0 s stopByTrack=0
+[12:49:36] [STATE] [12:49:50] Present->Away: Real session completed. lastAwayEpoch=12:49:50 reset stopByTracking
+[12:50:55] [STATE] [12:51:09] Away->Present: sit=997771 epoch=12:51:09 session=5 state=Distracted
+[12:50:55] [STATE] [12:51:09] Away->Present: refAway=12:49:50 gross=79 s break=79 s stopBy=0 s
+[12:50:55] [STATE] [12:51:09] ResetCheck: cur=12:51:09 ref=12:49:50 curDay=3 refDay=3
+[12:50:55] [STATE] [12:51:09] ResetCheck: abs=79 s (0 h 1 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[12:50:55] [STATE] [12:51:09] ResetCheck: false (same-day, resume session)
+[12:50:55] [STATE] [12:51:09] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[12:50:55] [STATE] [12:51:09] Away->Present: Ignored brief return (breakMs=79000 < min=180000)
+[12:51:16] [STATE] [12:51:30] Present->Away: prevState=Distracted presDur=21 s focusDur=0 s stopByTrack=0
+[12:51:16] [STATE] [12:51:30] Present->Away: Real session completed. lastAwayEpoch=12:51:30 reset stopByTracking
+[14:39:13] [STATE] [14:39:27] Away->Present: sit=7495884 epoch=14:39:27 session=6 state=d? 
+[14:39:13] [STATE] [14:39:27] Away->Present: refAway=12:51:30 gross=6477 s break=6477 s stopBy=0 s
+[14:39:13] [STATE] [14:39:27] ResetCheck: cur=14:39:27 ref=12:51:30 curDay=3 refDay=3
+[14:39:13] [STATE] [14:39:27] ResetCheck: abs=6477 s (1 h 47 m) dep=12:00 depDay=3 depWork=0 th=25200 s (7 h)
+[14:39:13] [STATE] [14:39:27] ResetCheck: false (same-day, resume session)
+[14:39:13] [STATE] [14:39:27] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[14:39:13] [STATE] [14:39:27] Away->Present: Handled standard break return: breakCount=6 duration=6477 s
+[14:39:16] [BEHAVIOUR] [14:39:30] triggerBehaviour: event=1 detail="1h47m" force=0
+[14:39:16] [BEHAVIOUR] [14:39:30] Starting AI query task (dailyCount=2)
+[14:39:16] [BEHAVIOUR] [14:39:30] AI Request: session=6 promptLen=1467
+[14:39:17] [BEHAVIOUR] [14:39:30] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-61. Loading local fallback.
+[14:39:17] [BEHAVIOUR] [14:39:30] AI Fallback loaded: "Welcome back, Dev Master. You took 1h47m off — now earn that progress."
+[14:48:51] [STATE] [14:49:04] Present->Away: prevState=Busy presDur=577 s focusDur=0 s stopByTrack=1
+[14:48:51] [STATE] [14:49:04] Present->Away: Real session completed. lastAwayEpoch=14:49:04 reset stopByTracking
+[15:24:33] [STATE] [15:24:46] Away->Present: sit=10215243 epoch=15:24:46 session=7 state=Distracted
+[15:24:33] [STATE] [15:24:46] Away->Present: refAway=14:49:04 gross=2142 s break=2142 s stopBy=0 s
+[15:24:33] [STATE] [15:24:46] ResetCheck: cur=15:24:46 ref=14:49:04 curDay=3 refDay=3
+[15:24:33] [STATE] [15:24:46] ResetCheck: abs=2142 s (0 h 35 m) dep=14:00 depDay=3 depWork=0 th=25200 s (7 h)
+[15:24:33] [STATE] [15:24:46] ResetCheck: false (same-day, resume session)
+[15:24:33] [STATE] [15:24:46] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[15:24:33] [STATE] [15:24:46] Away->Present: Handled standard break return: breakCount=7 duration=2142 s
+[15:24:39] [BEHAVIOUR] [15:24:50] triggerBehaviour: event=1 detail="35m" force=0
+[15:24:39] [BEHAVIOUR] [15:24:50] Starting AI query task (dailyCount=3)
+[15:24:39] [BEHAVIOUR] [15:24:50] AI Request: session=7 promptLen=1463
+[15:24:39] [BEHAVIOUR] [15:24:50] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-62. Loading local fallback.
+[15:24:39] [BEHAVIOUR] [15:24:50] AI Fallback loaded: "Break over, Dev Master. 35m was your recovery window — now let's work."
+[15:25:26] [STATE] [15:25:40] Present->Away: prevState=Pd?  presDur=53 s focusDur=0 s stopByTrack=1
+[15:25:26] [STATE] [15:25:40] Present->Away: Real session completed. lastAwayEpoch=15:25:40 reset stopByTracking
+[15:25:30] [STATE] [15:25:44] Away->Present: sit=10272598 epoch=15:25:44 session=8 state=L? 
+[15:25:30] [STATE] [15:25:44] Away->Present: refAway=15:25:40 gross=4 s break=4 s stopBy=0 s
+[15:25:30] [STATE] [15:25:44] ResetCheck: cur=15:25:44 ref=15:25:40 curDay=3 refDay=3
+[15:25:30] [STATE] [15:25:44] ResetCheck: abs=4 s (0 h 0 m) dep=15:00 depDay=3 depWork=0 th=25200 s (7 h)
+[15:25:30] [STATE] [15:25:44] ResetCheck: false (same-day, resume session)
+[15:25:30] [STATE] [15:25:44] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[15:25:30] [STATE] [15:25:44] Away->Present: Ignored brief return (breakMs=4000 < min=180000)
+[15:27:08] [STATE] [15:27:21] Present->Away: prevState=Busy presDur=97 s focusDur=0 s stopByTrack=0
+[15:27:08] [STATE] [15:27:21] Present->Away: Real session completed. lastAwayEpoch=15:27:21 reset stopByTracking
+[15:27:36] [STATE] [15:27:49] Away->Present: sit=10398297 epoch=15:27:49 session=9 state=Distracted
+[15:27:36] [STATE] [15:27:49] Away->Present: refAway=15:27:21 gross=28 s break=28 s stopBy=0 s
+[15:27:36] [STATE] [15:27:49] ResetCheck: cur=15:27:49 ref=15:27:21 curDay=3 refDay=3
+[15:27:36] [STATE] [15:27:49] ResetCheck: abs=28 s (0 h 0 m) dep=15:00 depDay=3 depWork=0 th=25200 s (7 h)
+[15:27:36] [STATE] [15:27:49] ResetCheck: false (same-day, resume session)
+[15:27:36] [STATE] [15:27:49] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[15:27:36] [STATE] [15:27:49] Away->Present: Ignored brief return (breakMs=28000 < min=180000)
+[15:42:53] [BEHAVIOUR] [15:43:07] triggerBehaviour: event=0 detail="45m" force=1
+[15:42:54] [BEHAVIOUR] [15:43:07] Starting AI query task (dailyCount=3)
+[15:42:54] [BEHAVIOUR] [15:43:07] AI Request: session=1 promptLen=1436
+[15:42:54] [BEHAVIOUR] [15:43:07] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-62. Loading local fallback.
+[15:42:54] [BEHAVIOUR] [15:43:07] AI Fallback loaded: "Welcome back, Dev Master! Let's launch this session strong after 45m offline."
+[15:43:43] [BEHAVIOUR] [15:43:57] triggerBehaviour: event=9 detail="" force=1
+[15:43:43] [BEHAVIOUR] [15:43:57] Starting AI query task (dailyCount=3)
+[15:43:43] [BEHAVIOUR] [15:43:57] AI Request: session=1 promptLen=1366
+[15:43:43] [BEHAVIOUR] [15:43:57] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-61. Loading local fallback.
+[15:43:43] [BEHAVIOUR] [15:43:57] AI Fallback loaded: "Welcome back, Dev Master. You took a while off — now earn that progress."
+[15:47:36] [BEHAVIOUR] [15:47:50] triggerBehaviour: event=0 detail="45m" force=1
+[15:47:36] [BEHAVIOUR] [15:47:50] Starting AI query task (dailyCount=3)
+[15:47:36] [BEHAVIOUR] [15:47:50] AI Request: session=1 promptLen=1434
+[15:47:36] [BEHAVIOUR] [15:47:50] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-60. Loading local fallback.
+[15:47:36] [BEHAVIOUR] [15:47:50] AI Fallback loaded: "Morning, Dev Master! Sleep is over. 45m offline. Let's make today count!"
+[15:47:43] [BEHAVIOUR] [15:47:57] triggerBehaviour: event=5 detail="45m" force=1
+[15:47:43] [BEHAVIOUR] [15:47:57] Starting AI query task (dailyCount=3)
+[15:47:43] [BEHAVIOUR] [15:47:57] AI Request: session=1 promptLen=1332
+[15:47:43] [BEHAVIOUR] [15:47:57] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-61. Loading local fallback.
+[15:47:43] [BEHAVIOUR] [15:47:57] AI Fallback loaded: "Streak record smashed, Dev Master! You're setting the pace."
+[15:47:53] [BEHAVIOUR] [15:48:06] triggerBehaviour: event=10 detail="" force=1
+[15:47:53] [BEHAVIOUR] [15:48:06] Journal trigger: generated 2 pages
+[15:47:53] [BEHAVIOUR] [15:48:06] Journal trigger: scheduled remaining pages in 4000 ms
+[15:47:57] [BEHAVIOUR] [15:48:10] triggerBehaviour: event=10 detail="PAGE:2|7|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[15:47:57] [BEHAVIOUR] [15:48:10] Journal trigger: showing page 2 (lines=7)
+[15:47:58] [BEHAVIOUR] [15:48:12] triggerBehaviour: event=12 detail="Drink Water" force=1
+[15:48:06] [BEHAVIOUR] [15:48:20] triggerBehaviour: event=11 detail="" force=1
+[15:48:06] [BEHAVIOUR] [15:48:20] Starting AI query task (dailyCount=3)
+[15:48:06] [BEHAVIOUR] [15:48:20] AI Request: session=1 promptLen=1291
+[15:48:07] [BEHAVIOUR] [15:48:20] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-61. Loading local fallback.
+[15:48:07] [BEHAVIOUR] [15:48:20] AI Fallback loaded: "Break over, Dev Master. a while was your recovery window — now let's work."
+[15:49:40] [STATE] [15:49:53] Present->Away: prevState=Busy presDur=158 s focusDur=0 s stopByTrack=0
+[15:49:40] [STATE] [15:49:53] Present->Away: Real session completed. lastAwayEpoch=15:49:53 reset stopByTracking
+[16:02:21] [STATE] [16:02:34] Away->Present: sit=926027 epoch=16:02:34 session=2 state=Distracted
+[16:02:21] [STATE] [16:02:34] Away->Present: refAway=15:49:53 gross=761 s break=761 s stopBy=0 s
+[16:02:21] [STATE] [16:02:34] ResetCheck: cur=16:02:34 ref=15:49:53 curDay=3 refDay=3
+[16:02:21] [STATE] [16:02:34] ResetCheck: abs=761 s (0 h 12 m) dep=15:00 depDay=3 depWork=0 th=25200 s (7 h)
+[16:02:21] [STATE] [16:02:34] ResetCheck: false (same-day, resume session)
+[16:02:21] [STATE] [16:02:34] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:02:21] [STATE] [16:02:34] Away->Present: Handled standard break return: breakCount=8 duration=761 s
+[16:02:24] [BEHAVIOUR] [16:02:37] triggerBehaviour: event=1 detail="12m" force=0
+[16:02:24] [BEHAVIOUR] [16:02:38] Starting AI query task (dailyCount=4)
+[16:02:24] [BEHAVIOUR] [16:02:38] AI Request: session=2 promptLen=1462
+[16:02:24] [BEHAVIOUR] [16:02:38] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-60. Loading local fallback.
+[16:02:24] [BEHAVIOUR] [16:02:38] AI Fallback loaded: "Recharged after 12m, Dev Master? Let's pick up the pace."
+[16:03:24] [STATE] [16:03:38] Present->Away: prevState=Distracted presDur=63 s focusDur=0 s stopByTrack=1
+[16:03:24] [STATE] [16:03:38] Present->Away: Real session completed. lastAwayEpoch=16:03:38 reset stopByTracking
+[16:36:57] [STATE] [16:37:11] Away->Present: sit=3002431 epoch=16:37:11 session=3 state=Distracted
+[16:36:57] [STATE] [16:37:11] Away->Present: refAway=16:03:38 gross=2013 s break=2013 s stopBy=0 s
+[16:36:58] [STATE] [16:37:11] ResetCheck: cur=16:37:11 ref=16:03:38 curDay=3 refDay=3
+[16:36:58] [STATE] [16:37:11] ResetCheck: abs=2013 s (0 h 33 m) dep=16:00 depDay=3 depWork=0 th=25200 s (7 h)
+[16:36:58] [STATE] [16:37:11] ResetCheck: false (same-day, resume session)
+[16:36:58] [STATE] [16:37:11] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:36:58] [STATE] [16:37:11] Away->Present: Handled standard break return: breakCount=9 duration=2013 s
+[16:37:00] [BEHAVIOUR] [16:37:14] triggerBehaviour: event=1 detail="33m" force=0
+[16:37:00] [BEHAVIOUR] [16:37:14] Starting AI query task (dailyCount=5)
+[16:37:00] [BEHAVIOUR] [16:37:14] AI Request: session=3 promptLen=1464
+[16:37:01] [BEHAVIOUR] [16:37:14] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-60. Loading local fallback.
+[16:37:01] [BEHAVIOUR] [16:37:14] AI Fallback loaded: "Break over, Dev Master. 33m was your recovery window — now let's work."
+[16:40:39] [STATE] [16:40:52] Present->Away: prevState=Distracted presDur=221 s focusDur=0 s stopByTrack=1
+[16:40:39] [STATE] [16:40:52] Present->Away: Real session completed. lastAwayEpoch=16:40:52 reset stopByTracking
+[16:41:08] [STATE] [16:41:22] Away->Present: sit=3253783 epoch=16:41:22 session=4 state=Distracted
+[16:41:08] [STATE] [16:41:22] Away->Present: refAway=16:40:52 gross=30 s break=30 s stopBy=0 s
+[16:41:08] [STATE] [16:41:22] ResetCheck: cur=16:41:22 ref=16:40:52 curDay=3 refDay=3
+[16:41:08] [STATE] [16:41:22] ResetCheck: abs=30 s (0 h 0 m) dep=16:00 depDay=3 depWork=0 th=25200 s (7 h)
+[16:41:08] [STATE] [16:41:22] ResetCheck: false (same-day, resume session)
+[16:41:08] [STATE] [16:41:22] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:41:08] [STATE] [16:41:22] Away->Present: Ignored brief return (breakMs=30000 < min=180000)
+[16:45:05] [STATE] [16:45:19] Away->Present: sit=11508 epoch=16:45:19 session=1 state=Focus
+[16:45:05] [STATE] [16:45:19] Away->Present: refAway=16:45:16 gross=3 s break=3 s stopBy=0 s
+[16:45:05] [STATE] [16:45:19] ResetCheck: cur=16:45:19 ref=16:45:16 curDay=3 refDay=3
+[16:45:05] [STATE] [16:45:19] ResetCheck: abs=3 s (0 h 0 m) dep=16:00 depDay=3 depWork=0 th=25200 s (7 h)
+[16:45:05] [STATE] [16:45:19] ResetCheck: false (same-day, resume session)
+[16:45:05] [STATE] [16:45:19] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:45:05] [STATE] [16:45:19] Away->Present: Ignored brief return (breakMs=3000 < min=180000)
+[16:45:41] [BEHAVIOUR] [16:45:54] triggerBehaviour: event=5 detail="45m" force=1
+[16:45:41] [BEHAVIOUR] [16:45:54] Starting AI query task (dailyCount=5)
+[16:45:41] [BEHAVIOUR] [16:45:54] AI Request: session=1 promptLen=1333
+[16:45:41] [BEHAVIOUR] [16:45:54] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-61. Loading local fallback.
+[16:45:41] [BEHAVIOUR] [16:45:54] AI Fallback loaded: "New sitting record, Dev Master! Focus level maximum!"
+[16:45:48] [BEHAVIOUR] [16:46:02] triggerBehaviour: event=10 detail="" force=1
+[16:45:48] [BEHAVIOUR] [16:46:02] Journal trigger: generated 2 pages
+[16:45:48] [BEHAVIOUR] [16:46:02] Journal trigger: scheduled remaining pages in 4000 ms
+[16:45:52] [BEHAVIOUR] [16:46:06] triggerBehaviour: event=10 detail="PAGE:2|7|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]11:00 | Arrumar a cama [RED]11:50 | 
+[16:45:52] [BEHAVIOUR] [16:46:06] Journal trigger: showing page 2 (lines=7)
+[16:46:07] [BEHAVIOUR] [16:46:21] triggerBehaviour: event=1 detail="15m" force=1
+[16:46:07] [BEHAVIOUR] [16:46:21] Starting AI query task (dailyCount=5)
+[16:46:07] [BEHAVIOUR] [16:46:21] AI Request: session=1 promptLen=1463
+[16:46:08] [BEHAVIOUR] [16:46:22] AI Request Failed: http=-1 (connection refused) WiFi=CONNECTED IP=192.168.15.160 RSSI=-59. Loading local fallback.
+[16:46:08] [BEHAVIOUR] [16:46:22] AI Fallback loaded: "Recharged after 15m, Dev Master? Let's pick up the pace."
+[16:47:21] [STATE] [16:47:35] Present->Away: prevState=Busy presDur=135 s focusDur=0 s stopByTrack=0
+[16:47:21] [STATE] [16:47:35] Present->Away: Real session completed. lastAwayEpoch=16:47:35 reset stopByTracking
+[16:47:57] [STATE] [16:48:11] Away->Present: sit=183614 epoch=16:48:11 session=2 state=Distracted
+[16:47:57] [STATE] [16:48:11] Away->Present: refAway=16:47:35 gross=36 s break=36 s stopBy=0 s
+[16:47:57] [STATE] [16:48:11] ResetCheck: cur=16:48:11 ref=16:47:35 curDay=3 refDay=3
+[16:47:57] [STATE] [16:48:11] ResetCheck: abs=36 s (0 h 0 m) dep=16:00 depDay=3 depWork=0 th=25200 s (7 h)
+[16:47:57] [STATE] [16:48:11] ResetCheck: false (same-day, resume session)
+[16:47:57] [STATE] [16:48:11] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:47:57] [STATE] [16:48:11] Away->Present: Ignored brief return (breakMs=36000 < min=180000)
+[16:49:04] [STATE] [16:49:18] Present->Away: prevState=Distracted presDur=66 s focusDur=0 s stopByTrack=0
+[16:49:04] [STATE] [16:49:18] Present->Away: Real session completed. lastAwayEpoch=16:49:18 reset stopByTracking
+[16:49:27] [STATE] [16:49:41] Away->Present: sit=273815 epoch=16:49:41 session=3 state=Distracted
+[16:49:27] [STATE] [16:49:41] Away->Present: refAway=16:49:18 gross=23 s break=23 s stopBy=0 s
+[16:49:27] [STATE] [16:49:41] ResetCheck: cur=16:49:41 ref=16:49:18 curDay=3 refDay=3
+[16:49:27] [STATE] [16:49:41] ResetCheck: abs=23 s (0 h 0 m) dep=16:00 depDay=3 depWork=0 th=25200 s (7 h)
+[16:49:27] [STATE] [16:49:41] ResetCheck: false (same-day, resume session)
+[16:49:27] [STATE] [16:49:41] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[16:49:27] [STATE] [16:49:41] Away->Present: Ignored brief return (breakMs=23000 < min=180000)

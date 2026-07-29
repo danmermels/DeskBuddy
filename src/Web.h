@@ -80,55 +80,12 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     .score-high { color: #4ade80; }
     .score-med { color: #fbbf24; }
     .score-low { color: #f87171; }
-    .ai-carousel {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 2.5rem;
-      padding: 0 30px;
-    }
-    .ai-message {
-      font-size: 1.2rem;
-      font-style: italic;
-      color: #38bdf8;
-      text-align: center;
-      line-height: 1.5;
-      min-height: 2.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      opacity: 0;
-      transition: opacity 0.5s ease;
-      position: absolute;
-    }
-    .ai-message.active {
-      opacity: 1;
-      position: relative;
-    }
-    .carousel-btn {
-      position: absolute;
-      background: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: color 0.2s, border-color 0.2s;
-      padding: 0;
-    }
-    .ai-arrow:hover { color: #38bdf8; border-color: #38bdf8; }
-    .ai-arrow.hidden { display: none; }
-    .ai-arrow-up { left: 0; top: 50%; transform: translateY(-50%); }
-    .ai-arrow-down { right: 0; top: 50%; transform: translateY(-50%); }
     .ai-badge {
       display: none;
       font-size: 0.75rem;
       color: #64748b;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      margin-top: -5px;
-      margin-bottom: 10px;
-      text-align: center;
       font-weight: bold;
     }
     .ai-loading-container {
@@ -272,16 +229,17 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     </div>
   </div>
 
-  <div class="card ai-card">
-    <div class="ai-badge" id="aiBadge">AI GENERATED</div>
-    <div class="ai-carousel">
-      <button class="ai-arrow ai-arrow-up hidden" id="aiArrowUp" onclick="aiNav(-1)">&#9664;</button>
-      <div class="ai-message" id="aiMsg">Loading latest update...</div>
-      <button class="ai-arrow ai-arrow-down hidden" id="aiArrowDown" onclick="aiNav(1)">&#9654;</button>
+  <div class="card ai-card" id="tftMessageCard">
+    <div class="panel-header-row">
+      <h1 style="margin:0;">Recent Updates</h1>
+      <div id="aiBadge" class="ai-badge" style="display:none; margin:0;">AI GENERATED</div>
+    </div>
+    <div id="tftLog" style="max-height:38px; overflow-y:auto; display:flex; flex-direction:column; gap:2px;">
+      <div style="color:#64748b; text-align:center; padding:20px 0; font-size:0.9rem;">Loading...</div>
     </div>
     <div class="ai-loading-container" id="aiLoading" style="display:none;">
       <div class="ai-spinner"></div>
-      <span>Gemini is generating response...</span>
+      <span>AI is generating response...</span>
     </div>
   </div>
 
@@ -411,15 +369,6 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
 
   <script>
     let selectedDay = -1;
-    let aiMessages = [];
-    let aiIndex = 0;
-    let lastAiMessage = "";
-    const AI_MAX_HISTORY = 10;
-
-    function aiNav(dir) {
-      aiIndex = Math.max(0, Math.min(aiIndex + dir, aiMessages.length - 1));
-      renderAiMessage();
-    }
 
     function triggerJournalDisplay() {
       fetch('/trigger-event?type=10&detail=&mode=0')
@@ -427,13 +376,6 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
           if (!response.ok) alert("Failed to trigger Journal.");
         })
         .catch(err => console.error("Failed to trigger Journal.", err));
-    }
-
-    function renderAiMessage() {
-      let msg = aiMessages[aiIndex] || "No events recorded yet.";
-      document.getElementById('aiMsg').innerText = msg;
-      document.getElementById('aiArrowUp').classList.toggle('hidden', aiIndex === 0);
-      document.getElementById('aiArrowDown').classList.toggle('hidden', aiIndex >= aiMessages.length - 1);
     }
 
     function updateHistoryDay() {
@@ -563,34 +505,34 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
             }
           }
           
-          // AI message history (carousel)
-          let aiMsg = document.getElementById('aiMsg');
-          let loadingContainer = document.getElementById('aiLoading');
-          let arrowUp = document.getElementById('aiArrowUp');
-          let arrowDown = document.getElementById('aiArrowDown');
-          if (data.aiLoading) {
-            aiMsg.style.display = "none";
-            arrowUp.classList.add('hidden');
-            arrowDown.classList.add('hidden');
-            loadingContainer.style.display = "flex";
-          } else {
-            loadingContainer.style.display = "none";
-            aiMsg.style.display = "flex";
-            if (data.aiMessage && data.aiMessage !== lastAiMessage) {
-              lastAiMessage = data.aiMessage;
-              if (aiMessages.indexOf(data.aiMessage) === -1) {
-                aiMessages.unshift(data.aiMessage);
-                if (aiMessages.length > AI_MAX_HISTORY) aiMessages.pop();
+          // AI loading indicator
+          document.getElementById('aiLoading').style.display = data.aiLoading ? "flex" : "none";
+
+          // TFT message history log
+          fetch('/api/tft-messages')
+            .then(r => r.json())
+            .then(msgData => {
+              let container = document.getElementById('tftLog');
+              container.innerHTML = '';
+              let msgs = msgData.messages || [];
+              msgs.forEach(m => {
+                let t = m.epoch > 1000000000 ? new Date(m.epoch * 1000).toLocaleTimeString() : '--:--:--';
+                let div = document.createElement('div');
+                div.style.cssText = 'display:flex; gap:10px; padding:6px 8px; border-radius:6px; font-size:0.85rem; background:#0f172a; align-items:center; transition:background 0.15s;';
+                if (m.isAi) div.style.borderLeft = '3px solid #38bdf8';
+                div.onmouseover = function(){ this.style.background = '#1e293b'; };
+                div.onmouseout = function(){ this.style.background = '#0f172a'; };
+                div.innerHTML = '<span style="color:#64748b; flex-shrink:0; font-size:0.75rem; font-weight:600;">' + t + '</span><span style="color:' + (m.isAi ? '#7dd3fc' : '#e2e8f0') + ';">' + m.text + '</span>';
+                container.appendChild(div);
+              });
+              if (msgs.length === 0) {
+                container.innerHTML = '<div style="color:#64748b; text-align:center; padding:20px 0; font-size:0.9rem;">No messages yet.</div>';
               }
-              aiIndex = 0;
-              renderAiMessage();
-            } else {
-              renderAiMessage();
-            }
-          }
-          
-          let isAi = data.isAiGenerated;
-          document.getElementById('aiBadge').style.display = isAi ? "block" : "none";
+              document.getElementById('aiBadge').style.display = msgs.some(m => m.isAi) ? "block" : "none";
+            })
+            .catch(() => {
+              // Silently ignore fetch errors for secondary endpoint
+            });
           
           setTimeout(updateMetrics, 250);
         })
@@ -2560,12 +2502,29 @@ inline void handleRadarData() {
   doc["g6sSens"] = appConfig.g6sSens;
   
   // Add AI response thread-safely
-  xSemaphoreTake(appState.geminiMutex, portMAX_DELAY);
+  xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
   doc["aiMessage"] = appState.aiResponse;
   doc["isAiGenerated"] = appState.lastResponseIsAi;
-  xSemaphoreGive(appState.geminiMutex);
+  xSemaphoreGive(appState.aiMutex);
   doc["aiLoading"] = appState.isAILoading;
   
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+}
+
+inline void handleTftMessages() {
+  DynamicJsonDocument doc(4096);
+  JsonArray arr = doc.createNestedArray("messages");
+  int start = tftMsgHistory.head;
+  for (int i = 0; i < tftMsgHistory.count; i++) {
+    int idx = (start - 1 - i + TftMessageHistory::MAX_MSGS) % TftMessageHistory::MAX_MSGS;
+    JsonObject obj = arr.createNestedObject();
+    obj["epoch"] = tftMsgHistory.buffer[idx].epoch;
+    obj["text"] = tftMsgHistory.buffer[idx].text;
+    obj["eventType"] = tftMsgHistory.buffer[idx].eventType;
+    obj["isAi"] = tftMsgHistory.buffer[idx].isAi;
+  }
   String json;
   serializeJson(doc, json);
   server.send(200, "application/json", json);
@@ -3277,6 +3236,7 @@ inline void setupWebServer() {
   server.on("/api/tasks/save", HTTP_POST, handleSaveTasks);
   server.on("/settings", handleSettings);
   server.on("/radar-data", handleRadarData);
+  server.on("/api/tft-messages", handleTftMessages);
   server.on("/save-settings", HTTP_POST, handleSaveSettings);
   server.on("/credentials", HTTP_GET, handleCredentials);
   server.on("/save-credentials", HTTP_POST, handleSaveCredentials);

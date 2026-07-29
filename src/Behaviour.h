@@ -297,7 +297,7 @@ static const char* localGoalCompleted[4][5] = {
   }
 };
 
-// --- Gemini AI Prompts (Templates used when AI is active) ---
+// --- AI Prompts (Templates used when AI is active) ---
 
 static const char* PROMPT_PREAMBLE_COACH =
   "You are DeskBuddy, a strategic high-performance coach — Tony Robbins but quieter, sharper. "
