@@ -562,7 +562,7 @@ inline void updateTFTDisplay(unsigned long now) {
     }
   }
 
-  if (appState.pendingWelcomeAlert && (now - appState.sitDownTime >= 15000UL)) {
+  if (appState.pendingWelcomeAlert && (now - appState.sitDownTime >= WELCOME_HOLD_MS)) {
     appState.pendingWelcomeAlert = false;
     activeAlertMessage = welcomeAlertMessage;
     activeAlertIsAi = welcomeAlertIsAi;

@@ -393,8 +393,7 @@ void setup(void) {
   Serial.println("[DIAGNOSTICS] Mutex created");
 
   // Setup Mutex for MQTT History Thread Safety
-  appState.mqttHistoryMutex = xSemaphoreCreateMutex();
-
+  
   // Setup Mutex for MQTT Publish Queue Thread Safety
   mqttPublishQueueMutex = xSemaphoreCreateMutex();
 

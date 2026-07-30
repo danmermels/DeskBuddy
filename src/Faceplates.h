@@ -898,10 +898,15 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 // SECTION 6: AVIATOR FACEPLATE
 // ============================================================================
 
-#define COLOR_AVIATOR_ORANGE    tft.color565(235, 94, 40)
-#define COLOR_AVIATOR_DARKGRAY  tft.color565(40, 40, 40)
-#define COLOR_AVIATOR_OFFWHITE  tft.color565(240, 240, 240)
 #define COLOR_TRANSPARENT       TFT_BLACK // Black pixels will be transparent
+#define COLOR_AVIATOR_TIME_FG     tft.color565(240, 240, 240)
+#define COLOR_AVIATOR_TIME_BG     tft.color565(65, 65, 65)
+#define COLOR_AVIATOR_DATE_FG     tft.color565(240, 240, 240)
+#define COLOR_AVIATOR_DATE_BG     tft.color565(240, 240, 240)
+#define COLOR_AVIATOR_WEATHER_FG  tft.color565(240, 240, 240)
+#define COLOR_AVIATOR_WEATHER_BG  tft.color565(240, 240, 240)
+#define COLOR_AVIATOR_FOCUS_FG    tft.color565(235, 94, 40)
+#define COLOR_AVIATOR_FOCUS_BG    tft.color565(235, 94, 40)
 #define MSG_FONT_AVIATOR        "GoodTiming15"
 
 void initWatchHandSprites() {
@@ -947,7 +952,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
   if (showEvent) {
     if (forceRedraw) {
-      drawFaceplateMessage("/aviator_msg.rle", message, COLOR_AVIATOR_ORANGE, MSG_FONT_AVIATOR, isAi, TFT_LIGHTGREY, TFT_BLACK);
+      drawFaceplateMessage("/aviator_msg.rle", message, COLOR_AVIATOR_FOCUS_FG, MSG_FONT_AVIATOR, isAi, TFT_LIGHTGREY, TFT_BLACK);
     }
     wasEvent = true;
     return;
@@ -1006,6 +1011,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     
     // Draw weather (TFT Y=54 -> relative Y=44)
     centerBgSprite.setTextDatum(MC_DATUM);
+    centerBgSprite.setTextColor(COLOR_AVIATOR_WEATHER_FG, COLOR_AVIATOR_WEATHER_BG);
     centerBgSprite.drawString(String(appState.temp) + "C", 162, 110, 2);
 
     // Draw Date Badge (TFT X=70, Y=68 -> relative X=60, Y=58)
@@ -1017,7 +1023,8 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     char monthDayStr[12];
     const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
     snprintf(monthDayStr, sizeof(monthDayStr), "%02d %s", ts.tm_mday, months[ts.tm_mon]);
-    centerBgSprite.drawString(monthDayStr, 86, 63, 2);
+    centerBgSprite.setTextColor(COLOR_AVIATOR_DATE_FG, COLOR_AVIATOR_DATE_BG);
+    centerBgSprite.drawString(monthDayStr, 86, 61, 2);
 
     // Draw Digital Time (HH:MM) centered at Y=93 (relative Y=83)
     int display_h = h;
@@ -1027,12 +1034,13 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     }
     char timeStr[9];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
-    centerBgSprite.drawString(timeStr, 96, 85, 4);
+    centerBgSprite.setTextColor(COLOR_AVIATOR_TIME_FG, COLOR_AVIATOR_TIME_BG);
+    centerBgSprite.drawString(timeStr, 88, 83, 4);
 
     // Draw Focus Progress (TFT Y=182 -> relative Y=172)
     char stepsGoalStr[32];
     snprintf(stepsGoalStr, sizeof(stepsGoalStr), "FOCUS: %d%%", pct);
-    centerBgSprite.setTextColor(TFT_LIGHTGREY);
+    centerBgSprite.setTextColor(COLOR_AVIATOR_FOCUS_FG, COLOR_AVIATOR_FOCUS_BG);
     centerBgSprite.drawString(stepsGoalStr, 110, 172, 2);
 
     // Set pivot of centerBgSprite relative to its center (110, 110)
@@ -1061,7 +1069,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   secondHandSprite.pushRotated(secAngle, COLOR_TRANSPARENT);
 
   // Center hub pin
-  tft.drawSmoothCircle(120, 120, 5, COLOR_AVIATOR_ORANGE, COLOR_AVIATOR_ORANGE);
+  tft.drawSmoothCircle(120, 120, 5, COLOR_AVIATOR_FOCUS_FG, COLOR_AVIATOR_FOCUS_FG);
   tft.drawSmoothCircle(120, 120, 2, TFT_BLACK, TFT_BLACK);
 }
 
@@ -1203,7 +1211,7 @@ static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
     "/buddy_eye_o.rle",
     "/buddy_eye_s.rle",
     "7Segment50",        // timeFont
-    "RobotoCondensed20",  // dateFont
+    "7Segment50",  // dateFont
     "RobotoCondensed20",      // metricFont
     "RobotoCondensed20",      // weatherFont
     rgb565(245, 207, 142), // timeColor

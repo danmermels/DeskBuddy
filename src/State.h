@@ -17,16 +17,6 @@ struct RGBColor {
 };
 #endif
 
-// MQTT Message structure
-#ifndef MQTT_MESSAGE_STRUCT
-#define MQTT_MESSAGE_STRUCT
-struct MqttMessage {
-  String topic;
-  String payload;
-  unsigned long timestamp;
-};
-#endif
-
 // System Log structure
 #ifndef LOG_ENTRY_STRUCT
 #define LOG_ENTRY_STRUCT
@@ -182,12 +172,6 @@ struct RuntimeState {
   
   SemaphoreHandle_t aiMutex = NULL;
   
-  // MQTT History Buffer
-  MqttMessage mqttHistory[MQTT_HISTORY_SIZE];
-  int mqttHistoryHead = 0;
-  int mqttHistoryCount = 0;
-  SemaphoreHandle_t mqttHistoryMutex = NULL;
-
   // Debug Simulation
   bool simulationMode = false;
   bool simulationContinuous = false;
