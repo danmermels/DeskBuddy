@@ -31,6 +31,7 @@ private:
   void sortMessagesByPriority();
 
 public:
+  static constexpr unsigned long PRIORITY_URGENT = MSG_PRIORITY_URGENT;
   static constexpr unsigned long PRIORITY_HIGH = MSG_PRIORITY_HIGH;
   static constexpr unsigned long PRIORITY_NORMAL = MSG_PRIORITY_NORMAL;
   static constexpr unsigned long PRIORITY_LOW = MSG_PRIORITY_LOW;
@@ -50,8 +51,6 @@ public:
   MessageManager() : lastUpdateTime(0) {}
 
   void update(unsigned long currentTimeMs);
-  bool hasMessagesDue();
-  bool hasScheduledMessages();
   DueMessage getNextDueMessage();
 
   void scheduleMessage(int eventType, const String& content,
@@ -64,18 +63,9 @@ public:
                                    unsigned long delayMs = 0,
                                    int relevance = R_NORMAL);
 
-  void triggerSmartEvent(int eventType, const String& content,
-                         unsigned long priority = 1500,
-                         unsigned long delayMs = 5000,
-                         unsigned long relevanceWindow = 300000);
-
   // Convenience scheduling methods
   void scheduleWelcomeBackMessage(const String& breakDuration);
   void scheduleFirstSitMessage(const String& overnightBreak);
-  void scheduleFocusSessionCongrats(const String& focusDuration);
-  void scheduleProductivityHints();
-  void scheduleStretchReminder(unsigned long continuousTime);
-  void scheduleLunchReminder();
 };
 
 #endif

@@ -25,21 +25,6 @@ void MessageManager::sortMessagesByPriority() {
     });
 }
 
-bool MessageManager::hasMessagesDue() {
-  for (const auto& msg : messageQueue) {
-    if (!msg.displayed && millis() >= msg.scheduleTime) {
-      if (millis() <= msg.scheduleTime + msg.relevanceWindow) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-bool MessageManager::hasScheduledMessages() {
-  return !messageQueue.empty();
-}
-
 MessageManager::DueMessage MessageManager::getNextDueMessage() {
   for (auto& msg : messageQueue) {
     if (!msg.displayed) {
@@ -72,7 +57,7 @@ void MessageManager::scheduleMessageWithPriority(int eventType, const String& co
                                                    int relevance) {
   unsigned long p;
   switch (priority) {
-    case P_URGENT:  p = PRIORITY_HIGH; break;
+    case P_URGENT:  p = PRIORITY_URGENT; break;
     case P_HIGH:    p = PRIORITY_HIGH; break;
     case P_NORMAL:  p = PRIORITY_NORMAL; break;
     default:        p = PRIORITY_LOW; break;
@@ -85,13 +70,6 @@ void MessageManager::scheduleMessageWithPriority(int eventType, const String& co
     default:          r = RELEVANCE_LOW; break;
   }
   scheduleMessage(eventType, content, p, delayMs, r);
-}
-
-void MessageManager::triggerSmartEvent(int eventType, const String& content,
-                                        unsigned long priority,
-                                        unsigned long delayMs,
-                                        unsigned long relevanceWindow) {
-  scheduleMessage(eventType, content, priority, delayMs, relevanceWindow);
 }
 
 void MessageManager::scheduleWelcomeBackMessage(const String& breakDuration) {
@@ -123,39 +101,5 @@ void MessageManager::scheduleFirstSitMessage(const String& overnightBreak) {
     EVENT_FIRST_SIT,
     overnightBreak,
     P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
-  );
-}
-
-void MessageManager::scheduleFocusSessionCongrats(const String& focusDuration) {
-  scheduleMessageWithPriority(
-    EVENT_FOCUS_END,
-    focusDuration,
-    P_HIGH, 0, R_NORMAL
-  );
-}
-
-void MessageManager::scheduleProductivityHints() {
-  scheduleMessageWithPriority(
-    EVENT_STREAK_BEATEN,
-    "",
-    P_NORMAL, 0, R_NORMAL
-  );
-}
-
-void MessageManager::scheduleStretchReminder(unsigned long continuousTime) {
-  if (continuousTime >= STRETCH_INTERVAL_MS) {
-    scheduleMessageWithPriority(
-      EVENT_STRETCH,
-      "",
-      P_NORMAL, 0, R_NORMAL
-    );
-  }
-}
-
-void MessageManager::scheduleLunchReminder() {
-  scheduleMessageWithPriority(
-    EVENT_LUNCH_REMINDER,
-    "",
-    P_NORMAL, LUNCH_REMINDER_DELAY_MS, R_BRIEF
   );
 }

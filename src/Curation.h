@@ -92,8 +92,7 @@ inline String getTodoObservations(int eventType) {
   int dailyTotal = 0;
   int dailyUncompleted = 0;
   int dailyOverdueMoreThan3Days = 0;
-  String dailyListStr = "";
-  String overdueDailyList = "";
+  std::vector<String> synthBullets;
   
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
@@ -134,7 +133,7 @@ inline String getTodoObservations(int eventType) {
           dailyUncompleted++;
           char timeBuf[10];
           snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", tHour, tMin);
-          dailyListStr += "- Daily task: " + taskText + " (due " + String(timeBuf) + ")\n";
+          synthBullets.push_back("- Daily task: " + taskText + " (due " + String(timeBuf) + ")");
         }
       }
 
@@ -143,7 +142,7 @@ inline String getTodoObservations(int eventType) {
         int diff = currentDaysCount - dateToDays(tDate);
         if (diff > TASK_OVERDUE_DAYS_LIMIT) {
           dailyOverdueMoreThan3Days++;
-          overdueDailyList += "- Daily task: " + taskText + " (overdue by " + String(diff) + " days!)\n";
+          synthBullets.push_back("- Daily task: " + taskText + " (overdue by " + String(diff) + " days!)");
         }
       }
     }
@@ -155,8 +154,6 @@ inline String getTodoObservations(int eventType) {
   int monthlyOverdue = 0;
   int monthlyDueToday = 0;
   int monthlyOverdueMoreThan3Months = 0;
-  String monthlyListStr = "";
-  String overdueMonthlyList = "";
   
   if (doc.containsKey("monthly")) {
     JsonArray monthly = doc["monthly"].as<JsonArray>();
@@ -202,12 +199,12 @@ inline String getTodoObservations(int eventType) {
           monthlyUncompleted++;
           if (currentDay == dueDay) {
             monthlyDueToday++;
-            monthlyListStr += "- Monthly task: " + taskText + " (DUE TODAY: Day " + String(dueDay) + ")\n";
+            synthBullets.push_back("- Monthly task: " + taskText + " (DUE TODAY: Day " + String(dueDay) + ")");
           } else if (currentDay > dueDay) {
             monthlyOverdue++;
-            monthlyListStr += "- Monthly task: " + taskText + " (OVERDUE: was due Day " + String(dueDay) + ")\n";
+            synthBullets.push_back("- Monthly task: " + taskText + " (OVERDUE: was due Day " + String(dueDay) + ")");
           } else {
-            monthlyListStr += "- Monthly task: " + taskText + " (due Day " + String(dueDay) + ")\n";
+            synthBullets.push_back("- Monthly task: " + taskText + " (due Day " + String(dueDay) + ")");
           }
         }
       }
@@ -217,52 +214,55 @@ inline String getTodoObservations(int eventType) {
         int diffMonths = (currentYear - tYear) * 12 + (currentMonth - tMonth);
         if (diffMonths > TASK_OVERDUE_MONTHS_LIMIT) {
           monthlyOverdueMoreThan3Months++;
-          overdueMonthlyList += "- Monthly task: " + taskText + " (overdue by " + String(diffMonths) + " months!)\n";
+          synthBullets.push_back("- Monthly task: " + taskText + " (overdue by " + String(diffMonths) + " months!)");
         }
       }
     }
   }
 
-  // Format Observations output based on trigger event type
-  if (eventType == EVENT_JOURNAL) {
-    obs += "User is requesting a task journal overview. Here are the remaining tasks to complete:\n";
-    obs += "Daily Tasks remaining: " + String(dailyUncompleted) + " out of " + String(dailyTotal) + "\n";
-    if (dailyUncompleted > 0) {
-      obs += "Pending Daily Tasks:\n" + dailyListStr;
-    }
-    obs += "Monthly Tasks remaining: " + String(monthlyUncompleted) + " out of " + String(monthlyTotal) + "\n";
-    if (monthlyUncompleted > 0) {
-      obs += "Pending Monthly Tasks:\n" + monthlyListStr;
-    }
-  } else if (eventType == EVENT_NAGGING) {
-    obs += "Highly Overdue Tasks Alert! User has tasks that are severely overdue:\n";
-    if (dailyOverdueMoreThan3Days > 0) {
-      obs += "Daily tasks overdue by > " + String(TASK_OVERDUE_DAYS_LIMIT) + " days:\n" + overdueDailyList;
-    }
-    if (monthlyOverdueMoreThan3Months > 0) {
-      obs += "Monthly tasks overdue by > " + String(TASK_OVERDUE_MONTHS_LIMIT) + " months:\n" + overdueMonthlyList;
-    }
+  // Compact task synthesis (counts + names) injected into AI prompt observations.
+  // Covers everything the AI needs to talk about tasks: pending today, due today,
+  // and overdue (daily >3d, monthly this-month and >3mo), by name.
+  String synthesis = "[TASK SYNTHESIS]\n";
+  if (dailyTotal == 0 && monthlyTotal == 0) {
+    synthesis += "No tasks on the list.\n";
+  } else if (dailyUncompleted == 0 && monthlyUncompleted == 0 &&
+             dailyOverdueMoreThan3Days == 0 && monthlyOverdue == 0 && monthlyOverdueMoreThan3Months == 0) {
+    synthesis += "All tasks for today completed.\n";
   } else {
-    // Normal prompt flows: check for dynamic observations
-    // 1. Midday task check
-    if (timeClient.isTimeSet() && currentHour >= MIDDAY_TASK_CHECK_HOUR && dailyUncompleted > 0) {
-      obs += "- Observation: Past midday (it is " + String(currentHour) + ":00) and user has " + String(dailyUncompleted) + " uncompleted daily tasks remaining.\n";
+    synthesis += String(dailyUncompleted) + "/" + String(dailyTotal) + " daily pending today, " +
+                 String(monthlyDueToday) + " monthly due today; overdue: " +
+                 String(dailyOverdueMoreThan3Days) + " daily (3d+), " +
+                 String(monthlyOverdue) + " monthly this month, " +
+                 String(monthlyOverdueMoreThan3Months) + " monthly (3mo+).\n";
+    // Shuffle the bullets so the AI doesn't always latch onto the first task in the list
+    for (int i = (int)synthBullets.size() - 1; i > 0; i--) {
+      int j = random(i + 1);
+      String tmp = synthBullets[i];
+      synthBullets[i] = synthBullets[j];
+      synthBullets[j] = tmp;
     }
+    for (size_t i = 0; i < synthBullets.size(); i++) {
+      synthesis += synthBullets[i];
+      synthesis += "\n";
+    }
+    if (synthesis.length() > TASK_SYNTHESIS_MAX_CHARS) {
+      synthesis = synthesis.substring(0, TASK_SYNTHESIS_MAX_CHARS) + "...\n";
+    }
+  }
 
-    // 2. Overdue/due today tasks
-    if (monthlyDueToday > 0) {
-      obs += "- Observation: User has " + String(monthlyDueToday) + " monthly task(s) DUE TODAY that are not completed.\n";
-    }
-    if (monthlyOverdue > 0) {
-      obs += "- Observation: User has " + String(monthlyOverdue) + " monthly task(s) OVERDUE that are not completed.\n";
-    }
-
-    // 3. Nagging observations in normal prompts if overdue limits are breached
-    if (dailyOverdueMoreThan3Days > 0) {
-      obs += "- Observation: User has " + String(dailyOverdueMoreThan3Days) + " daily task(s) overdue by more than " + String(TASK_OVERDUE_DAYS_LIMIT) + " days!\n";
-    }
-    if (monthlyOverdueMoreThan3Months > 0) {
-      obs += "- Observation: User has " + String(monthlyOverdueMoreThan3Months) + " monthly task(s) overdue by more than " + String(TASK_OVERDUE_MONTHS_LIMIT) + " months!\n";
+  // Format Observations output based on trigger event type
+  if (eventType == EVENT_NAGGING) {
+    obs += "Highly Overdue Tasks Alert!\n";
+    obs += synthesis;
+  } else {
+    // All AI prompt flows receive the task synthesis
+    obs += synthesis;
+    if (eventType != EVENT_JOURNAL) {
+      // Dynamic time-based observation (task counts/names live in the synthesis)
+      if (timeClient.isTimeSet() && currentHour >= MIDDAY_TASK_CHECK_HOUR && dailyUncompleted > 0) {
+        obs += "- Observation: Past midday (it is " + String(currentHour) + ":00) and user has " + String(dailyUncompleted) + " uncompleted daily tasks remaining.\n";
+      }
     }
   }
 

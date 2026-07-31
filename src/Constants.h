@@ -53,7 +53,6 @@
 #define OVERNIGHT_THRESHOLD_S            14400UL  // 4 hours - overnight/sleep threshold for first-sit greeting
 #define G0S_SENS_DEFAULT                   90
 #define LUNCH_MIN_DESK_MS            1800000UL  // 30 min minimum desk time before lunch reminder
-#define LUNCH_REMINDER_DELAY_MS      3600000UL  // 1 hour delay for lunch reminder message
 #define NTP_TIME_OFFSET               -10800   // Argentina time (UTC-3)
 
 // --- Radar Constants ---
@@ -66,13 +65,17 @@
 #define MOTION_FILTER_SIZE                 10
 
 // --- Message Queue Constants ---
-#define MSG_PRIORITY_HIGH                 3000UL
+#define MSG_PRIORITY_URGENT               3000UL
+#define MSG_PRIORITY_HIGH                 2250UL
 #define MSG_PRIORITY_NORMAL               1500UL
 #define MSG_PRIORITY_LOW                   500UL
 
 #define MSG_RELEVANCE_URGENT            300000UL  // 5 min
 #define MSG_RELEVANCE_NORMAL           1800000UL  // 30 min
 #define MSG_RELEVANCE_LOW              3600000UL  // 1 hr
+
+// Max chars a standard message screen holds before it spills to a 2nd screen (F12)
+#define MSG_PAGE_MAX_CHARS                 110
 
 // --- Journal & Curation Constants ---
 #define MORNING_JOURNAL_DELAY_MS        300000UL  // 5 minutes sitting delay for morning kickoff
@@ -82,6 +85,7 @@
 #define NAGGING_TRIGGER_DELAY_MS       7200000UL  // 2 hours sitting delay for nagging trigger
 #define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
 #define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
+#define TASK_SYNTHESIS_MAX_CHARS            500   // Max length of the compact task synthesis injected into AI observations
 
 // --- MQTT Service Constants ---
 #define MQTT_BROKER_IP             "192.168.15.18"
@@ -91,8 +95,6 @@
 #define MQTT_STATUS_TOPIC       "deskbuddy/status"
 #define MQTT_STATUS_PAYLOAD              "online"
 #define MQTT_SUBSCRIBE_TOPIC         "deskbuddy/#"
-#define MQTT_DISPLAY_TOPIC     "deskbuddy/display"
-#define MQTT_PUBLISH_TOPIC     "deskbuddy/message"
 #define MQTT_ECHO_TOPIC        "deskbuddy/echo"
 
 #define SYSTEM_LOG_SIZE                     15
@@ -146,6 +148,18 @@ namespace JournalConfig {
   constexpr int dueTimeY = 200;                       // Position Y for the time
   constexpr const char* dueTimeFont = "";             // Font for the time
   constexpr RGB dueTimeColor = {239, 68, 68};       // Red
+}
+
+// ============================================================================
+// NAGGING ALERT TITLE CONFIGURATION (red "DUE NOW" on top of the nag message)
+// ============================================================================
+namespace NaggingConfig {
+  constexpr const char* titleText = "DUE NOW";        // Text of the title
+  constexpr uint8_t titleFont = 2;                    // TFT_eSPI built-in font index (0-7; 2=small, 4=medium)
+  constexpr int titleX = 120;                         // X center of the title
+  constexpr int titleY = 24;                          // Y center of the title
+  constexpr RGB titleColor = {239, 68, 68};         // Red
+  constexpr int msgStartY = 55;                       // Y where the AI nag message begins
 }
 
 #endif // CONSTANTS_H

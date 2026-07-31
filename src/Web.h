@@ -2807,10 +2807,19 @@ inline void handleTriggerEvent() {
       }
     }
 
-    // Trigger behavioral handler manually
-    extern void triggerBehaviour(int event, String detail = "", int forceMode = 0);
-    triggerBehaviour(eventType, detail, forceMode);
-    
+    // Route the trigger through the MQTT debug command channel so the panel
+    // uses the same path as external debug tools (deskbuddy/debug/cmd).
+    if (!appState.mqttConnected) {
+      server.send(503, "text/plain", "MQTT not connected");
+      return;
+    }
+    String cmd = "TRIGGER " + String(eventType) + " " + String(forceMode);
+    if (detail.length() > 0) {
+      cmd += " " + detail;
+    }
+    enqueueMqttPublish(MQTT_DEBUG_CMD_TOPIC, cmd);
+    Logger::log("WEB", "Debug trigger via MQTT: %s", cmd.c_str());
+
     server.send(200, "text/plain", "Event Triggered");
   } else {
     server.send(400, "text/plain", "Missing type");

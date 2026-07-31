@@ -95,7 +95,7 @@ stateDiagram-v2
     - `STATE_AWAY`: No presence detected.
 * **Debouncing & Grace Periods**:
   - **Presence Jitter Debounce**: Transition from `STATE_AWAY` to present takes **2 seconds** of continuous raw detection. Transition to `STATE_AWAY` takes **10 seconds** of continuous raw absence.
-  - **Attention Mode Stickiness**: Transitions between active presence states (`STATE_FOCUS`, `STATE_BUSY`, `STATE_DISTRACTED`, and `STATE_REGULAR`) are stabilized. A new state must remain prevalent and unchanged for at least **3 minutes (180,000ms)** before it is committed. Transitioning into or out of `STATE_AWAY` bypasses this delay to keep the system reactive.
+  - **Attention Mode Stickiness**: Transitions between active presence states (`STATE_FOCUS`, `STATE_BUSY`, `STATE_DISTRACTED`, and `STATE_REGULAR`) are stabilized. A new state must remain prevalent and unchanged for at least **30 seconds (30,000ms)** before it is committed. Transitioning into or out of `STATE_AWAY` bypasses this delay to keep the system reactive.
   - **Display Away Grace Period**: When a transition to `STATE_AWAY` is confirmed, the state machine immediately updates backend metrics (such as beginning to accumulate break time), but **delays updating the display to the Away splash screen for 1 minute (60,000ms)**. During this minute, the active clock face continues to display normally.
 * **Absence Transition Rules (Away -> Present)**:
   - When raw presence is confirmed after an away period, the system initiates an **adaptive session validation buffer** (`rolloverPending = true`).
@@ -135,51 +135,52 @@ stateDiagram-v2
 
 ---
 
-## 3. Behavioural Events & Gemini AI Triggers
+## 3. Behavioural Events & AI Triggers
 
-When the state machine registers specific transitions or durations, it calls `triggerBehaviour()` in [AI.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/AI.h#L225).
+When the state machine registers specific transitions or durations, it calls `triggerBehaviour()` in [AI.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/AI.h#L277).
 
-![Gemini AI and Local Triggers](flowcharts/ai_triggers.svg)
+![AI and Local Triggers](flowcharts/ai_triggers.svg)
 
 ```mermaid
 graph TD
     Trigger([triggerBehaviour called]) --> CheckAI{Is AI Mode active?}
     
-    CheckAI -- Yes --> LimitCheck{Under daily 15-req cap?}
-    LimitCheck -- Yes --> StartThread[Launch queryGeminiTask in background]
+    CheckAI -- Yes --> LimitCheck{Under daily 30-req cap?}
+    LimitCheck -- Yes --> StartThread[Launch aiQueryTask in background]
     LimitCheck -- No --> Fallback[Load Local Fallback Quote]
     CheckAI -- No --> Fallback
     
-    StartThread --> HTTPSReq[Send secure HTTPS POST to Gemini 2.5 Flash]
+    StartThread --> HTTPSReq[Send secure HTTPS POST to Groq llama-3.3-70b]
     HTTPSReq --> RespCheck{HTTP 200 & Valid JSON?}
     
     RespCheck -- Yes --> SetNewResp[Store response, set hasNewAIResponse = true]
     RespCheck -- No --> Fallback
     
-    Fallback --> SelectLocal[Pick 1 of 20 category-specific quotes]
-    SelectLocal --> Personalize[Insert userName]
+    Fallback --> SelectLocal[Pick 1 of 5 category-specific quotes]
+    SelectLocal --> Personalize[Insert userName + placeholders]
     Personalize --> SetNewResp
 ```
 
 ### Behavioural & AI Triggers Deep Dive:
+* **Routing:** All event paths queue through `MessageManager` before dispatch. FIRST_SIT/WELCOME_BACK/EXCESSIVE_BREAKS use P_URGENT; GOAL/JOURNAL/NAGGING use P_HIGH; STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH use P_NORMAL (delay 0, R_NORMAL). JOURNAL and TASK_DUE render locally inside `triggerBehaviour` and never hit the AI pipeline.
 * **AI Configuration Levels**:
-  - If `aiMode == 2` (Frequent): All triggered events query the Gemini model.
-  - If `aiMode == 1` (Balanced): `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_STRETCH`, and `EVENT_LUNCH_REMINDER` query Gemini; other events use local fallbacks.
-  - Daily Request Cap: If `dailyAiRequestCount >= 15` is reached, all event triggers bypass the AI logic and use local fallbacks immediately to save API token costs.
+  - If `aiMode == 2` (Frequent): All triggered events query the Groq model.
+  - If `aiMode == 1` (Balanced): `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_STRETCH`, `EVENT_LUNCH_REMINDER`, `EVENT_EXCESSIVE_BREAKS`, `EVENT_GOAL_COMPLETED`, `EVENT_NAGGING` query AI; other events use local fallbacks.
+  - Daily Request Cap: If `dailyAiRequestCount >= 30` is reached, all event triggers bypass the AI logic and use local fallbacks immediately to save API token costs.
 * **Lunch Time Reminder**:
   - The system analyzes the 24-hour occupancy profile to identify the user's usual lunch window (scanning 11:00 AM to 2:00 PM for the lowest presence value).
   - If the user works through this learned hour (and has been active at their desk for at least 30 minutes), the system triggers `EVENT_LUNCH_REMINDER` to wittily remind them to eat lunch.
 * **Asynchronous FreeRTOS Task Execution**:
   - Copies prompt templates from `Behaviour.h` and formats them with contextual metrics (userName, totalDeskTime, totalFocusTime, breakCount, productivityScore).
-  - Sets `isAILoading = true` and spawns a FreeRTOS task `queryGeminiTask` with a stack size of 8192 bytes and priority 1.
-  - The task initializes a `WiFiClientSecure` client and calls `setInsecure()` to disable SSL certificate verification (speeding up handshakes on local microcontrollers).
-  - Sends a secure HTTPS POST payload to the Gemini API (`v1beta/models/gemini-2.5-flash`).
-  - If the HTTP response is 200, parses the JSON payload, trims the generated text (removes surrounding quotes), takes `geminiMutex` lock, updates the global `aiResponse` string, flags `hasNewAIResponse = true`, releases the mutex, and terminates itself via `vTaskDelete(NULL)`.
+  - Sets `isAILoading = true` and wakes the persistent FreeRTOS task `aiQueryTask` with a stack size of 12288 bytes and priority 1.
+  - Sends a secure HTTPS POST payload to the Groq API (`llama-3.3-70b-versatile`).
+  - If the HTTP response is 200, trims the generated text (removes surrounding quotes), takes `aiMutex` lock, updates the global `aiResponse` string, flags `hasNewAIResponse = true`, releases the mutex, and returns to its blocked wait state.
+  - If the query fails OR another query is already in flight, a local fallback quote is loaded instead (the event is never silently dropped).
 * **Local Fallback Handler**:
   - If the HTTPS request fails, or if AI mode is disabled/capped:
-  - Picks a random quote (1 of 20) for the current category from the arrays in [Behaviour.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Behaviour.h).
-  - Replaces the string placeholder with `userName` via `resolveLocalPlaceholders()`.
-  - Thread-safely takes `geminiMutex`, sets `lastResponseIsAi = false`, writes the personalized quote to `aiResponse`, sets `hasNewAIResponse = true`, and releases the mutex.
+  - Picks a random quote (1 of 5) for the current category from the arrays in [Behaviour.h](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/Behaviour.h).
+  - Replaces the string placeholders (`{name}`, `{detail}`, `{score}`, etc.) via `resolveLocalPlaceholders()`.
+  - Thread-safely takes `aiMutex`, sets `lastResponseIsAi = false`, writes the personalized quote to `aiResponse`, sets `hasNewAIResponse = true`, and releases the mutex.
 
 ---
 
@@ -261,7 +262,7 @@ graph TD
       - If `showEvent` is false: Throttled to 500ms. Overlays time, date, temperature, sitting/away hours, status icons, and a cyan mail envelope on top of the `/hitech.rle` dashboard image.
     - **DEV Mode Faceplate** (`drawDevClockFace`):
       - Debug-focused screen designed for developers. If `showEvent` is true: Draws the alert message text centered in green.
-      - If `showEvent` is false: Throttled to 100ms refresh rate for real-time diagnostics monitoring. Uses fast non-antialiased built-in Font 2 to maximize drawing speed and eliminate screen flickering. Displays time (hh:mm:ss), IP Address, RSSI, presence state, raw/filtered radar indicators, raw/filtered distance measurements, session sitting elapsed timer (formatted as H:mm:ss), daily sitting/break timers, break count, LittleFS read/write file access counts, heap memory, and Gemini API request counters.
+      - If `showEvent` is false: Throttled to 100ms refresh rate for real-time diagnostics monitoring. Uses fast non-antialiased built-in Font 2 to maximize drawing speed and eliminate screen flickering. Displays time (hh:mm:ss), IP Address, RSSI, presence state, raw/filtered radar indicators, raw/filtered distance measurements, session sitting elapsed timer (formatted as H:mm:ss), daily sitting/break timers, break count, LittleFS read/write file access counts, heap memory, and AI (Groq) API request counters.
 
 ---
 
@@ -294,7 +295,7 @@ These values are synchronized through the REST API `/radar-data` and form POST `
 | JSON Key | Type | Description / Destination |
 | :--- | :--- | :--- |
 | `aiMode` | `int` | AI triggering setting (0 = Eco/Off, 1 = Balanced, 2 = Frequent) |
-| `aiPersona` | `int` | Current prompt template style persona (0 = Coach, 1 = Critic, 2 = Nerd, 3 = Zen) |
+| `aiPersona` | `int` | Current prompt template style persona (0 = Coach, 1 = Critic, 2 = Sweet, 3 = Friend) |
 | `clockFace` | `int` | Current faceplate page style (0 = Default, 1 = Minimalist, 2 = Hi-Tech, 3 = DEV Mode) |
 | `userName` | `String` | Personalized username referenced by the AI model and local fallbacks |
 | `targetHours` | `float` | Target workday hours used to compute the workday percentage |
@@ -305,7 +306,7 @@ These values are synchronized through the REST API `/radar-data` and form POST `
 | `hasMail` | `bool` | Toggle state representing active mail alerts |
 | `time24h` | `bool` | Clock face time representation format |
 | `score` | `int` | Current running productivity score percentage (0-100%) |
-| `aiMessage` | `String` | Last text returned by Gemini AI or localized fallbacks |
+| `aiMessage` | `String` | Last text returned by the AI (Groq) model or local fallbacks |
 | `isAiGenerated` | `bool` | True if the current response text was generated dynamically by the LLM |
 | `aiLoading` | `bool` | True if a background HTTPS query is currently processing in FreeRTOS |
 | `movingTarget` | `bool` | Live radar motion presence indicator |
@@ -398,7 +399,7 @@ void drawXClockFace(
     bool forceRedraw,           // Request to clear buffers and redraw static backgrounds
     bool showEvent,             // True if an event message/alert should be shown
     const String &message,      // The active response/alert text to wrap and draw
-    bool isAi,                  // True if the active response was generated by Gemini
+    bool isAi,                  // True if the active response was generated by the AI (Groq) model
     bool wifiAvailable,         // Live WiFi connection status (WiFi.status() == WL_CONNECTED)
     bool internetAvailable,     // Live Internet/NTP synced availability status
     bool hasMail                // Live Mail notification alert status
@@ -421,7 +422,7 @@ The system preserves session statistics, learned occupancy logs, and runtime par
   "totalBreakTime": 0,                   // Total break time in milliseconds
   "overnightBreakDuration": 0,           // Duration of last night's sleep in seconds
   "lastAwayEpoch": 0,                    // Epoch time when user left the desk
-  "dailyAiRequestCount": 0,              // Gemini API request counter for the current day
+  "dailyAiRequestCount": 0,              // Groq API request counter for the current day
   "lastNtpDay": -1,                      // Calendar day index of last NTP sync (0-6)
   "longestSittingStreak": 0,             // Record longest sitting streak of the day in ms
   "latestBreakDuration": 0,              // Duration of the latest break in ms
@@ -463,7 +464,7 @@ Here is a reference index of all timing thresholds, debounce configurations, and
 | **Presence Debounce (Present &rarr; Away)** | `10000` ms (10s) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L601) | 601 | `debounceLimit` (when `rawPresent` is false) |
 | **Pee Break Buffer (Early Phase)** | `180000UL` ms (3m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L117) | 117 | `requiredValidationBufferMs` (default fallback) |
 | **Welcome / Break Duration Limit** | `180000UL` ms (3m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L696) | 696 | `currentBreakDurationMs >= 180000UL` (minimum away duration) |
-| **Attention State Debounce (Stickiness)** | `180000UL` ms (3m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L760) | 760 | `now - stateConfirmationTime >= 180000UL` |
+| **Attention State Debounce (Stickiness)** | `30000UL` ms (30s) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L1070) | 1070 | `now - stateConfirmationTime >= 30000UL` |
 | **Stop-By Tracking Session Threshold** | `480000UL` ms (8m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L820) | 820 | `presenceDurationMs < 480000UL` (maximum threshold for stop-by validation) |
 | **Streak Beaten Sitting Record Limit** | `900000UL` ms (15m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L791) | 791, 795 | `longestSittingStreak >= 900000UL` |
 | **Stretch Reminder Interval** | `2700000UL` ms (45m) | [main.cpp](file:///c:/Users/danme/Documents/PlatformIO/Projects/DeskBuddy/src/main.cpp#L774) | 774 | `now - lastStretchReminderTime > 2700000UL` |

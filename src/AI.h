@@ -111,6 +111,22 @@ inline String resolvePromptPlaceholders(int eventType, String templateStr, Strin
   } else {
     resolvedTemplate.replace("{detail}", detail);
   }
+  if (appState.lastTriggeredEventType == EVENT_FIRST_SIT) {
+    resolvedTemplate.replace("{score}", "100");
+    resolvedTemplate.replace("{deskTime}", "0m");
+    resolvedTemplate.replace("{focusTime}", "0m");
+    resolvedTemplate.replace("{breakTime}", "0m");
+    resolvedTemplate.replace("{breakCount}", "0");
+  } else {
+    resolvedTemplate.replace("{score}", String(appStats.productivityScore));
+    resolvedTemplate.replace("{deskTime}", formatTime(appStats.totalDeskTime));
+    resolvedTemplate.replace("{focusTime}", formatTime(appStats.totalFocusTime));
+    resolvedTemplate.replace("{breakTime}", formatTime(appStats.totalBreakTime));
+    resolvedTemplate.replace("{breakCount}", String(appStats.breakCount));
+  }
+  resolvedTemplate.replace("{longestStreak}", formatTime(appStats.longestSittingStreak));
+  int currentDayIdx = timeClient.isTimeSet() ? timeClient.getDay() : 1;
+  resolvedTemplate.replace("{historyDays}", String(appStats.historyDaysCountWeekly[currentDayIdx]));
 
   // 5. Build structured prompt
   String fullPrompt = "[ROLE]\n";
@@ -278,6 +294,17 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   appState.lastTriggeredEventType = eventType;
   Logger::log("BEHAVIOUR", "triggerBehaviour: event=%d detail=\"%s\" force=%d", eventType, detail.c_str(), forceMode);
 
+  if (eventType == EVENT_PAGE) {
+    // F12: 2nd-screen follow-up page -- render the raw text locally, no AI query
+    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
+    appState.lastResponseIsAi = false;
+    appState.aiResponse = detail;
+    appState.hasNewAIResponse = true;
+    xSemaphoreGive(appState.aiMutex);
+    Logger::log("BEHAVIOUR", "EVENT_PAGE: rendering 2nd screen (%d chars)", detail.length());
+    return;
+  }
+
   if (eventType == EVENT_JOURNAL) {
     if (detail.startsWith("PAGE:")) {
       int pipe1 = detail.indexOf('|');
@@ -442,9 +469,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_LUNCH_REMINDER: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_LUNCH_REMINDER, detail); break;
       case EVENT_EXCESSIVE_BREAKS: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_EXCESSIVE_BREAKS, detail); break;
       case EVENT_GOAL_COMPLETED:   basePrompt = resolvePromptPlaceholders(eventType, PROMPT_GOAL_COMPLETED, detail); break;
-      case EVENT_JOURNAL:          basePrompt = resolvePromptPlaceholders(eventType, PROMPT_JOURNAL, detail); break;
       case EVENT_NAGGING:          basePrompt = resolvePromptPlaceholders(eventType, PROMPT_NAGGING, detail); break;
-      case EVENT_TASK_DUE:         basePrompt = resolvePromptPlaceholders(eventType, PROMPT_TASK_DUE, detail); break;
     }
 
     if (!appState.isAILoading) {
@@ -482,9 +507,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
           case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
           case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
           case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
-          case EVENT_JOURNAL:          quote = localJournal[persona][randIdx]; break;
           case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
-          case EVENT_TASK_DUE:         quote = localTaskDue[persona][randIdx]; break;
         }
 
         String personalQuote = resolveLocalPlaceholders(String(quote), detail);
@@ -495,7 +518,32 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         xSemaphoreGive(appState.aiMutex);
       }
     } else {
-      Logger::log("BEHAVIOUR", "AI Query ignored: already loading");
+      Logger::log("BEHAVIOUR", "AI query already loading; using local fallback instead of dropping event %d", eventType);
+      const char* quote = "";
+      int randIdx = random(5);
+      int persona = appConfig.aiPersona;
+      if (persona < 0 || persona > 3) persona = 0;
+
+      switch (eventType) {
+        case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
+        case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
+        case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
+        case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
+        case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
+        case EVENT_STREAK_BEATEN: quote = localStreakBeaten[persona][randIdx]; break;
+        case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
+        case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
+        case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
+        case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
+      }
+
+      String personalQuote = resolveLocalPlaceholders(String(quote), detail);
+      Logger::log("BEHAVIOUR", "Picked local fallback (AI busy): \"%s\"", personalQuote.c_str());
+      xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
+      appState.lastResponseIsAi = false;
+      appState.aiResponse = personalQuote;
+      appState.hasNewAIResponse = true;
+      xSemaphoreGive(appState.aiMutex);
     }
   } else {
     // Local Fallback selection (picks from available per event type and persona)
@@ -514,9 +562,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
       case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
       case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
-      case EVENT_JOURNAL:          quote = localJournal[persona][randIdx]; break;
       case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
-      case EVENT_TASK_DUE:         quote = localTaskDue[persona][randIdx]; break;
     }
 
     String personalQuote = resolveLocalPlaceholders(String(quote), detail);

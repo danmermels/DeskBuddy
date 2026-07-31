@@ -223,6 +223,8 @@ void saveDailyStats() {
   doc["preLunchJournalTriggered"] = appStats.preLunchJournalTriggered;
   doc["endOfDayJournalTriggered"] = appStats.endOfDayJournalTriggered;
   doc["naggingTriggeredToday"] = appStats.naggingTriggeredToday;
+  doc["dueFiredDay"] = appStats.dueFiredDay;
+  doc["dueFiredKeys"] = appStats.dueFiredKeys;
   doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
   doc["fsReadCount"] = appStats.fsReadCount;
   doc["fsWritesToday"] = appStats.fsWritesToday;
@@ -314,6 +316,8 @@ void loadDailyStats() {
     appStats.preLunchJournalTriggered = doc["preLunchJournalTriggered"] | false;
     appStats.endOfDayJournalTriggered = doc["endOfDayJournalTriggered"] | false;
     appStats.naggingTriggeredToday = doc["naggingTriggeredToday"] | false;
+    appStats.dueFiredDay = doc["dueFiredDay"] | "";
+    appStats.dueFiredKeys = doc["dueFiredKeys"] | "";
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
     appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
     appStats.fsWritesToday = doc["fsWritesToday"] | 0;
@@ -561,9 +565,18 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   file.close();
   if (err) return;
   
+  // F10 (T2): track which tasks already fired today so catch-up never re-announces them.
+  // Persisted in stats.json so a reboot doesn't clear the day's already-announced tasks.
+  if (appStats.dueFiredDay != currentDayString) {
+    appStats.dueFiredDay = currentDayString;
+    appStats.dueFiredKeys = "";
+  }
+  
+  int nowMins = currentHour * 60 + currentMin;
+  String dueTasksDetail = "";
+
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
-    String dueTasksDetail = "";
     for (JsonObject task : daily) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
@@ -594,17 +607,29 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
         isCompleted = task["completed"] | false;
       }
       
-      if (isActiveToday && !isCompleted && tHour == currentHour && tMin == currentMin) {
-        if (dueTasksDetail.length() > 0) {
-          dueTasksDetail += "|";
+      if (isActiveToday && !isCompleted) {
+        int dueMins = tHour * 60 + tMin;
+        String dueKey = String(tHour) + ":" + String(tMin) + "|" + taskText;
+        // F10 (T2): fire once the task time has arrived, even if a previous minute was missed
+        if (dueMins <= nowMins && appStats.dueFiredKeys.indexOf(dueKey) == -1) {
+          if (dueTasksDetail.length() > 0) {
+            dueTasksDetail += "|";
+          }
+          dueTasksDetail += taskText;
+          appStats.dueFiredKeys += dueKey + ";";
         }
-        dueTasksDetail += taskText;
       }
     }
+  }
 
-    if (dueTasksDetail.length() > 0) {
-      triggerBehaviour(EVENT_TASK_DUE, dueTasksDetail);
-    }
+  if (dueTasksDetail.length() > 0) {
+    // F10 (T2/T4): route through MessageManager so a task due while away lines up for display on return
+    messageManager.scheduleMessageWithPriority(
+      EVENT_TASK_DUE,
+      dueTasksDetail,
+      MessageManager::P_HIGH, 0, MessageManager::R_IMPORTANT
+    );
+    saveDailyStats();
   }
 }
 
@@ -617,7 +642,7 @@ inline String getHighlyOverdueTaskNames(String currentDayString, String currentM
   file.close();
   if (err) return "";
   
-  String overdueNames = "";
+  std::vector<String> overdueNames;
 
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
@@ -644,8 +669,7 @@ inline String getHighlyOverdueTaskNames(String currentDayString, String currentM
       if (!isCompleted && tDate.length() == 10) {
         int diff = currentDaysCount - dateToDays(tDate);
         if (diff > TASK_OVERDUE_DAYS_LIMIT) {
-          if (overdueNames.length() > 0) overdueNames += ", ";
-          overdueNames += taskText;
+          overdueNames.push_back(taskText);
         }
       }
     }
@@ -683,13 +707,24 @@ inline String getHighlyOverdueTaskNames(String currentDayString, String currentM
       if (!isCompleted) {
         int diffMonths = (currentYear - tYear) * 12 + (currentMonth - tMonth);
         if (diffMonths > TASK_OVERDUE_MONTHS_LIMIT) {
-          if (overdueNames.length() > 0) overdueNames += ", ";
-          overdueNames += taskText;
+          overdueNames.push_back(taskText);
         }
       }
     }
   }
-  return overdueNames;
+  // Shuffle the overdue names so NAGGING doesn't always reference the first task in the list
+  for (int i = (int)overdueNames.size() - 1; i > 0; i--) {
+    int j = random(i + 1);
+    String tmp = overdueNames[i];
+    overdueNames[i] = overdueNames[j];
+    overdueNames[j] = tmp;
+  }
+  String result = "";
+  for (size_t i = 0; i < overdueNames.size(); i++) {
+    if (i > 0) result += ", ";
+    result += overdueNames[i];
+  }
+  return result;
 }
 
 void loop(void) {
@@ -1048,14 +1083,14 @@ void loop(void) {
           if (excessive && !appStats.excessiveBreaksTriggered) {
             appStats.excessiveBreaksTriggered = true;
             saveDailyStats();
+            // Roast is demoted below the welcome greeting: it fires after (never replaces) it.
             messageManager.scheduleMessageWithPriority(
               EVENT_EXCESSIVE_BREAKS,
               tempBreakDuration,
-              MessageManager::P_URGENT, WELCOME_DELAY_MS, MessageManager::R_IMPORTANT
+              MessageManager::P_NORMAL, WELCOME_DELAY_MS, MessageManager::R_IMPORTANT
             );
-          } else {
-            messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
           }
+          messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
         }
       }
     } else {
@@ -1067,12 +1102,25 @@ void loop(void) {
         if (targetState != candidateState) {
           candidateState = targetState;
           stateConfirmationTime = now;
-        } else if (now - stateConfirmationTime >= STICKY_CONFIRM_MS) { // 3 minutes
+        } else if (now - stateConfirmationTime >= STICKY_CONFIRM_MS) { // 30 seconds
           if (candidateState == STATE_FOCUS) {
-            appState.continuousStillStart = stateConfirmationTime; // Include the 3-minute confirmation window
+            appState.continuousStillStart = stateConfirmationTime; // Include the 30-second confirmation window
           }
-          appState.currentPresenceState = candidateState;
+          int prevState = appState.currentPresenceState;
+          int confirmedState = candidateState;
+          appState.currentPresenceState = confirmedState;
           candidateState = -1;
+          // F11 (T5): celebrate a focus session that ends IN PLACE (FOCUS -> BUSY/REGULAR), never on leaving
+          if (prevState == STATE_FOCUS && (confirmedState == STATE_BUSY || confirmedState == STATE_REGULAR)) {
+            unsigned long focusSessionDuration = now - appState.continuousStillStart;
+            if (focusSessionDuration > FOCUS_MINIMUM_MS) {
+              messageManager.scheduleMessageWithPriority(
+                EVENT_FOCUS_END,
+                formatTime(focusSessionDuration),
+                MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+              );
+            }
+          }
         }
       } else {
         candidateState = -1;
@@ -1092,8 +1140,12 @@ void loop(void) {
       
     // Trigger Stretch alert after 45 minutes of continuous presence
     if (now - appState.lastStretchReminderTime > STRETCH_INTERVAL_MS) {
-      triggerBehaviour(EVENT_STRETCH);
       appState.lastStretchReminderTime = now;
+      messageManager.scheduleMessageWithPriority(
+        EVENT_STRETCH,
+        "",
+        MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+      );
     }
 
     // Trigger Slacker Roast if sitting > 1 hour and score < 35%
@@ -1101,8 +1153,12 @@ void loop(void) {
     unsigned long continuousSittingTime = now - appState.continuousPresenceStart;
     if (continuousSittingTime > SLACKER_INTERVAL_MS && appStats.productivityScore < 35) {
       if (now - lastSlackerRoastTime > SLACKER_INTERVAL_MS) {
-        triggerBehaviour(EVENT_SLACKER);
         lastSlackerRoastTime = now;
+        messageManager.scheduleMessageWithPriority(
+          EVENT_SLACKER,
+          "",
+          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+        );
       }
     }
 
@@ -1110,7 +1166,11 @@ void loop(void) {
     unsigned long currentStreak = now - appState.continuousPresenceStart;
     if (appStats.longestSittingStreak >= STREAK_MINIMUM_MS && currentStreak > appStats.longestSittingStreak && !appState.streakAlertTriggered) {
       appState.streakAlertTriggered = true;
-      triggerBehaviour(EVENT_STREAK_BEATEN, formatTime(appStats.longestSittingStreak));
+      messageManager.scheduleMessageWithPriority(
+        EVENT_STREAK_BEATEN,
+        formatTime(currentStreak),
+        MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+      );
     }
     if (currentStreak > appStats.longestSittingStreak && currentStreak >= STREAK_MINIMUM_MS) {
       appStats.longestSittingStreak = currentStreak;
@@ -1125,10 +1185,7 @@ void loop(void) {
         focusSessionDuration = now - appState.continuousStillStart;
       }
       
-      // Trigger Focus session congrats if user focused for > 15s
-      if (focusSessionDuration > FOCUS_MINIMUM_MS) {
-        triggerBehaviour(EVENT_FOCUS_END, formatTime(focusSessionDuration));
-      }
+      // F11 (T5): no FOCUS_END congrats on leaving -- focus sessions are celebrated in place (see sticky-confirm block)
       
       unsigned long presenceDurationMs = now - appState.sitDownTime;
       Logger::log("STATE", "Present->Away: prevState=%s presDur=%lu s focusDur=%lu s stopByTrack=%d", 
@@ -1250,7 +1307,7 @@ void loop(void) {
     HTTPClient http;
     String weatherUrl = "https://api.openweathermap.org/data/2.5/weather?lat=" + 
                         String(appConfig.openWeatherLat, 4) + "&units=metric&lon=" + 
-                        String(appConfig.openWeatherLon, 4) + "&leng=fr&appid=" + 
+                        String(appConfig.openWeatherLon, 4) + "&lang=fr&appid=" + 
                         appConfig.openWeatherKey;
     http.begin(weatherUrl);
     int httpCode = http.GET();
@@ -1337,10 +1394,15 @@ void loop(void) {
     int currentDay = timeClient.getDay();
     int learnedLunch = getLearnedLunchHour(currentDay);
     if (currentHour == learnedLunch && currentMin >= 15) {
-      if (appState.currentPresenceState != STATE_AWAY && !appStats.lunchReminderTriggered && appStats.totalDeskTime > LUNCH_MIN_DESK_MS) {
+      // F10 (T4): schedule even while away -- MM lines it up for display once present
+      if (!appStats.lunchReminderTriggered && appStats.totalDeskTime > LUNCH_MIN_DESK_MS) {
         appStats.lunchReminderTriggered = true;
         saveDailyStats();
-        triggerBehaviour(EVENT_LUNCH_REMINDER);
+        messageManager.scheduleMessageWithPriority(
+          EVENT_LUNCH_REMINDER,
+          "",
+          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+        );
       }
     }
   }
@@ -1386,7 +1448,8 @@ void loop(void) {
     int lunchThresholdMins = refLunch * 60 - PRE_LUNCH_JOURNAL_MINS_BEFORE; // 15 mins before learned lunch
     
     if (currentMinsFromMidnight >= lunchThresholdMins && currentMinsFromMidnight < refLunch * 60) {
-      if (appState.currentPresenceState != STATE_AWAY && !appStats.preLunchJournalTriggered) {
+      // F10 (T4): schedule even while away -- MM lines it up for display once present
+      if (!appStats.preLunchJournalTriggered) {
         appStats.preLunchJournalTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1411,7 +1474,8 @@ void loop(void) {
     int endThresholdMins = (refEnd - END_OF_DAY_JOURNAL_HOURS_BEFORE) * 60; // 1 hour before learned workday end
     
     if (currentMinsFromMidnight >= endThresholdMins && currentMinsFromMidnight < refEnd * 60) {
-      if (appState.currentPresenceState != STATE_AWAY && !appStats.endOfDayJournalTriggered) {
+      // F10 (T4): schedule even while away -- MM lines it up for display once present
+      if (!appStats.endOfDayJournalTriggered) {
         appStats.endOfDayJournalTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(

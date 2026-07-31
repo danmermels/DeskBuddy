@@ -6,6 +6,7 @@
 #include <LittleFS.h>
 #include "Behaviour.h"
 #include "MqttService.h"
+#include "MessageManager.h"
 
 // State definitions if not already declared
 #ifndef STATE_AWAY
@@ -38,6 +39,7 @@ extern NTPClient timeClient;
 extern const int AI_RESPONSE_MAX_CHARS;
 extern const int DISPLAY_CHARS_PER_LINE;
 extern const RGBColor stateColors[];
+extern MessageManager messageManager;
 
 // Forward declarations for clock faces (defined in Faceplates.h)
 extern void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail);
@@ -313,6 +315,14 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
     contentColorDefault = tft.color565(JournalConfig::dueTextColor.r, JournalConfig::dueTextColor.g, JournalConfig::dueTextColor.b);
   }
 
+  if (appState.lastTriggeredEventType == EVENT_NAGGING) {
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(tft.color565(NaggingConfig::titleColor.r, NaggingConfig::titleColor.g, NaggingConfig::titleColor.b), bgColor);
+    tft.setTextFont(NaggingConfig::titleFont);
+    tft.drawString(NaggingConfig::titleText, NaggingConfig::titleX, NaggingConfig::titleY);
+    startY = NaggingConfig::msgStartY;
+  }
+
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
   
   int y = startY;
@@ -538,6 +548,22 @@ inline void updateTFTDisplay(unsigned long now) {
       welcomeAlertMessage = msg;
       welcomeAlertIsAi = isAi;
     } else {
+      // F12: split oversized messages into a follow-up 2nd screen (EVENT_PAGE). Runs after the
+      // MQTT echo above so the full text is still published. JOURNAL/TASK_DUE have their own layouts.
+      int curEvent = appState.lastTriggeredEventType;
+      if (curEvent != EVENT_JOURNAL && curEvent != EVENT_TASK_DUE && msg.length() > MSG_PAGE_MAX_CHARS) {
+        int splitAt = msg.lastIndexOf(' ', MSG_PAGE_MAX_CHARS);
+        if (splitAt > 20) {
+          String rest = msg.substring(splitAt + 1);
+          msg = msg.substring(0, splitAt);
+          messageManager.scheduleMessageWithPriority(
+            EVENT_PAGE,
+            rest,
+            MessageManager::P_HIGH, 8000, MessageManager::R_NORMAL
+          );
+          Logger::log("DISPLAY", "Message split into 2nd screen (p1=%d, p2=%d chars)", msg.length(), rest.length());
+        }
+      }
       activeAlertMessage = msg;
       activeAlertIsAi = isAi;
       if (appState.lastTriggeredEventType == EVENT_JOURNAL) {
@@ -556,7 +582,7 @@ inline void updateTFTDisplay(unsigned long now) {
         appState.aiScreenEndTime = now + 8000;
       }
       newAlert = true;
-      if (appState.lastTriggeredEventType != EVENT_JOURNAL) {
+      if (appState.lastTriggeredEventType != EVENT_JOURNAL && appState.lastTriggeredEventType != EVENT_TASK_DUE) {
         tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
       }
     }
@@ -568,22 +594,27 @@ inline void updateTFTDisplay(unsigned long now) {
     activeAlertIsAi = welcomeAlertIsAi;
     appState.aiScreenEndTime = now + 8000;
     newAlert = true;
-    if (appState.lastTriggeredEventType != EVENT_JOURNAL) {
+    if (appState.lastTriggeredEventType != EVENT_JOURNAL && appState.lastTriggeredEventType != EVENT_TASK_DUE) {
       tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
     }
   }
 
   bool isAlertActive = (now < appState.aiScreenEndTime);
+  if (appState.manualTriggerOverride && !isAlertActive && !appState.isAILoading && !appState.hasNewAIResponse) {
+    appState.manualTriggerOverride = false;
+  }
   int targetPage = -1;
   if (appState.currentPresenceState == STATE_AWAY) {
     appState.pendingWelcomeAlert = false;
     welcomeAlertMessage = "";
-    if (appState.hasNewAIResponse) {
+    if (appState.hasNewAIResponse && !appState.manualTriggerOverride) {
       if (appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_FIRST_SIT) {
         appState.hasNewAIResponse = false;
       }
     }
-    if (now - appState.lastStateTransitionTime < 60000UL) {
+    if (appState.manualTriggerOverride && isAlertActive) {
+      targetPage = -2; // Manual MQTT trigger: force the alert even while away
+    } else if (now - appState.lastStateTransitionTime < 60000UL) {
       targetPage = 0; // Show Clock page during the 1-minute grace period
     } else {
       targetPage = -1; // Away page
@@ -634,10 +665,12 @@ inline void updateTFTDisplay(unsigned long now) {
 
   // 1. If user is AWAY (and grace period has expired)
   if (appState.currentPresenceState == STATE_AWAY && (now - appState.lastStateTransitionTime >= 60000UL)) {
-    if (forceRedraw) {
-      drawRLEImage("/away.rle", 0, 0);
+    if (!appState.manualTriggerOverride || !isAlertActive) {
+      if (forceRedraw) {
+        drawRLEImage("/away.rle", 0, 0);
+      }
+      return;
     }
-    return;
   }
 
 

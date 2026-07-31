@@ -3,7 +3,6 @@
 
 #include <WiFi.h>
 #include <PubSubClient.h>
-#include "MessageManager.h"
 
 #include "Constants.h"
 #include "State.h"
@@ -16,7 +15,6 @@ void handleDebugCommand(const String& payload);
 // Extern instances defined in main.cpp
 extern WiFiClient wifiClient;
 extern PubSubClient mqttClient;
-extern MessageManager messageManager;
 
 // MQTT History Buffer declarations
 #include <queue>
@@ -59,12 +57,7 @@ inline void mqttCallback(char* topic, byte* payload, unsigned int length) {
   
   String t = String(topic);
   
-  // Route MQTT messages through MessageManager for proper queueing
-  if (t == MQTT_DISPLAY_TOPIC || t == MQTT_PUBLISH_TOPIC) {
-    Logger::log("MQTT", "Received display/message topic: %s payload: %s", t.c_str(), p.c_str());
-    messageManager.scheduleMessage(EVENT_MQTT_MESSAGE, p, MSG_PRIORITY_HIGH, 0, MSG_RELEVANCE_URGENT);
-  }
-  else if (t == MQTT_DEBUG_CMD_TOPIC) {
+  if (t == MQTT_DEBUG_CMD_TOPIC) {
     handleDebugCommand(p);
   }
 }

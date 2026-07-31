@@ -8,6 +8,7 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include "Constants.h"
+#include "Behaviour.h"
 #include "State.h"
 #include "Logger.h"
 #include "Learning.h"
@@ -18,6 +19,7 @@ extern NTPClient timeClient;
 extern struct tm ts;
 extern char buf[];
 extern const char* getPresenceStateName(int state);
+extern void triggerBehaviour(int event, String detail, int forceMode);
 
 static String presenceStateName(int s) {
   const char* n = getPresenceStateName(s);
@@ -650,6 +652,69 @@ static void handleSys(const String& args) {
   }
 }
 
+// ---- TRIGGER handler ----
+
+static int parseEventType(const String& s) {
+  if (isDigitStr(s)) return s.toInt();
+  String u = s;
+  u.toUpperCase();
+  if (u == "FIRST_SIT" || u == "FIRSTSIT")                return EVENT_FIRST_SIT;
+  if (u == "WELCOME_BACK" || u == "WELCOMEBACK")          return EVENT_WELCOME_BACK;
+  if (u == "STRETCH")                                     return EVENT_STRETCH;
+  if (u == "FOCUS_END" || u == "FOCUSEND")                return EVENT_FOCUS_END;
+  if (u == "SLACKER")                                     return EVENT_SLACKER;
+  if (u == "STREAK_BEATEN" || u == "STREAKBEATEN")        return EVENT_STREAK_BEATEN;
+  if (u == "LUNCH" || u == "LUNCH_REMINDER" || u == "LUNCHREMINDER") return EVENT_LUNCH_REMINDER;
+  if (u == "EXCESSIVE_BREAKS" || u == "EXCESSIVEBREAKS")  return EVENT_EXCESSIVE_BREAKS;
+  if (u == "GOAL_COMPLETED" || u == "GOALCOMPLETED")      return EVENT_GOAL_COMPLETED;
+  if (u == "JOURNAL")                                     return EVENT_JOURNAL;
+  if (u == "NAGGING")                                     return EVENT_NAGGING;
+  if (u == "TASK_DUE" || u == "TASKDUE")                  return EVENT_TASK_DUE;
+  if (u == "PAGE")                                        return EVENT_PAGE;
+  return -1;
+}
+
+static void handleTrigger(const String& args) {
+  int sp = args.indexOf(' ');
+  String typeStr = (sp < 0) ? args : args.substring(0, sp);
+  String rest = (sp < 0) ? "" : args.substring(sp + 1);
+
+  int eventType = parseEventType(typeStr);
+  if (typeStr.length() == 0 || eventType < 0 || eventType > EVENT_PAGE) {
+    Logger::log("MQTT", "Invalid TRIGGER event type '%s'. Use 0-%d or a name (FIRST_SIT, WELCOME_BACK, STRETCH, FOCUS_END, SLACKER, STREAK_BEATEN, LUNCH, EXCESSIVE_BREAKS, GOAL_COMPLETED, JOURNAL, NAGGING, TASK_DUE, PAGE).", typeStr.c_str(), EVENT_PAGE);
+    publishDebug("{\"ok\":false,\"error\":\"Invalid event type. Use 0-" + String(EVENT_PAGE) + " or an event name (e.g. LUNCH, JOURNAL)\"}");
+    return;
+  }
+
+  int forceMode = 0;
+  String detail = rest;
+
+  if (rest.length() > 0) {
+    int sp2 = rest.indexOf(' ');
+    String modeStr = (sp2 < 0) ? rest : rest.substring(0, sp2);
+    String modeUp = modeStr;
+    modeUp.toUpperCase();
+    if (modeUp == "AI") {
+      forceMode = 1;
+      detail = (sp2 < 0) ? "" : rest.substring(sp2 + 1);
+    } else if (modeUp == "FALLBACK") {
+      forceMode = 2;
+      detail = (sp2 < 0) ? "" : rest.substring(sp2 + 1);
+    } else if (isDigitStr(modeStr)) {
+      forceMode = modeStr.toInt();
+      detail = (sp2 < 0) ? "" : rest.substring(sp2 + 1);
+    }
+  }
+
+  Logger::log("MQTT", "TRIGGER event=%d mode=%d detail=\"%s\"", eventType, forceMode, detail.c_str());
+  appState.manualTriggerOverride = true;
+  triggerBehaviour(eventType, detail, forceMode);
+
+  String resp = "{\"ok\":true,\"triggered\":\"" + String(eventType) +
+                "\",\"mode\":" + String(forceMode) + "}";
+  publishDebug(resp);
+}
+
 // ---- Main debug command dispatcher ----
 // Parses and dispatches plain-text MQTT commands received from the web terminal or debug broker.
 // Protocol Format: [COMMAND] [arguments...] (e.g. "GET state", "SET config.userName \"alex\"", "SIM away")
@@ -667,6 +732,8 @@ static void handleSys(const String& args) {
 // - SET <key> <val>: Updates config values in Preferences or overrides metrics in memory.
 // - SIM <scenario>: Controls the radar simulation mode (e.g. 'away', 'sit', 'focus', 'stop').
 // - SYS <action>: Executes administrative tasks ('reboot', 'reset_stats', 'factory_reset').
+// - TRIGGER <eventType> [ai|fallback] [detail]: Simulates a behaviour event through
+//                 triggerBehaviour (e.g. 'TRIGGER 2 ai').
 void handleDebugCommand(const String& payload) {
   String trimmed = payload;
   trimmed.trim();
@@ -700,8 +767,11 @@ void handleDebugCommand(const String& payload) {
   else if (cmd == "SYS") {
     handleSys(args);
   }
+  else if (cmd == "TRIGGER") {
+    handleTrigger(args);
+  }
   else {
-    publishDebug("{\"ok\":false,\"error\":\"Unknown command '" + cmd + "'. Use GET/SET/SIM/SYS\"}");
+    publishDebug("{\"ok\":false,\"error\":\"Unknown command '" + cmd + "'. Use GET/SET/SIM/SYS/TRIGGER\"}");
   }
 }
 

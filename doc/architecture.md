@@ -78,8 +78,8 @@ tools/                 Helper scripts
 ### `setup()` Boot Sequence (`main.cpp:381`)
 
 1. Serial init (115200 baud)
-2. Create FreeRTOS mutexes (`geminiMutex`, `mqttHistoryMutex`, `mqttPublishQueueMutex`)
-3. Spawn persistent `queryGeminiTask` FreeRTOS background task (12KB stack)
+2. Create FreeRTOS mutexes (`aiMutex`, `mqttHistoryMutex`, `mqttPublishQueueMutex`)
+3. Spawn persistent `aiQueryTask` FreeRTOS background task (12KB stack)
 4. Load all config from NVS Preferences (WiFi, MQTT, API keys, radar gate sensitivities)
 5. Mount LittleFS and load `stats.json` (daily statistics)
 6. Init TFT display, show splash screen
@@ -145,7 +145,7 @@ Key fields: `totalDeskTime`, `totalFocusTime`, `totalBreakTime`, `breakCount`, `
 ### `RuntimeState appState`
 Ephemeral runtime state. Not persisted.
 
-Key fields: `currentPresenceState`, `filteredDetectionDist`, `sensorPresenceDetected`, `sensorMovingTargetDetected`, `isAILoading`, `aiResponse`, `hasNewAIResponse`, `currentPrompt`, `mqttConnected`, `geminiMutex`, `mqttHistory[50]`, `simulationMode`, `captivePortalMode`.
+Key fields: `currentPresenceState`, `filteredDetectionDist`, `sensorPresenceDetected`, `sensorMovingTargetDetected`, `isAILoading`, `aiResponse`, `hasNewAIResponse`, `currentPrompt`, `mqttConnected`, `aiMutex`, `mqttHistory[50]`, `simulationMode`, `captivePortalMode`.
 
 ### `TodoState appTodo`
 Raw JSON string for the task list (`{"daily":[],"monthly":[]}`). Read from `/todo.json` on LittleFS.
@@ -195,7 +195,7 @@ else:
 
 - **Presence ON:** 2s debounce (5s overnight on first sit)
 - **Presence OFF:** 10s debounce
-- **State transitions (e.g., Focus -> Busy):** 30s sticky confirmation window
+- **State transitions (e.g., Focus -> Busy):** 30s sticky confirmation window (`STICKY_CONFIRM_MS`)
 
 ### Session Lifecycle
 
@@ -238,7 +238,6 @@ score = constrain(raw, 0, 100)
 | 4 | `EVENT_SLACKER` | Sitting > 1 hour with productivity score < 35% |
 | 5 | `EVENT_STREAK_BEATEN` | Longest sitting streak record broken |
 | 6 | `EVENT_LUNCH_REMINDER` | At learned lunch hour + 15 min, if desk time > 30 min |
-| 7 | `EVENT_MQTT_MESSAGE` | External message received via MQTT |
 | 8 | `EVENT_EXCESSIVE_BREAKS` | Break rate > 1/hour |
 | 9 | `EVENT_GOAL_COMPLETED` | Desk time >= target hours |
 | 10 | `EVENT_JOURNAL` | Morning/pre-lunch/end-of-day task review |
@@ -258,9 +257,13 @@ triggerBehaviour(eventType, detail)
                 [ACTION REQUIRED] event-specific template
               --> Notify FreeRTOS task --> Groq API call
               --> On success: post response to appState.aiResponse
-              --> On failure: fall back to local quote
+              --> On failure or AI busy: fall back to local quote
       NO --> Pick random local quote from persona array
 ```
+
+**Routing:** Every event path now goes through `MessageManager` before `triggerBehaviour()` (see `main.cpp` loop). FIRST_SIT/WELCOME_BACK use P_URGENT (3000), GOAL/JOURNAL/NAGGING use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS use P_NORMAL (1500, delay 0, R_NORMAL) — a true 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500, F9). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it so the greeting is never replaced by the roast (F8). If an AI query is already in flight when a trigger arrives, `triggerBehaviour` falls back to a local quote instead of dropping the event.
+
+**aiMode whitelist (mode 1 = Balanced):** `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_STRETCH`, `EVENT_LUNCH_REMINDER`, `EVENT_EXCESSIVE_BREAKS`, `EVENT_GOAL_COMPLETED`, `EVENT_NAGGING`. Mode 2 = all events use AI; mode 0 = local quotes only.
 
 ### 4 Personas
 
@@ -275,7 +278,7 @@ Each event type has 5 pre-written local fallback quotes per persona (20 quotes p
 
 ### FreeRTOS Task
 
-- **Task:** `queryGeminiTask` (12KB stack, priority 1)
+- **Task:** `aiQueryTask` (12KB stack, priority 1)
 - **Notification:** `xTaskNotifyGive(aiQueryTaskHandle)` triggers execution
 - **Session safety:** Stale responses discarded if `querySessionId != currentSitDownSessionId` or user went away
 - **Timeout:** Safety reset of `isAILoading` after 45 seconds
@@ -342,12 +345,10 @@ The Aviator face (ID 4) uses `TFT_eSprite` for double-buffered watch hands:
 |-------|-----------|---------|
 | `deskbuddy/#` | Subscribe | Wildcard subscription for all commands |
 | `deskbuddy/status` | Publish | Online status on connect |
-| `deskbuddy/display` | Subscribe | Display alert messages |
-| `deskbuddy/message` | Subscribe | Display alert messages (alias) |
-| `deskbuddy/echo` | Publish | Echo of displayed messages |
+| `deskbuddy/echo` | Publish | Echo of triggered messages |
 | `deskbuddy/heap` | Publish | Heap telemetry (every 60s) |
 | `deskbuddy/log/<category>` | Publish | System logs by category |
-| `deskbuddy/debug/cmd` | Subscribe | Debug commands (GET/SET parameters) |
+| `deskbuddy/debug/cmd` | Subscribe | Debug commands (GET/SET/SIM/SYS/TRIGGER) |
 | `deskbuddy/debug/resp` | Publish | Debug command responses |
 | `deskbuddy/debug/ai/request` | Publish | Full AI request payload (debug) |
 | `deskbuddy/debug/ai/response` | Publish | Full AI response (debug) |
@@ -521,8 +522,8 @@ The `getCurationObservations()` function generates behavioral observation string
 
 - **Break frequency:** Compares actual break rate to 1/hour target
 - **Break duration:** Compares break time ratio to 10% target
-- **Task overdue:** Daily tasks overdue by 3+ days, monthly tasks overdue by 3+ months
-- **Midday task check:** At 12:00 PM, checks if any daily tasks are completed
+- **Task synthesis (`getTodoObservations`):** injects a compact `[TASK SYNTHESIS]` block into every AI prompt — counts (daily pending today, monthly due today, daily overdue 3d+, monthly overdue this-month/3mo+) plus the task names with times/overdue durations (capped at `TASK_SYNTHESIS_MAX_CHARS`). NAGGING prepends a `Highly Overdue Tasks Alert!` framing.
+- **Midday task check:** At 12:00 PM, adds a past-midday observation when daily tasks remain
 - **Pattern anomalies:** Detects unusual deviations from learned occupancy patterns
 
 ---
@@ -533,7 +534,7 @@ The `getCurationObservations()` function generates behavioral observation string
 
 | Mutex | Protects | Created In |
 |-------|----------|------------|
-| `appState.geminiMutex` | `appState.currentPrompt`, `appState.aiResponse`, `appState.hasNewAIResponse`, `appState.lastResponseIsAi`, `appState.lastTriggeredEventType`, `appState.lastTriggeredEventDetail`, `appState.currentUserName`, `geminiQuerySessionId` | `main.cpp:391` |
+| `appState.aiMutex` | `appState.currentPrompt`, `appState.aiResponse`, `appState.hasNewAIResponse`, `appState.lastResponseIsAi`, `appState.lastTriggeredEventType`, `appState.lastTriggeredEventDetail`, `appState.currentUserName`, `aiQuerySessionId` | `main.cpp:391` |
 | `appState.mqttHistoryMutex` | `appState.mqttHistory[]` circular buffer | `main.cpp:395` |
 | `mqttPublishQueueMutex` | `mqttPublishQueue` (std::queue) | `main.cpp:398` |
 
@@ -541,7 +542,7 @@ The `getCurationObservations()` function generates behavioral observation string
 
 | Task | Stack | Priority | Purpose |
 |------|-------|----------|---------|
-| `queryGeminiTask` | 12288 bytes | 1 | Background AI API queries via Groq |
+| `aiQueryTask` | 12288 bytes | 1 | Background AI API queries via Groq |
 
 The main `loopTask` (Arduino default) runs all other subsystems. The AI task blocks on `ulTaskNotifyTake` until `triggerBehaviour()` wakes it via `xTaskNotifyGive`.
 

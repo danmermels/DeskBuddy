@@ -9,12 +9,12 @@
 #define EVENT_SLACKER       4
 #define EVENT_STREAK_BEATEN 5
 #define EVENT_LUNCH_REMINDER 6
-#define EVENT_MQTT_MESSAGE 7
 #define EVENT_EXCESSIVE_BREAKS 8
 #define EVENT_GOAL_COMPLETED   9
 #define EVENT_JOURNAL          10
 #define EVENT_NAGGING          11
 #define EVENT_TASK_DUE         12
+#define EVENT_PAGE             13
 
 // --- Local Fallback/Eco Quotes (20 per category) ---
 

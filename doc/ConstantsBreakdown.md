@@ -132,7 +132,8 @@ These are initial defaults. Actual values are loaded from NVS Preferences at boo
 | Constant | Value | What It Does |
 |----------|-------|--------------|
 | `LUNCH_MIN_DESK_MS` | 1800000 | 30 minutes. Minimum desk time before a lunch reminder is allowed. Prevents lunch reminders before the user has actually started working. |
-| `LUNCH_REMINDER_DELAY_MS` | 3600000 | 1 hour. After the learned lunch hour is reached, wait 1 additional hour before firing the reminder. Gives a buffer if the user usually eats slightly late. |
+
+The lunch reminder fires at the learned lunch hour + 15 minutes (checked in the main loop, `main.cpp`), routed through `MessageManager` at P_NORMAL with no additional delay.
 
 ---
 
@@ -171,15 +172,16 @@ Priority and relevance levels for the `MessageManager` scheduling system.
 
 | Constant | Value | When Used |
 |----------|-------|-----------|
-| `MSG_PRIORITY_HIGH` | 3000 | MQTT alerts, stretch reminders, slacker roasts, goal completed — messages that should display ASAP. |
-| `MSG_PRIORITY_NORMAL` | 1500 | Welcome-back messages, focus-end messages — normal behaviour events. |
-| `MSG_PRIORITY_LOW` | 500 | Journal prompts, low-urgency observations — can wait if something more important is on screen. |
+| `MSG_PRIORITY_URGENT` | 3000 | First-sit and welcome-back greetings (P_URGENT) — must always win over everything else. |
+| `MSG_PRIORITY_HIGH` | 2250 | Goal completed, journal (incl. queued pages), nagging (P_HIGH) — important, but never outrank the greeting. |
+| `MSG_PRIORITY_NORMAL` | 1500 | Stretch, slacker, streak-beaten, focus-end, lunch, excessive-breaks (P_NORMAL) — standard behaviour events. |
+| `MSG_PRIORITY_LOW` | 500 | Low-urgency observations (P_LOW) — can wait if something more important is on screen. |
 
 ### Relevance (how long a message stays "fresh")
 
 | Constant | Value | What It Does |
 |----------|-------|--------------|
-| `MSG_RELEVANCE_URGENT` | 300000 | 5 minutes. MQTT alerts and time-sensitive triggers. If not displayed within 5 minutes, they're discarded. |
+| `MSG_RELEVANCE_URGENT` | 300000 | 5 minutes. Time-sensitive triggers. If not displayed within 5 minutes, they're discarded. |
 | `MSG_RELEVANCE_NORMAL` | 1800000 | 30 minutes. Standard behaviour events. Relevant for half an hour. |
 | `MSG_RELEVANCE_LOW` | 3600000 | 1 hour. Journal prompts and low-priority observations. |
 
@@ -200,6 +202,7 @@ Constants controlling when task journal prompts and nagging triggers fire.
 | `NAGGING_TRIGGER_DELAY_MS` | 7200000 | 2 hours | After 2 hours of continuous sitting, if tasks are overdue (3+ days), fire the nagging trigger. Prevents nagging immediately on sit-down. |
 | `TASK_OVERDUE_DAYS_LIMIT` | 3 | 3 days | A daily task is considered "overdue" if it's been 3+ days since it was due and not completed. |
 | `TASK_OVERDUE_MONTHS_LIMIT` | 3 | 3 months | A monthly task is considered "overdue" if it's been 3+ months since it was due and not completed. |
+| `TASK_SYNTHESIS_MAX_CHARS` | 500 | ~10 bullets | Max length of the compact `[TASK SYNTHESIS]` block injected into AI prompt observations (counts + task names). Longer lists are truncated with `...`. |
 
 ---
 
@@ -221,8 +224,6 @@ All MQTT connection, topic, and buffer configuration.
 | Constant | Value | Direction | What It Does |
 |----------|-------|-----------|--------------|
 | `MQTT_SUBSCRIBE_TOPIC` | `"deskbuddy/#"` | IN | Wildcard subscription. Receives ALL messages on any `deskbuddy/*` subtopic. |
-| `MQTT_DISPLAY_TOPIC` | `"deskbuddy/display"` | IN | Display alert messages. Payload shown on screen immediately. |
-| `MQTT_PUBLISH_TOPIC` | `"deskbuddy/message"` | IN | Alias for `deskbuddy/display`. Same behaviour, different topic name. |
 
 ### Topics (Published)
 
@@ -230,8 +231,8 @@ All MQTT connection, topic, and buffer configuration.
 |----------|-------|-----------|--------------|
 | `MQTT_STATUS_TOPIC` | `"deskbuddy/status"` | OUT | Published once on every MQTT connect with payload `"online"`. |
 | `MQTT_STATUS_PAYLOAD` | `"online"` | OUT | The payload for the status topic. |
-| `MQTT_ECHO_TOPIC` | `"deskbuddy/echo"` | OUT | Published after displaying an MQTT alert. Echoes the displayed message back. |
-| `MQTT_DEBUG_CMD_TOPIC` | `"deskbuddy/debug/cmd"` | IN | Debug command input (GET/SET/SIM/SYS plain-text protocol). |
+| `MQTT_ECHO_TOPIC` | `"deskbuddy/echo"` | OUT | Echoes every triggered message back for debugging. |
+| `MQTT_DEBUG_CMD_TOPIC` | `"deskbuddy/debug/cmd"` | IN | Debug command input (GET/SET/SIM/SYS/TRIGGER plain-text protocol). |
 | `MQTT_DEBUG_RESP_TOPIC` | `"deskbuddy/debug/resp"` | OUT | Debug command responses (JSON). |
 
 ### Buffers

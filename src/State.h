@@ -108,6 +108,8 @@ struct StatsState {
   bool preLunchJournalTriggered = false;
   bool endOfDayJournalTriggered = false;
   bool naggingTriggeredToday = false;
+  String dueFiredDay = "";
+  String dueFiredKeys = "";
   int lastNtpDay = -1;
   int lastMidnightCheckDay = -1;
   unsigned long previousLatestBreakDuration = 0;
@@ -154,6 +156,7 @@ struct RuntimeState {
   unsigned long lastAiQueryStartTime = 0;
   volatile bool mqttConnected = false;
   volatile bool pendingWelcomeAlert = false;
+  volatile bool manualTriggerOverride = false;
   String aiResponse = "";
   volatile bool hasNewAIResponse = false;
   volatile bool lastResponseIsAi = false;

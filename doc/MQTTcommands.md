@@ -8,16 +8,17 @@ Complete reference for all MQTT topics, commands, and message formats.
 
 1. [Broker Configuration](#1-broker-configuration)
 2. [Topic Map Overview](#2-topic-map-overview)
-3. [Display Alert Topics](#3-display-alert-topics)
-4. [Debug Command Platform](#4-debug-command-platform)
-5. [Simulation Platform](#5-simulation-platform)
-6. [System Commands](#6-system-commands)
+3. [Debug Command Platform](#3-debug-command-platform)
+4. [Simulation Platform](#5-simulation-platform)
+5. [System Commands](#6-system-commands)
+6. [TRIGGER Commands](#65-trigger-commands)
 7. [Publishing Topics](#7-publishing-topics)
 8. [AI Debug Trace](#8-ai-debug-trace)
 9. [Log Stream](#9-log-stream)
 10. [Message Queue & Throttling](#10-message-queue--throttling)
 11. [Message History Buffer](#11-message-history-buffer)
 12. [Home Assistant Integration](#12-home-assistant-integration)
+13. [Quick Reference Card](#quick-reference-card)
 
 ---
 
@@ -43,8 +44,6 @@ Configurable via NVS Preferences (`mqttBroker`, `mqttPort`) or the web dashboard
 | Topic | Handler | Priority |
 |-------|---------|----------|
 | `deskbuddy/#` | Wildcard subscription (all subtopics below) | -- |
-| `deskbuddy/display` | MessageManager (display alert) | HIGH |
-| `deskbuddy/message` | MessageManager (display alert) | HIGH |
 | `deskbuddy/debug/cmd` | `handleDebugCommand()` dispatcher | -- |
 
 ### Outbound (Published)
@@ -52,7 +51,7 @@ Configurable via NVS Preferences (`mqttBroker`, `mqttPort`) or the web dashboard
 | Topic | Trigger | Format |
 |-------|---------|--------|
 | `deskbuddy/status` | On MQTT connect | `"online"` |
-| `deskbuddy/echo` | After displaying an MQTT alert | String (echoed message) |
+| `deskbuddy/echo` | After every triggered message | String (echoed message) |
 | `deskbuddy/heap` | Every 60 seconds | `{"freeHeap":NNN,"minFreeHeap":NNN}` |
 | `deskbuddy/debug/resp` | After every debug command | JSON (varies by command) |
 | `deskbuddy/debug/ai/request` | When AI query is sent | Multi-line text |
@@ -65,39 +64,7 @@ Configurable via NVS Preferences (`mqttBroker`, `mqttPort`) or the web dashboard
 
 ---
 
-## 3. Display Alert Topics
-
-Publish a string to either topic to show a message on the TFT display. Both topics behave identically.
-
-### Topics
-
-```
-deskbuddy/display
-deskbuddy/message
-```
-
-### Payload Format
-
-Plain string. Supports multi-line via `\n`. Special formatting is NOT parsed from MQTT payloads (color codes, two-column layout, etc. are only processed for AI-generated messages).
-
-### Behaviour
-
-- Routed through `MessageManager` at **HIGH priority**, **URGENT relevance**
-- Bypasses all scheduled message queue — displayed immediately if no other urgent message is active
-- Display duration is auto-calculated based on line count (3s base + 1.8s per line)
-- After display, an echo is published to `deskbuddy/echo`
-
-### Example
-
-```bash
-# MQTT CLI / mosquitto_pub
-mosquitto_pub -h 192.168.15.18 -t "deskbuddy/display" -m "Meeting in 5 minutes!"
-mosquitto_pub -h 192.168.15.18 -t "deskbuddy/message" -m "Lunch break!\nGo stretch your legs"
-```
-
----
-
-## 4. Debug Command Platform
+## 3. Debug Command Platform
 
 All debug commands are sent as plain-text strings to `deskbuddy/debug/cmd`. All responses are published to `deskbuddy/debug/resp` as JSON.
 
@@ -107,7 +74,7 @@ All debug commands are sent as plain-text strings to `deskbuddy/debug/cmd`. All 
 <TOPLEVEL> [SUBCOMMAND] [ARGS...]
 ```
 
-Commands are case-insensitive. Top-level keywords: `GET`, `SET`, `SIM`, `SYS`.
+Commands are case-insensitive. Top-level keywords: `GET`, `SET`, `SIM`, `SYS`, `TRIGGER`.
 
 ---
 
@@ -516,6 +483,47 @@ SYS <subcommand>
 
 ---
 
+## 6.5 TRIGGER Commands
+
+Simulate a behaviour event through `triggerBehaviour()` so the full AI/fallback pipeline can be tested without waiting for a real trigger. Also used by the "Debug Trigger Event" panel on the `/settings` web page (which publishes the same command over MQTT).
+
+Manual triggers are rendered immediately: they bypass the welcome-hold path (events `0`/`1` go straight to the alert overlay) and override the away screen, so a trigger still produces a visible reaction even when the device believes nobody is at the desk.
+
+### Syntax
+
+```
+TRIGGER <eventType> [ai|fallback|0|1|2] [detail]
+```
+
+| Argument | Description |
+|----------|-------------|
+| `eventType` | Numeric event type **or** a case-insensitive name (see table below): `0`=FirstSit, `1`=WelcomeBack, `2`=Stretch, `3`=FocusEnd, `4`=Slacker, `5`=StreakBeaten, `6`=Lunch, `8`=ExcessiveBreaks, `9`=GoalCompleted, `10`=Journal, `11`=Nagging, `12`=TaskDue |
+| `mode` | `ai` → force AI generation, `fallback` → force local quote, `0`/`1`/`2` → numeric equivalent (`0`=auto, `1`=ai, `2`=fallback). Default `0`. |
+| `detail` | Optional detail string passed to the event (e.g. break duration). |
+
+**Accepted names** (numeric and named forms are interchangeable):
+
+`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`.
+
+**Examples:**
+```
+→ TRIGGER 2 ai
+← {"ok":true,"triggered":"2","mode":1}
+
+→ TRIGGER LUNCH ai
+← {"ok":true,"triggered":"6","mode":1}
+
+→ TRIGGER 3 fallback 25m
+← {"ok":true,"triggered":"3","mode":2}
+
+→ TRIGGER 10 0
+← {"ok":true,"triggered":"10","mode":0}
+```
+
+An unknown or out-of-range event type returns `{"ok":false,"error":"Invalid event type..."}` and is also logged to the `deskbuddy/log` stream.
+
+---
+
 ## 7. Publishing Topics
 
 ### `deskbuddy/status` — Online Status
@@ -528,14 +536,14 @@ Published once on every MQTT connection (including reconnects).
 | Payload | `"online"` |
 | QoS | 0 (fire-and-forget) |
 
-### `deskbuddy/echo` — Display Alert Echo
+### `deskbuddy/echo` — Message Echo
 
-Published after a message from `deskbuddy/display` or `deskbuddy/message` is displayed on screen. Allows external systems to confirm the alert was shown.
+Published after a behaviour message is triggered (AI or fallback), echoing the message content for debugging.
 
 | Field | Value |
 |-------|-------|
 | Topic | `deskbuddy/echo` |
-| Payload | String (same as the display alert content) |
+| Payload | String (same as the triggered message content) |
 
 ### `deskbuddy/heap` — Heap Telemetry
 
@@ -566,7 +574,7 @@ Published just before the Groq API call.
 ```
 ---------- AI Request ----------
 URL: https://api.groq.com/openai/v1/chat/completions
-Body: {"model":"llama-3.3-70b-versatile","messages":[...],"temperature":0.7}
+Body: {"model":"llama-3.3-70b-versatile","messages":[...],"temperature":0.5}
 -------------------------------
 ```
 
@@ -652,8 +660,8 @@ The `/radar-data` JSON endpoint includes the full history:
 {
   "mqttHistory": [
     {
-      "topic": "deskbuddy/display",
-      "payload": "Meeting soon!",
+      "topic": "deskbuddy/debug/resp",
+      "payload": "{\"ok\":true}",
       "timestamp": 12345678
     },
     ...
@@ -697,10 +705,9 @@ mqtt:
       command_topic: "deskbuddy/debug/cmd"
       payload_press: "SYS reset_stats"
 
-  text:
-    - name: "DeskBuddy Alert"
-      command_topic: "deskbuddy/display"
-      mode: text
+    - name: "DeskBuddy Stretch Trigger"
+      command_topic: "deskbuddy/debug/cmd"
+      payload_press: "TRIGGER 2 ai"
 ```
 
 ### Automate Presence Detection
@@ -724,16 +731,89 @@ automation:
 
 ## Quick Reference Card
 
-```
-DISPLAY:   deskbuddy/display          "Alert message"
-MESSAGE:   deskbuddy/message          "Alert message"  (alias)
-ECHO:      deskbuddy/echo             ← echoed after display
-HEALTH:    deskbuddy/heap             ← {"freeHeap":...}
+### All `/deskbuddy/debug/cmd` Commands
 
-DEBUG:     deskbuddy/debug/cmd        GET state|radar|filters|stats|config|session|time|system|<key>
-                                      SET <config.key> <value> | <stats.key> <value>
-                                      SIM away|sit|focus|busy|distracted|radar|state|time|loop|stop
-                                      SYS reboot|reset_stats|factory_reset
+Send plain-text payloads to `deskbuddy/debug/cmd`; responses arrive as JSON on `deskbuddy/debug/resp`. Top-level keywords: `GET`, `SET`, `SIM`, `SYS`, `TRIGGER`.
+
+#### GET — query state
+
+| Command | Response |
+|---------|----------|
+| `GET state` | `{"ok":true,"state":"FOCUS","rawDist":42,"filtDist":41.3,"present":true,"moving":false,"stable":true}` |
+| `GET radar` | `{"ok":true,"rawDist":42,"filtDist":41.3,"present":true,"moving":true,"static":false,"sim":false}` |
+| `GET filters` | `{"ok":true,"filtDist":41.3,"filterWindow":2.0,"distAvg":42.1,"distCount":150}` |
+| `GET stats` | `{"ok":true,"deskTime":"4h32m","focusTime":"1h10m","breakTime":"22m","breakCount":5,"score":78,"motionTime":"8m","motionCount":12,"longestStreak":"1h02m","latestBreak":"9m","firstSit":true,"dailyAiCount":7,"fsWrites":2,"fsReads":3}` |
+| `GET config` | `{"ok":true,"aiMode":1,"aiPersona":0,"clockFace":0,"buddyFontIdx":1,"userName":"Alex","targetHours":8.0,"focusDistLim":60,"motionRatioLim":10,"distLimit":120,"filterWindow":2.0,"hasMail":true,"time24h":true,"g0mSens":...}` |
+| `GET session` | `{"ok":true,"deskTime":"1h05m","motionTime":"8m","distAvg":44.0,"distCount":300,"continuousPresence":"1h04m"}` |
+| `GET time` | `{"ok":true,"epoch":1754000000,"hour":14,"minute":32,"day":4,"dayName":"Thu","ntpSet":true}` |
+| `GET system` | `{"ok":true,"freeHeap":120000,"minHeap":90000,"uptime":"2h","wifiRssi":-55,"wifiStatus":"connected","simActive":false,"simContinuous":false}` |
+| `GET <key>` | Generic lookup, e.g. `GET score` → `{"ok":true,"score":78}` |
+
+Generic keys: `state`, `presence`, `rawDist`, `filtDist`, `present`, `moving`, `score`, `productivityScore`, `deskTime`, `focusTime`, `breakTime`, `breakCount`, `motionTime`, `motionCount`, `longestStreak`, `userName`, `aiMode`, `aiPersona`, `clockFace`, `buddyFontIdx`, `distLimit`, `focusDistLim`, `motionRatioLim`, `filterWindow`, `freeHeap`.
+
+#### SET — change config or override stats
+
+| Command | Response |
+|---------|----------|
+| `SET config.aiMode 1` | `{"ok":true,"key":"aiMode","value":1}` |
+| `SET config.userName "Alex"` | `{"ok":true,"key":"userName","value":"Alex"}` |
+| `SET config.clockFace 2` | `{"ok":true,"key":"clockFace","value":2}` |
+| `SET config.targetHours 8` | `{"ok":true,"key":"targetHours","value":8}` |
+| `SET stats.breakCount 3` | `{"ok":true,"key":"breakCount","value":3}` (runtime only, not persisted) |
+
+Config keys (persist to NVS): `aiMode`, `aiPersona`, `clockFace`, `buddyFontIdx`, `userName`, `targetHours`, `focusDistLim`, `motionRatioLim`, `distLimit`, `filterWindow`, `hasMail`, `time24h`, `g0mSens`…`g6sSens`. Stats keys (runtime only): `breakCount`, `latestBreakDuration`, `previousLatestBreakDuration`, `totalBreakTime`, `totalDeskTime`, `totalFocusTime`, `firstSitToday`, `overnightBreakDuration`.
+
+#### SIM — radar simulation
+
+| Command | Response |
+|---------|----------|
+| `SIM away` | `{"ok":true,"sim":"on","preset":"away"}` |
+| `SIM sit 80` | `{"ok":true,"sim":"on","preset":"sit","dist":80}` |
+| `SIM focus 40` | `{"ok":true,"sim":"on","preset":"focus","dist":40}` |
+| `SIM busy 40` | `{"ok":true,"sim":"on","preset":"busy","dist":40}` |
+| `SIM distracted 120` | `{"ok":true,"sim":"on","preset":"distracted","dist":120}` |
+| `SIM state FOCUS` | `{"ok":true,"sim":"on","overrideState":"FOCUS"}` |
+| `SIM radar 45 1 1` | `{"ok":true,"sim":"on","dist":45,"moving":1,"present":1}` (dist moving present) |
+| `SIM time 1754000000` | `{"ok":true,"simTime":1754000000}` (epoch) |
+| `SIM loop` | `{"ok":true,"sim":"continuous"}` |
+| `SIM stop` | `{"ok":true,"sim":"off"}` |
+
+States: `AWAY|FOCUS|BUSY|DISTRACTED|REGULAR`.
+
+#### SYS — admin (all reboot after responding)
+
+| Command | Response |
+|---------|----------|
+| `SYS reboot` | `{"ok":true,"msg":"Rebooting..."}` |
+| `SYS reset_stats` | `{"ok":true,"msg":"Stats cleared, rebooting..."}` |
+| `SYS factory_reset` | `{"ok":true,"msg":"Factory reset, rebooting..."}` |
+
+#### TRIGGER — simulate a behaviour event
+
+| Command | Response |
+|---------|----------|
+| `TRIGGER 2 ai` | `{"ok":true,"triggered":"2","mode":1}` |
+| `TRIGGER LUNCH ai` | `{"ok":true,"triggered":"6","mode":1}` |
+| `TRIGGER 3 fallback 25m` | `{"ok":true,"triggered":"3","mode":2}` |
+| `TRIGGER 10 0` | `{"ok":true,"triggered":"10","mode":0}` |
+
+`<eventType>`: numeric (0=FirstSit, 1=WelcomeBack, 2=Stretch, 3=FocusEnd, 4=Slacker, 5=StreakBeaten, 6=Lunch, 8=ExcessiveBreaks, 9=GoalCompleted, 10=Journal, 11=Nagging, 12=TaskDue) or a case-insensitive name (`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`). Mode: `ai`/`1`=force AI, `fallback`/`2`=force local quote, `0`=auto. Manual triggers bypass the welcome-hold and away-screen suppression so they always render.
+
+### Examples (mosquitto_pub)
+
+```bash
+mosquitto_pub -h 192.168.15.18 -t "deskbuddy/debug/cmd" -m "GET stats"
+mosquitto_pub -h 192.168.15.18 -t "deskbuddy/debug/cmd" -m "SET config.aiMode 1"
+mosquitto_pub -h 192.168.15.18 -t "deskbuddy/debug/cmd" -m "SIM focus 40"
+mosquitto_pub -h 192.168.15.18 -t "deskbuddy/debug/cmd" -m "TRIGGER 2 ai"
+mosquitto_pub -h 192.168.15.18 -t "deskbuddy/debug/cmd" -m "SYS reboot"
+```
+
+### Topics
+
+```
+ECHO:      deskbuddy/echo             ← every triggered message (debug)
+HEALTH:    deskbuddy/heap             ← {"freeHeap":...}
 RESPONSE:  deskbuddy/debug/resp       ← JSON response
 
 AI TRACE:  deskbuddy/debug/ai/request  ← full prompt
