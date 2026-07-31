@@ -203,6 +203,70 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     #mqttConsole::-webkit-scrollbar-thumb:hover {
       background: #38bdf8;
     }
+    .expand-toggle {
+      background: none;
+      border: none;
+      color: #64748b;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      transition: color 0.2s, transform 0.3s ease;
+    }
+    .expand-toggle:hover { color: #38bdf8; }
+    .expand-toggle svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      transition: transform 0.3s ease;
+    }
+    .expand-toggle.expanded svg {
+      transform: rotate(180deg);
+    }
+    /* TFT Display Panel Styles */
+    .tft-display-entry {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      margin-bottom: 8px;
+      transition: background 0.2s ease, border-color 0.2s ease;
+      text-align: center;
+      box-sizing: border-box;
+      width: 100%;
+    }
+    .tft-display-entry:hover {
+      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .tft-display-entry.ai-display-entry {
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.7) 100%);
+      box-shadow: inset 0 0 12px rgba(56, 189, 248, 0.05);
+    }
+    .tft-display-time {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #64748b;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .tft-display-text {
+      font-size: 1.25rem;
+      font-weight: 300;
+      line-height: 1.4;
+      color: #e2e8f0;
+      max-width: 90%;
+    }
+    .tft-display-entry.ai-display-entry .tft-display-text {
+      color: #38bdf8;
+      text-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+    }
   </style>
 </head>
 <body>
@@ -230,14 +294,16 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
   </div>
 
   <div class="card ai-card" id="tftMessageCard">
-    <div class="panel-header-row">
-      <h1 style="margin:0;">Recent Updates</h1>
-      <div id="aiBadge" class="ai-badge" style="display:none; margin:0;">AI GENERATED</div>
+    <div style="position: relative; display: flex; justify-content: center; align-items: center; margin-bottom: 12px; width: 100%;">
+      <h1 style="margin:0; text-align: center;">Recent Updates</h1>
+      <button class="expand-toggle" id="expandToggle" onclick="toggleTftLog()" title="Expand / Collapse" style="position: absolute; right: 0;">
+        <svg viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+      </button>
     </div>
-    <div id="tftLog" style="max-height:38px; overflow-y:auto; display:flex; flex-direction:column; gap:2px;">
+    <div id="tftLog" style="max-height:100px; overflow:hidden; display:flex; flex-direction:column; gap:8px; transition: max-height 0.35s ease; box-sizing: border-box; padding: 2px;">
       <div style="color:#64748b; text-align:center; padding:20px 0; font-size:0.9rem;">Loading...</div>
     </div>
-    <div class="ai-loading-container" id="aiLoading" style="display:none;">
+    <div class="ai-loading-container" id="aiLoading" style="display:none; margin-top:8px;">
       <div class="ai-spinner"></div>
       <span>AI is generating response...</span>
     </div>
@@ -515,20 +581,25 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
               let container = document.getElementById('tftLog');
               container.innerHTML = '';
               let msgs = msgData.messages || [];
-              msgs.forEach(m => {
-                let t = m.epoch > 1000000000 ? new Date(m.epoch * 1000).toLocaleTimeString() : '--:--:--';
+              msgs.forEach((m, idx) => {
+                let t = '--:--:--';
+                if (m.epoch > 1000000000) {
+                  let d = new Date(m.epoch * 1000);
+                  let hours = String(d.getUTCHours()).padStart(2, '0');
+                  let minutes = String(d.getUTCMinutes()).padStart(2, '0');
+                  let seconds = String(d.getUTCSeconds()).padStart(2, '0');
+                  t = hours + ':' + minutes + ':' + seconds;
+                }
                 let div = document.createElement('div');
-                div.style.cssText = 'display:flex; gap:10px; padding:6px 8px; border-radius:6px; font-size:0.85rem; background:#0f172a; align-items:center; transition:background 0.15s;';
-                if (m.isAi) div.style.borderLeft = '3px solid #38bdf8';
-                div.onmouseover = function(){ this.style.background = '#1e293b'; };
-                div.onmouseout = function(){ this.style.background = '#0f172a'; };
-                div.innerHTML = '<span style="color:#64748b; flex-shrink:0; font-size:0.75rem; font-weight:600;">' + t + '</span><span style="color:' + (m.isAi ? '#7dd3fc' : '#e2e8f0') + ';">' + m.text + '</span>';
+                div.className = 'tft-display-entry' + (m.isAi ? ' ai-display-entry' : '');
+                if (!tftExpanded && idx > 0) div.style.display = 'none';
+                div.innerHTML = '<span class="tft-display-time">' + t + '</span><span class="tft-display-text">' + m.text + '</span>';
                 container.appendChild(div);
               });
               if (msgs.length === 0) {
                 container.innerHTML = '<div style="color:#64748b; text-align:center; padding:20px 0; font-size:0.9rem;">No messages yet.</div>';
               }
-              document.getElementById('aiBadge').style.display = msgs.some(m => m.isAi) ? "block" : "none";
+
             })
             .catch(() => {
               // Silently ignore fetch errors for secondary endpoint
@@ -542,6 +613,25 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
         });
     }
     updateMetrics();
+
+    let tftExpanded = false;
+    function toggleTftLog() {
+      tftExpanded = !tftExpanded;
+      let log = document.getElementById('tftLog');
+      let btn = document.getElementById('expandToggle');
+      let entries = log.querySelectorAll('#tftLog > .tft-display-entry');
+      if (tftExpanded) {
+        log.style.maxHeight = '320px';
+        log.style.overflowY = 'auto';
+        btn.classList.add('expanded');
+        entries.forEach(e => e.style.display = 'flex');
+      } else {
+        log.style.maxHeight = '100px';
+        log.style.overflow = 'hidden';
+        btn.classList.remove('expanded');
+        entries.forEach((e, i) => e.style.display = (i > 0) ? 'none' : 'flex');
+      }
+    }
 
   </script>
 </body>

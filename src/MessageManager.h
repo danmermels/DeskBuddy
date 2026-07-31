@@ -71,6 +71,7 @@ public:
 
   // Convenience scheduling methods
   void scheduleWelcomeBackMessage(const String& breakDuration);
+  void scheduleFirstSitMessage(const String& overnightBreak);
   void scheduleFocusSessionCongrats(const String& focusDuration);
   void scheduleProductivityHints();
   void scheduleStretchReminder(unsigned long continuousTime);

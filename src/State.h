@@ -202,7 +202,7 @@ struct TftMessageRecord {
 };
 
 struct TftMessageHistory {
-  static constexpr int MAX_MSGS = 15;
+  static constexpr int MAX_MSGS = MAX_TFT_MSGS;
   TftMessageRecord buffer[MAX_MSGS];
   int head = 0;
   int count = 0;

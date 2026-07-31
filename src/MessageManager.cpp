@@ -95,9 +95,33 @@ void MessageManager::triggerSmartEvent(int eventType, const String& content,
 }
 
 void MessageManager::scheduleWelcomeBackMessage(const String& breakDuration) {
+  messageQueue.erase(
+    std::remove_if(messageQueue.begin(), messageQueue.end(),
+      [](const QueuedMessage& msg) {
+        return msg.eventType == EVENT_WELCOME_BACK || msg.eventType == EVENT_FIRST_SIT;
+      }),
+    messageQueue.end()
+  );
+
   scheduleMessageWithPriority(
     EVENT_WELCOME_BACK,
     breakDuration,
+    P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
+  );
+}
+
+void MessageManager::scheduleFirstSitMessage(const String& overnightBreak) {
+  messageQueue.erase(
+    std::remove_if(messageQueue.begin(), messageQueue.end(),
+      [](const QueuedMessage& msg) {
+        return msg.eventType == EVENT_WELCOME_BACK || msg.eventType == EVENT_FIRST_SIT;
+      }),
+    messageQueue.end()
+  );
+
+  scheduleMessageWithPriority(
+    EVENT_FIRST_SIT,
+    overnightBreak,
     P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
   );
 }

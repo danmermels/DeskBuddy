@@ -86,22 +86,7 @@ inline void setupRadar() {
   Serial1.begin(256000, SERIAL_8N1, 0, 5); 
   delay(500);
   if (radar.begin(Serial1)) {
-    // Configure sensor distance resolution to 0.2m (20cm) programmatically
-    uint8_t enter_cmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xFF, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
-    Serial1.write(enter_cmd, sizeof(enter_cmd));
-    delay(150);
-    uint8_t res_cmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x04, 0x00, 0xAA, 0x00, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01};
-    Serial1.write(res_cmd, sizeof(res_cmd));
-    delay(150);
-    uint8_t exit_cmd[] = {0xFD, 0xFC, 0xFB, 0xFA, 0x02, 0x00, 0xFE, 0x00, 0x04, 0x03, 0x02, 0x01};
-    Serial1.write(exit_cmd, sizeof(exit_cmd));
-    delay(200);
-    
-    // Restart to apply new resolution
-    radar.requestRestart();
-    delay(1000); // Give the module time to reboot and load firmware settings
-    
-    // Re-verify serial connection and query configuration from the physical module
+    // Re-verify serial connection and query configuration from the physical module (LD2410 holds state)
     if (radar.requestCurrentConfiguration()) {
       // Sync local state variables with settings retrieved from the module
       appConfig.g0mSens = radar.motion_sensitivity[0];
@@ -145,20 +130,7 @@ inline void setupRadar() {
       
       Serial.println("LD2410 configurations retrieved and synced successfully from the module.");
     } else {
-      Serial.println("Failed to retrieve configuration from LD2410. Falling back to local settings.");
-      // Fallback: apply local configurations (loaded from Preferences at startup) to the module
-      radar.setGateSensitivityThreshold(0, appConfig.g0mSens, appConfig.g0sSens);
-      radar.setGateSensitivityThreshold(1, appConfig.g1mSens, appConfig.g1sSens);
-      radar.setGateSensitivityThreshold(2, appConfig.g2mSens, appConfig.g2sSens);
-      radar.setGateSensitivityThreshold(3, appConfig.g3mSens, appConfig.g3sSens);
-      radar.setGateSensitivityThreshold(4, appConfig.g4mSens, appConfig.g4sSens);
-      radar.setGateSensitivityThreshold(5, appConfig.g5mSens, appConfig.g5sSens);
-      radar.setGateSensitivityThreshold(6, appConfig.g6mSens, appConfig.g6sSens);
-      
-      int requiredGates = (appConfig.deskDistanceLimit + 19) / 20;
-      if (requiredGates < 2) requiredGates = 2;
-      if (requiredGates > 8) requiredGates = 8;
-      radar.setMaxValues(requiredGates, requiredGates, 5);
+      Serial.println("Failed to retrieve configuration from LD2410 on startup. Keeping local config.");
     }
   }
 }

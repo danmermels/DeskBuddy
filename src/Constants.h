@@ -39,6 +39,7 @@
 
 // --- Performance & Productivity Constants ---
 #define DAILY_AI_LIMIT                    30
+#define MAX_TFT_MSGS                      10
 #define FILTER_MOTION_THRESHOLD          0.5f
 #define BREAK_PENALTY_TARGET              1.0f   // target: 1 break/hour = 25% penalty
 #define BREAK_TIME_TARGET                 0.10f  // target: 10% of workday in breaks = 25% penalty

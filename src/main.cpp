@@ -782,14 +782,14 @@ void loop(void) {
       // Midnight: merge current day's presence before resetting
       int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
       mergeCurrentDayPresence(mergeDay);
-
       appStats.lastMidnightCheckDay = currentDay;
       resetDailyStats(appStats.lastAwayEpoch, currentDay);
     }
   }
 
   static bool stablePresence = false;
-  static unsigned long lastPresenceChangeTime = 0;
+  static bool lastRawPresent = false;
+  static unsigned long lastRawPresentChangeTime = 0;
 
   bool rawPresent = false;
   int rawState = STATE_AWAY;
@@ -889,6 +889,11 @@ void loop(void) {
   }
 
   // Debouncing logic to filter sensor instability/boundary jitter
+  if (rawPresent != lastRawPresent) {
+    lastRawPresent = rawPresent;
+    lastRawPresentChangeTime = now;
+  }
+
   if (rawPresent != stablePresence) {
     unsigned long debounceLimit = 0;
     if (rawPresent) {
@@ -896,11 +901,9 @@ void loop(void) {
     } else {
       debounceLimit = DEBOUNCE_AWAY_MS;
     }
-    if (now - lastPresenceChangeTime > debounceLimit) {
+    if (now - lastRawPresentChangeTime >= debounceLimit) {
       stablePresence = rawPresent;
     }
-  } else {
-    lastPresenceChangeTime = now;
   }
 
   bool targetPresent = stablePresence;
@@ -1025,15 +1028,12 @@ void loop(void) {
         appState.continuousStillStart = now;
       }
 
-      // Smooth transition: immediately trigger API welcome/fallback query on sit-down
+      // Smooth transition: schedule API welcome/fallback query on sit-down
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
       if (wasFirstSitToday || willRollover) {
         unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
-        if (overnightBreak >= OVERNIGHT_THRESHOLD_S) {
-          triggerBehaviour(EVENT_FIRST_SIT, formatTime(overnightBreak * 1000));
-        } else {
-          triggerBehaviour(EVENT_FIRST_SIT, "");
-        }
+        String breakStr = (overnightBreak >= OVERNIGHT_THRESHOLD_S) ? formatTime(overnightBreak * 1000) : "";
+        messageManager.scheduleFirstSitMessage(breakStr);
       } else {
         if (lastAwaySliceMs >= BREAK_MINIMUM_MS) {
           String tempBreakDuration = formatTime(appState.currentBreakDurationMs);
