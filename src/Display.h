@@ -402,30 +402,36 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
       fontLoaded = true;
     }
 
-    // Color code support
-    if (line.indexOf("[RED]") != -1) { 
-      currentLineColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b); 
-      line.replace("[RED]", ""); 
-    }
-    else if (line.indexOf("[GREEN]") != -1) { currentLineColor = tft.color565(34, 197, 94); line.replace("[GREEN]", ""); }
-    else if (line.indexOf("[YELLOW]") != -1) { currentLineColor = tft.color565(245, 158, 11); line.replace("[YELLOW]", ""); }
-    else if (line.indexOf("[BLUE]") != -1) { currentLineColor = tft.color565(56, 189, 248); line.replace("[BLUE]", ""); }
-    else if (line.indexOf("[ORANGE]") != -1) { currentLineColor = tft.color565(249, 115, 22); line.replace("[ORANGE]", ""); }
-    else if (line.indexOf("[GREY]") != -1) { currentLineColor = tft.color565(148, 163, 184); line.replace("[GREY]", ""); }
-    else if (line.indexOf("[GRAY]") != -1) { currentLineColor = tft.color565(148, 163, 184); line.replace("[GRAY]", ""); }
-    else if (line.indexOf("[WHITE]") != -1) { currentLineColor = TFT_WHITE; line.replace("[WHITE]", ""); }
-
+    // Column-split lines ("left | right") apply per-column color tags; single lines get one line-wide color
     line.replace("\r", "");
-    tft.setTextColor(currentLineColor, bgColor);
-
     int fontIndex = (pType != PAGE_STANDARD) ? 2 : 4;
 
     int splitIdx = line.indexOf('|');
-    if (splitIdx != -1) {
+    if (splitIdx == -1) {
+      if (line.indexOf("[RED]") != -1) {
+        currentLineColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b);
+        line.replace("[RED]", "");
+      }
+      else if (line.indexOf("[GREEN]") != -1) { currentLineColor = tft.color565(34, 197, 94); line.replace("[GREEN]", ""); }
+      else if (line.indexOf("[YELLOW]") != -1) { currentLineColor = tft.color565(245, 158, 11); line.replace("[YELLOW]", ""); }
+      else if (line.indexOf("[BLUE]") != -1) { currentLineColor = tft.color565(56, 189, 248); line.replace("[BLUE]", ""); }
+      else if (line.indexOf("[ORANGE]") != -1) { currentLineColor = tft.color565(249, 115, 22); line.replace("[ORANGE]", ""); }
+      else if (line.indexOf("[GREY]") != -1) { currentLineColor = tft.color565(148, 163, 184); line.replace("[GREY]", ""); }
+      else if (line.indexOf("[GRAY]") != -1) { currentLineColor = tft.color565(148, 163, 184); line.replace("[GRAY]", ""); }
+      else if (line.indexOf("[WHITE]") != -1) { currentLineColor = TFT_WHITE; line.replace("[WHITE]", ""); }
+
+      tft.setTextColor(currentLineColor, bgColor);
+      if (fontLoaded) {
+        tft.drawString(line, 120, currentY);
+      } else {
+        tft.drawString(line, 120, currentY, fontIndex);
+      }
+    }
+    else {
       String colLeft = line.substring(0, splitIdx);
       String colRight = line.substring(splitIdx + 1);
 
-      uint16_t leftColor = currentLineColor;
+      uint16_t leftColor = contentColorDefault;
       if (colLeft.indexOf("[RED]") != -1) { 
         leftColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b); 
         colLeft.replace("[RED]", ""); 
@@ -438,7 +444,7 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
       else if (colLeft.indexOf("[GRAY]") != -1) { leftColor = tft.color565(148, 163, 184); colLeft.replace("[GRAY]", ""); }
       else if (colLeft.indexOf("[WHITE]") != -1) { leftColor = TFT_WHITE; colLeft.replace("[WHITE]", ""); }
 
-      uint16_t rightColor = currentLineColor;
+      uint16_t rightColor = contentColorDefault;
       if (colRight.indexOf("[RED]") != -1) { 
         rightColor = tft.color565(JournalConfig::dueTimeColor.r, JournalConfig::dueTimeColor.g, JournalConfig::dueTimeColor.b); 
         colRight.replace("[RED]", ""); 
@@ -460,6 +466,10 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
       if (colLeft.indexOf("Due Today") != -1) {
         leftAlignX = 115;
         rightAlignX = 125;
+      } else if (colLeft.indexOf("Daily") != -1) {
+        // Diligence row sits low on the round screen; pull both columns toward center
+        leftAlignX = 114;
+        rightAlignX = 122;
       }
 
       // Draw left column right-aligned at leftAlignX
@@ -481,13 +491,6 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
       }
       
       tft.setTextDatum(MC_DATUM); // Restore default
-    } else {
-      tft.setTextColor(currentLineColor, bgColor);
-      if (fontLoaded) {
-        tft.drawString(line, 120, currentY);
-      } else {
-        tft.drawString(line, 120, currentY, fontIndex);
-      }
     }
 
     if (fontLoaded) {
@@ -577,9 +580,9 @@ inline void updateTFTDisplay(unsigned long now) {
           lineCount++;
         }
         bool isPage1 = (msg.indexOf("[YELLOW]TODO") != -1);
-        appState.aiScreenEndTime = now + getAlertDurationMs(lineCount, isPage1);
+        appState.aiScreenEndTime = millis() + getAlertDurationMs(lineCount, isPage1);
       } else {
-        appState.aiScreenEndTime = now + 8000;
+        appState.aiScreenEndTime = millis() + 8000;
       }
       newAlert = true;
       if (appState.lastTriggeredEventType != EVENT_JOURNAL && appState.lastTriggeredEventType != EVENT_TASK_DUE) {
@@ -592,14 +595,14 @@ inline void updateTFTDisplay(unsigned long now) {
     appState.pendingWelcomeAlert = false;
     activeAlertMessage = welcomeAlertMessage;
     activeAlertIsAi = welcomeAlertIsAi;
-    appState.aiScreenEndTime = now + 8000;
+    appState.aiScreenEndTime = millis() + 8000;
     newAlert = true;
     if (appState.lastTriggeredEventType != EVENT_JOURNAL && appState.lastTriggeredEventType != EVENT_TASK_DUE) {
       tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
     }
   }
 
-  bool isAlertActive = (now < appState.aiScreenEndTime);
+  bool isAlertActive = (millis() < appState.aiScreenEndTime);
   if (appState.manualTriggerOverride && !isAlertActive && !appState.isAILoading && !appState.hasNewAIResponse) {
     appState.manualTriggerOverride = false;
   }

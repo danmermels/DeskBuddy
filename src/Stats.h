@@ -19,6 +19,47 @@ inline void resetSessionStats() {
   clearRecentMotionWindow();
 }
 
+// Records the current task-diligence tally (done/total) for the given day and
+// month into appStats, keeping the current-period snapshot and the rolling
+// history rings (most-recent-first) in sync. Call on each journal generation.
+inline void updateTodoTally(int dailyDone, int dailyTotal, int monthlyDone, int monthlyTotal,
+                            const String& dayKey, const String& monthKey) {
+  appStats.dailyTaskDone = dailyDone;
+  appStats.dailyTaskTotal = dailyTotal;
+  appStats.dailyTallyDate = dayKey;
+  appStats.monthlyTaskDone = monthlyDone;
+  appStats.monthlyTaskTotal = monthlyTotal;
+  appStats.monthlyTallyMonth = monthKey;
+
+  if (appStats.diligenceDailyDays[0] == dayKey) {
+    appStats.diligenceDailyDone[0] = dailyDone;
+    appStats.diligenceDailyTotal[0] = dailyTotal;
+  } else {
+    for (int i = 6; i > 0; i--) {
+      appStats.diligenceDailyDays[i] = appStats.diligenceDailyDays[i - 1];
+      appStats.diligenceDailyDone[i] = appStats.diligenceDailyDone[i - 1];
+      appStats.diligenceDailyTotal[i] = appStats.diligenceDailyTotal[i - 1];
+    }
+    appStats.diligenceDailyDays[0] = dayKey;
+    appStats.diligenceDailyDone[0] = dailyDone;
+    appStats.diligenceDailyTotal[0] = dailyTotal;
+  }
+
+  if (appStats.diligenceMonthlyMonths[0] == monthKey) {
+    appStats.diligenceMonthlyDone[0] = monthlyDone;
+    appStats.diligenceMonthlyTotal[0] = monthlyTotal;
+  } else {
+    for (int i = 11; i > 0; i--) {
+      appStats.diligenceMonthlyMonths[i] = appStats.diligenceMonthlyMonths[i - 1];
+      appStats.diligenceMonthlyDone[i] = appStats.diligenceMonthlyDone[i - 1];
+      appStats.diligenceMonthlyTotal[i] = appStats.diligenceMonthlyTotal[i - 1];
+    }
+    appStats.diligenceMonthlyMonths[0] = monthKey;
+    appStats.diligenceMonthlyDone[0] = monthlyDone;
+    appStats.diligenceMonthlyTotal[0] = monthlyTotal;
+  }
+}
+
 // Resets daily counts on day session rollover
 inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
   appStats.firstSitToday = true;

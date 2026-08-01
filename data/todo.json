@@ -1,4 +1,1 @@
-{
-  "daily": [],
-  "monthly": []
-}
+{"daily":[{"text":"Arrumar a cama","hour":11,"minute":0,"recurrent":true,"startDate":"2026-07-27","completedDates":["2026-07-31","2026-08-01"]},{"text":"Testiculo","hour":11,"minute":25,"recurrent":false,"targetDate":"2026-07-27","completed":true},{"text":"Check Mail","hour":11,"minute":50,"recurrent":true,"startDate":"2026-07-27","completedDates":["2026-07-31","2026-08-01"]},{"text":"Banho","hour":10,"minute":0,"recurrent":true,"startDate":"2026-07-29","completedDates":["2026-07-29"]},{"text":"Dentes","hour":10,"minute":0,"recurrent":true,"startDate":"2026-07-29","completedDates":["2026-07-29"]}],"monthly":[{"text":"Rent","day":5,"recurrent":true,"startMonth":"2026-07","completedMonths":["2026-07"]},{"text":"Cartao C6","day":20,"recurrent":true,"startMonth":"2026-07","completedMonths":["2026-08","2026-07"]},{"text":"Alice 1","day":10,"recurrent":true,"startMonth":"2026-07","completedMonths":["2026-08"]},{"text":"Alice 2","day":10,"recurrent":true,"startMonth":"2026-07","completedMonths":[]}]}

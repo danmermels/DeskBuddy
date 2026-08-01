@@ -315,6 +315,28 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   appState.lastTriggeredEventType = eventType;
   Logger::log("BEHAVIOUR", "triggerBehaviour: event=%d detail=\"%s\" force=%d", eventType, detail.c_str(), forceMode);
 
+  // Nagging without an explicit task (e.g. debug TRIGGER NAGGING) resolves the
+  // single most-overdue task (daily OR monthly) so the nudge references an actual
+  // task by name. This mirrors the first entry the seated 35-min nag would ring.
+  if (eventType == EVENT_NAGGING && detail.length() == 0 && timeClient.isTimeSet()) {
+    time_t epochNow = timeClient.getEpochTime();
+    struct tm *ptm = localtime(&epochNow);
+    if (ptm != nullptr) {
+      int y = ptm->tm_year + 1900;
+      int mon = ptm->tm_mon + 1;
+      int d = ptm->tm_mday;
+      char dStr[11], mStr[8];
+      snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", y, mon, d);
+      snprintf(mStr, sizeof(mStr), "%04d-%02d", y, mon);
+      int nowMinutes = ptm->tm_hour * 60 + ptm->tm_min;
+      std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), y, mon, d, nowMinutes);
+      if (!queue.empty()) {
+        detail = queue[0].text;
+        Logger::log("BEHAVIOUR", "Nagging detail resolved to most-overdue \"%s\" (queue size=%d)", detail.c_str(), (int)queue.size());
+      }
+    }
+  }
+
   if (eventType == EVENT_PAGE) {
     // F12: 2nd-screen follow-up page -- render the raw text locally, no AI query
     xSemaphoreTake(appState.aiMutex, portMAX_DELAY);

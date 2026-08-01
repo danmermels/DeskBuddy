@@ -640,7 +640,7 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
 
 inline void handleRoot() {
   appState.lastWebActivityTime = millis();
-  server.send_P(200, "text/html", ROOT_HTML);
+  server.send_P(200, "text/html; charset=utf-8", ROOT_HTML);
 }
 
 static const char TODO_HTML[] PROGMEM = R"rawhtml(
@@ -703,7 +703,10 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
 
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
-      <h2 style="margin: 0; border: none; padding: 0;">Daily Tasks</h2>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <h2 style="margin: 0; border: none; padding: 0;">Daily Tasks</h2>
+        <span id="dailyTally" style="font-size: 0.8rem; color: #94a3b8; background: #1e293b; padding: 2px 8px; border-radius: 10px;"></span>
+      </div>
       <select id="dayHistorySelect" onchange="renderLists()" style="background: #0f172a; border: 1px solid #334155; color: #38bdf8; border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; font-weight: bold; outline: none; cursor: pointer;"></select>
     </div>
     <div class="task-list" id="dailyList"></div>
@@ -721,7 +724,10 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
 
   <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 15px;">
-      <h2 style="margin: 0; border: none; padding: 0;">Monthly Tasks</h2>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <h2 style="margin: 0; border: none; padding: 0;">Monthly Tasks</h2>
+        <span id="monthlyTally" style="font-size: 0.8rem; color: #94a3b8; background: #1e293b; padding: 2px 8px; border-radius: 10px;"></span>
+      </div>
       <select id="monthHistorySelect" onchange="renderLists()" style="background: #0f172a; border: 1px solid #334155; color: #38bdf8; border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; font-weight: bold; outline: none; cursor: pointer;"></select>
     </div>
     <div class="task-list" id="monthlyList"></div>
@@ -815,6 +821,21 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
       renderList('monthly', 'monthlyList');
     }
 
+    function fmtMonthLabel(key) {
+      if (!key || key.length < 7) return '';
+      const y = parseInt(key.substring(0, 4), 10);
+      const m = parseInt(key.substring(5, 7), 10) - 1;
+      const abbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${abbr[m]} ${y}`;
+    }
+
+    function updateTally(elId, done, total) {
+      const net = 2 * done - total;
+      const color = net > 0 ? '#34d399' : net < 0 ? '#f43f5e' : '#94a3b8';
+      const sign = net > 0 ? '+' + net : String(net);
+      document.getElementById(elId).innerHTML = `${done} / ${total} completed <span style="color:${color}; font-weight:700;">${sign}</span>`;
+    }
+
     function renderList(type, elementId) {
       const container = document.getElementById(elementId);
       container.innerHTML = '';
@@ -835,7 +856,11 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
             isActive = (selectedDateStr >= startD) && (!endD || selectedDateStr < endD);
             isCompleted = task.completedDates && task.completedDates.includes(selectedDateStr);
           } else {
-            isActive = (!task.targetDate || task.targetDate === selectedDateStr);
+            if (task.completed) {
+              isActive = (task.targetDate === selectedDateStr);
+            } else {
+              isActive = !task.targetDate || selectedDateStr >= task.targetDate;
+            }
             isCompleted = task.completed;
           }
           
@@ -855,6 +880,9 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           return (a.task.minute || 0) - (b.task.minute || 0);
         });
 
+        const dailyDone = activeTasks.filter(i => i.isCompleted).length;
+        updateTally('dailyTally', dailyDone, activeTasks.length);
+
         if (activeTasks.length === 0) {
           container.innerHTML = '<div class="empty-state">No tasks scheduled for this day.</div>';
           return;
@@ -873,7 +901,9 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           
           let isOverdue = false;
           if (!isCompleted) {
-            if (selectedDateStr < curDateStr) {
+            if (!task.recurrent && task.targetDate && task.targetDate < curDateStr) {
+              isOverdue = true;
+            } else if (selectedDateStr < curDateStr) {
               isOverdue = true;
             } else if (selectedDateStr === curDateStr) {
               if (task.hour < currentHour || (task.hour === currentHour && tMin < currentMinute)) {
@@ -888,7 +918,14 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           const item = document.createElement('div');
           item.className = `task-item ${isCompleted ? 'completed' : ''}`;
           
-          let deadlineHtml = `<span class="task-deadline" style="font-size: 0.75rem; color: ${badgeColor}; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px;">Due: ${formatTimeDeadline(task.hour, tMin)}</span>`;
+          let deadlineHtml;
+          if (!task.recurrent && task.targetDate && task.targetDate < curDateStr) {
+            const odM = task.targetDate.substring(5, 7);
+            const odD = task.targetDate.substring(8, 10);
+            deadlineHtml = `<span class="task-deadline" style="font-size: 0.75rem; color: #f43f5e; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px;">Overdue from ${odD}/${odM}</span>`;
+          } else {
+            deadlineHtml = `<span class="task-deadline" style="font-size: 0.75rem; color: ${badgeColor}; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px;">Due: ${formatTimeDeadline(task.hour, tMin)}</span>`;
+          }
 
           item.innerHTML = `
             <div class="task-left">
@@ -909,25 +946,38 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
         });
       } else {
         const selectedMonthStr = document.getElementById('monthHistorySelect').value;
-        const [selYear, selMonth] = selectedMonthStr.split('-').map(Number);
         
         let activeTasks = [];
         list.forEach((task, index) => {
-          let isActive = false;
-          let isCompleted = false;
-          
           if (task.recurrent) {
             const startM = task.startMonth || "";
             const endM = task.endMonth || "";
-            isActive = (selectedMonthStr >= startM) && (!endM || selectedMonthStr < endM);
-            isCompleted = task.completedMonths && task.completedMonths.includes(selectedMonthStr);
+            if (endM && selectedMonthStr >= endM) return;
+            const completed = task.completedMonths || [];
+            let [y, m] = (startM || selectedMonthStr).split('-').map(Number);
+            while (true) {
+              const key = `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}`;
+              if (key > selectedMonthStr) break;
+              const done = completed.includes(key);
+              if (key === selectedMonthStr || !done) {
+                activeTasks.push({ task: task, originalIndex: index, occMonth: key, isCompleted: done });
+              }
+              m++;
+              if (m > 12) { m = 1; y++; }
+            }
           } else {
-            isActive = (!task.year || (task.year === selYear && task.month === selMonth));
-            isCompleted = task.completed;
-          }
-          
-          if (isActive) {
-            activeTasks.push({ task: task, originalIndex: index, isCompleted: isCompleted });
+            let occMonth = null;
+            let isActive = false;
+            if (task.year && task.month) {
+              const targetKey = `${String(task.year).padStart(4, '0')}-${String(task.month).padStart(2, '0')}`;
+              occMonth = targetKey;
+              isActive = task.completed ? (selectedMonthStr === targetKey) : (selectedMonthStr >= targetKey);
+            } else {
+              isActive = true;
+            }
+            if (isActive) {
+              activeTasks.push({ task: task, originalIndex: index, occMonth: occMonth, isCompleted: task.completed });
+            }
           }
         });
         
@@ -939,6 +989,9 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           return a.task.day - b.task.day;
         });
 
+        const monthlyDone = activeTasks.filter(i => i.isCompleted).length;
+        updateTally('monthlyTally', monthlyDone, activeTasks.length);
+
         if (activeTasks.length === 0) {
           container.innerHTML = '<div class="empty-state">No tasks scheduled for this month.</div>';
           return;
@@ -948,6 +1001,7 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           const task = itemInfo.task;
           const index = itemInfo.originalIndex;
           const isCompleted = itemInfo.isCompleted;
+          const shownMonth = itemInfo.occMonth || selectedMonthStr;
           
           const now = new Date();
           const curMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -955,28 +1009,22 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           
           let isOverdue = false;
           if (!isCompleted) {
-            if (selectedMonthStr < curMonthStr) {
+            if (shownMonth < curMonthStr || (shownMonth === curMonthStr && task.day < currentDay)) {
               isOverdue = true;
-            } else if (selectedMonthStr === curMonthStr) {
-              if (task.day < currentDay) {
-                isOverdue = true;
-              }
             }
           }
           
           const badgeColor = isOverdue ? '#f43f5e' : '#9ca3af';
           const recurrentIndicator = task.recurrent ? `<span style="color: #3b82f6; font-weight: bold; font-size: 0.85rem; margin-right: 8px;" title="Recurrent">R</span>` : '';
-          
+
           const item = document.createElement('div');
           item.className = `task-item ${isCompleted ? 'completed' : ''}`;
-          
-          let deadlineHtml = `<span class="task-deadline" style="font-size: 0.75rem; color: ${badgeColor}; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px;">Due: Day ${task.day}</span>`;
-
+          const occArg = task.recurrent ? `, '${shownMonth}'` : '';
           item.innerHTML = `
             <div class="task-left">
-              <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTask('${type}', ${index})">
+              <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="toggleTask('${type}', ${index}${occArg})">
               <span class="task-text">${escapeHtml(task.text)}</span>
-              ${deadlineHtml}
+              <span class="task-deadline" style="font-size: 0.75rem; color: ${badgeColor}; background: #27272a; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 8px; white-space: nowrap;">${isOverdue ? 'Overdue' : 'Due'}: Day ${task.day} · ${fmtMonthLabel(shownMonth)}</span>
             </div>
             <div style="display: flex; align-items: center;">
               ${recurrentIndicator}
@@ -1070,7 +1118,7 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
       saveTasks();
     }
 
-    function toggleTask(type, index) {
+    function toggleTask(type, index, occMonth) {
       if (type === 'daily') {
         const task = tasks[type][index];
         const selectedDateStr = document.getElementById('dayHistorySelect').value;
@@ -1090,11 +1138,12 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
         const selectedMonthStr = document.getElementById('monthHistorySelect').value;
         if (task.recurrent) {
           if (!task.completedMonths) task.completedMonths = [];
-          const idx = task.completedMonths.indexOf(selectedMonthStr);
+          const monthToToggle = occMonth || selectedMonthStr;
+          const idx = task.completedMonths.indexOf(monthToToggle);
           if (idx > -1) {
             task.completedMonths.splice(idx, 1);
           } else {
-            task.completedMonths.push(selectedMonthStr);
+            task.completedMonths.push(monthToToggle);
           }
         } else {
           task.completed = !task.completed;
@@ -1252,7 +1301,7 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
   )rawhtml";
 
 inline void handleTodo() {
-  server.send_P(200, "text/html", TODO_HTML);
+  server.send_P(200, "text/html; charset=utf-8", TODO_HTML);
 }
 
 inline void handleGetTasks() {
@@ -1999,7 +2048,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
   )rawhtml";
 
 inline void handleSettings() {
-  server.send_P(200, "text/html", SETTINGS_HTML);
+  server.send_P(200, "text/html; charset=utf-8", SETTINGS_HTML);
 }
 
 static const char CREDENTIALS_HTML[] PROGMEM = R"rawhtml(
@@ -2270,7 +2319,7 @@ static const char CREDENTIALS_HTML[] PROGMEM = R"rawhtml(
   )rawhtml";
 
 inline void handleCredentials() {
-  server.send_P(200, "text/html", CREDENTIALS_HTML);
+  server.send_P(200, "text/html; charset=utf-8", CREDENTIALS_HTML);
 }
 
 inline void handleWifiScan() {
@@ -2415,7 +2464,7 @@ static const char SETUP_HTML[] PROGMEM = R"rawhtml(
   )rawhtml";
 
 inline void handleSetup() {
-  server.send_P(200, "text/html", SETUP_HTML);
+  server.send_P(200, "text/html; charset=utf-8", SETUP_HTML);
 }
 
 inline void handleSaveCredentials() {
@@ -3313,7 +3362,7 @@ static const char FILE_MANAGER_HTML[] PROGMEM = R"rawhtml(
   )rawhtml";
 
 inline void handleFileManager() {
-  server.send_P(200, "text/html", FILE_MANAGER_HTML);
+  server.send_P(200, "text/html; charset=utf-8", FILE_MANAGER_HTML);
 }
 
 

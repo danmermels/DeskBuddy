@@ -518,8 +518,9 @@ static const char* localTaskDue[4][5] = {
 };
 
 static const char* PROMPT_NAGGING =
-  "{name} has an overdue task: '{detail}'. "
-  "One pointed nudge in your persona's voice referencing that specific task by name. "
+  "{name} has overdue tasks. The next one in line is '{detail}' — reference it by name. "
+  "Other overdue daily and monthly tasks may appear in the observations; you are allowed to cite them too. "
+  "One pointed nudge in your persona's voice. "
   "React to what the task IS — its content, its nature, its consequences. "
   "BANNED: 'Nudge:', 'Procrastination alert!', 'Check your panel', generic urgency. "
   "Make the overdue nature feel like a person noticing, not an app. Vary the angle each time. Under 90 characters.";

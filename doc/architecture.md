@@ -140,7 +140,7 @@ User preferences and system configuration. Loaded from NVS Preferences at boot.
 ### `StatsState appStats`
 Daily statistics. Persisted to `stats.json` via LittleFS.
 
-Key fields: `totalDeskTime`, `totalFocusTime`, `totalBreakTime`, `breakCount`, `productivityScore`, `longestSittingStreak`, `firstSitEpoch`, `hourlyPresenceHistoryWeekly[7][24]`, `presenceMsCurrentDay[24]`, `dailyAiRequestCount`, `fsWriteCount`, daily trigger flags.
+Key fields: `totalDeskTime`, `totalFocusTime`, `totalBreakTime`, `breakCount`, `productivityScore`, `longestSittingStreak`, `firstSitEpoch`, `hourlyPresenceHistoryWeekly[7][24]`, `presenceMsCurrentDay[24]`, `dailyAiRequestCount`, `fsWriteCount`, daily trigger flags. Task diligence tally: `dailyTaskDone`/`dailyTaskTotal` (dated `dailyTallyDate`), `monthlyTaskDone`/`monthlyTaskTotal` (dated `monthlyTallyMonth`), plus rolling history rings `diligenceDailyDays[7]`/`diligenceDailyDone[7]`/`diligenceDailyTotal[7]` and `diligenceMonthlyMonths[12]`/`diligenceMonthlyDone[12]`/`diligenceMonthlyTotal[12]` (most-recent-first), refreshed on each journal generation (`buildTaskJournalSummary` → `updateTodoTally`, persisted via `saveDailyStats`).
 
 ### `RuntimeState appState`
 Ephemeral runtime state. Not persisted.
@@ -442,7 +442,19 @@ Atomic write pattern: write to `stats.json.tmp`, then `rename()` to `stats.json`
   "nagQueueIndex": 0,
   "fsWriteCount": 0,
   "fsReadCount": 0,
-  "fsWritesToday": 0
+  "fsWritesToday": 0,
+  "dailyTaskTotal": 4,
+  "dailyTaskDone": 2,
+  "dailyTallyDate": "2026-08-01",
+  "monthlyTaskTotal": 4,
+  "monthlyTaskDone": 0,
+  "monthlyTallyMonth": "2026-08",
+  "diligenceDailyDays": ["2026-08-01", ...x7],
+  "diligenceDailyDone": [2, ...x7],
+  "diligenceDailyTotal": [4, ...x7],
+  "diligenceMonthlyMonths": ["2026-08", ...x12],
+  "diligenceMonthlyDone": [0, ...x12],
+  "diligenceMonthlyTotal": [4, ...x12]
 }
 ```
 
@@ -529,7 +541,7 @@ The `getCurationObservations()` function generates behavioral observation string
 
 - **Break frequency:** Compares actual break rate to 1/hour target
 - **Break duration:** Compares break time ratio to 10% target
-- **Task synthesis (`getTodoObservations`):** injects a compact `[TASK SYNTHESIS]` block into every AI prompt — counts (daily pending today, monthly due today, daily overdue 3d+, monthly overdue this-month/3mo+) plus the task names with times/overdue durations (capped at `TASK_SYNTHESIS_MAX_CHARS`). NAGGING prepends an `Overdue Tasks Alert!` framing.
+- **Task synthesis (`getTodoObservations`):** injects a compact `[TASK SYNTHESIS]` block into every AI prompt — counts (daily pending today, monthly due today, daily overdue 3d+, monthly overdue incl. carried-over/3mo+) plus the task names with times/overdue durations (capped at `TASK_SYNTHESIS_MAX_CHARS`). Carried-over tasks show as overdue: non-recurrent daily → later days, non-recurrent monthly → later months, recurrent monthly → the month after a missed month; the `3d+`/`3mo+` buckets apply to recurrent standing tasks only. NAGGING prepends an `Overdue Tasks Alert!` framing. The block also carries a `Diligence: daily N/M (±X), monthly N/M (±Y)` line (the persisted `2·done − total` score) and refreshes `appStats` via `updateTodoTally` so the persisted tally is current on every AI call.
 - **Midday task check:** At 12:00 PM, adds a past-midday observation when daily tasks remain
 - **Pattern anomalies:** Detects unusual deviations from learned occupancy patterns
 
@@ -661,6 +673,7 @@ See [Section 10](#10-persistence) for full field listing. Key arrays:
 - `hourlyPresenceHistoryWeekly[7][24]`: uint8 percent presence per hour per day-of-week
 - `presenceMsCurrentDay[24]`: uint32 milliseconds accumulated per hour today
 - `historyDaysCountWeekly[7]`: int days of data blended per day-of-week
+- `diligenceDailyDays[7]`/`diligenceDailyDone[7]`/`diligenceDailyTotal[7]` + `diligenceMonthlyMonths[12]`/`diligenceMonthlyDone[12]`/`diligenceMonthlyTotal[12]`: task-diligence history rings (most-recent-first; period key + done/total per slot)
 
 ### `todo.json` Schema
 
@@ -668,4 +681,5 @@ See [Section 10](#10-persistence) for full structure. Key patterns:
 - **Daily tasks:** Time-based (hour + minute), one-shot or recurrent (date range)
 - **Monthly tasks:** Day-of-month, one-shot or recurrent (month range)
 - **Recurrent tracking:** `completedDates[]` / `completedMonths[]` arrays
+- **Carry-over:** uncompleted one-shot tasks stay active in later days/months as overdue until completed; a recurrent monthly task that missed a month is overdue from day 1 of the next month until completed
 - **Soft delete (recurrent):** Set `endDate`/`endMonth` instead of removing

@@ -229,6 +229,25 @@ void saveDailyStats() {
   doc["fsReadCount"] = appStats.fsReadCount;
   doc["fsWritesToday"] = appStats.fsWritesToday;
 
+  doc["dailyTaskTotal"] = appStats.dailyTaskTotal;
+  doc["dailyTaskDone"] = appStats.dailyTaskDone;
+  doc["dailyTallyDate"] = appStats.dailyTallyDate;
+  doc["monthlyTaskTotal"] = appStats.monthlyTaskTotal;
+  doc["monthlyTaskDone"] = appStats.monthlyTaskDone;
+  doc["monthlyTallyMonth"] = appStats.monthlyTallyMonth;
+  JsonArray dilDailyDays = doc.createNestedArray("diligenceDailyDays");
+  for (int i = 0; i < 7; i++) dilDailyDays.add(appStats.diligenceDailyDays[i]);
+  JsonArray dilDailyDone = doc.createNestedArray("diligenceDailyDone");
+  for (int i = 0; i < 7; i++) dilDailyDone.add(appStats.diligenceDailyDone[i]);
+  JsonArray dilDailyTotal = doc.createNestedArray("diligenceDailyTotal");
+  for (int i = 0; i < 7; i++) dilDailyTotal.add(appStats.diligenceDailyTotal[i]);
+  JsonArray dilMonthlyMonths = doc.createNestedArray("diligenceMonthlyMonths");
+  for (int i = 0; i < 12; i++) dilMonthlyMonths.add(appStats.diligenceMonthlyMonths[i]);
+  JsonArray dilMonthlyDone = doc.createNestedArray("diligenceMonthlyDone");
+  for (int i = 0; i < 12; i++) dilMonthlyDone.add(appStats.diligenceMonthlyDone[i]);
+  JsonArray dilMonthlyTotal = doc.createNestedArray("diligenceMonthlyTotal");
+  for (int i = 0; i < 12; i++) dilMonthlyTotal.add(appStats.diligenceMonthlyTotal[i]);
+
   JsonArray historyArray = doc.createNestedArray("hourlyPresenceHistoryWeekly");
   for (int d = 0; d < 7; d++) {
     JsonArray dayArray = historyArray.createNestedArray();
@@ -321,6 +340,37 @@ void loadDailyStats() {
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
     appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
     appStats.fsWritesToday = doc["fsWritesToday"] | 0;
+    appStats.dailyTaskTotal = doc["dailyTaskTotal"] | 0;
+    appStats.dailyTaskDone = doc["dailyTaskDone"] | 0;
+    appStats.dailyTallyDate = doc["dailyTallyDate"] | "";
+    appStats.monthlyTaskTotal = doc["monthlyTaskTotal"] | 0;
+    appStats.monthlyTaskDone = doc["monthlyTaskDone"] | 0;
+    appStats.monthlyTallyMonth = doc["monthlyTallyMonth"] | "";
+
+    if (doc.containsKey("diligenceDailyDays")) {
+      JsonArray a = doc["diligenceDailyDays"].as<JsonArray>();
+      for (int i = 0; i < 7 && i < a.size(); i++) appStats.diligenceDailyDays[i] = a[i].as<String>();
+    }
+    if (doc.containsKey("diligenceDailyDone")) {
+      JsonArray a = doc["diligenceDailyDone"].as<JsonArray>();
+      for (int i = 0; i < 7 && i < a.size(); i++) appStats.diligenceDailyDone[i] = a[i];
+    }
+    if (doc.containsKey("diligenceDailyTotal")) {
+      JsonArray a = doc["diligenceDailyTotal"].as<JsonArray>();
+      for (int i = 0; i < 7 && i < a.size(); i++) appStats.diligenceDailyTotal[i] = a[i];
+    }
+    if (doc.containsKey("diligenceMonthlyMonths")) {
+      JsonArray a = doc["diligenceMonthlyMonths"].as<JsonArray>();
+      for (int i = 0; i < 12 && i < a.size(); i++) appStats.diligenceMonthlyMonths[i] = a[i].as<String>();
+    }
+    if (doc.containsKey("diligenceMonthlyDone")) {
+      JsonArray a = doc["diligenceMonthlyDone"].as<JsonArray>();
+      for (int i = 0; i < 12 && i < a.size(); i++) appStats.diligenceMonthlyDone[i] = a[i];
+    }
+    if (doc.containsKey("diligenceMonthlyTotal")) {
+      JsonArray a = doc["diligenceMonthlyTotal"].as<JsonArray>();
+      for (int i = 0; i < 12 && i < a.size(); i++) appStats.diligenceMonthlyTotal[i] = a[i];
+    }
 
     if (doc.containsKey("historyDaysCountWeekly")) {
       JsonArray countArray = doc["historyDaysCountWeekly"].as<JsonArray>();
@@ -631,133 +681,6 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
     );
     saveDailyStats();
   }
-}
-
-struct OverdueTask {
-  String text;
-  long expiredMinutes;
-};
-
-inline std::vector<OverdueTask> buildOverdueTaskQueue(String currentDayString, String currentMonthString, int currentDaysCount, int currentYear, int currentMonth, int currentDay, int nowMinutes) {
-  std::vector<OverdueTask> queue;
-  if (!LittleFS.exists("/todo.json")) return queue;
-  fs::File file = LittleFS.open("/todo.json", "r");
-  if (!file) return queue;
-  DynamicJsonDocument doc(4096);
-  DeserializationError err = deserializeJson(doc, file);
-  file.close();
-  if (err) return queue;
-
-  if (doc.containsKey("daily")) {
-    JsonArray daily = doc["daily"].as<JsonArray>();
-    for (JsonObject task : daily) {
-      bool isRecurrent = task["recurrent"] | false;
-      bool isCompleted = false;
-      int tHour = task["hour"] | 12;
-      int tMin = task["minute"] | 0;
-      String taskText = task["text"] | "";
-      String tDate = task["startDate"] | "";
-      if (isRecurrent) {
-        if (task.containsKey("completedDates")) {
-          JsonArray compDates = task["completedDates"].as<JsonArray>();
-          for (JsonVariant d : compDates) {
-            if (d.as<String>() == currentDayString) {
-              isCompleted = true;
-              break;
-            }
-          }
-        }
-      } else {
-        isCompleted = task["completed"] | false;
-        tDate = task["targetDate"] | "";
-      }
-
-      if (!isCompleted) {
-        long expired = 0;
-        bool overdue = false;
-        if (isRecurrent) {
-          // Standing daily task: overdue once today's due time has passed.
-          expired = (long)nowMinutes - (tHour * 60 + tMin);
-          overdue = expired > 0;
-        } else if (tDate.length() == 10) {
-          int diff = currentDaysCount - dateToDays(tDate);
-          if (diff > 0) {
-            overdue = true;
-            expired = diff * 1440L;
-          } else if (diff == 0) {
-            // Due today: overdue once the due time has passed.
-            expired = (long)nowMinutes - (tHour * 60 + tMin);
-            overdue = expired > 0;
-          }
-        }
-        if (overdue) {
-          queue.push_back({taskText, expired});
-        }
-      }
-    }
-  }
-
-  if (doc.containsKey("monthly")) {
-    JsonArray monthly = doc["monthly"].as<JsonArray>();
-    for (JsonObject task : monthly) {
-      bool isRecurrent = task["recurrent"] | false;
-      bool isCompleted = false;
-      int dueDay = task["day"] | 1;
-      String taskText = task["text"] | "";
-      int tMonth = 1;
-      int tYear = 2026;
-      if (isRecurrent) {
-        if (task.containsKey("completedMonths")) {
-          JsonArray compMonths = task["completedMonths"].as<JsonArray>();
-          for (JsonVariant m : compMonths) {
-            if (m.as<String>() == currentMonthString) {
-              isCompleted = true;
-              break;
-            }
-          }
-        }
-      } else {
-        tMonth = task["month"] | 1;
-        tYear = task["year"] | 2026;
-        isCompleted = task["completed"] | false;
-      }
-
-      if (!isCompleted) {
-        long expired = 0;
-        bool overdue = false;
-        if (isRecurrent) {
-          if (currentDay > dueDay) {
-            overdue = true;
-            expired = (long)(currentDay - dueDay) * 1440L;
-          }
-        } else {
-          int monthDiff = (currentYear - tYear) * 12 + (currentMonth - tMonth);
-          if (monthDiff > 0) {
-            overdue = true;
-            expired = monthDiff * 30 * 1440L;
-          } else if (monthDiff == 0 && currentDay > dueDay) {
-            overdue = true;
-            expired = (long)(currentDay - dueDay) * 1440L;
-          }
-        }
-        if (overdue) {
-          queue.push_back({taskText, expired});
-        }
-      }
-    }
-  }
-
-  // Sort most-expired-first (stable insertion sort keeps small lists cheap)
-  for (size_t i = 1; i < queue.size(); i++) {
-    OverdueTask key = queue[i];
-    size_t j = i;
-    while (j > 0 && queue[j - 1].expiredMinutes < key.expiredMinutes) {
-      queue[j] = queue[j - 1];
-      j--;
-    }
-    queue[j] = key;
-  }
-  return queue;
 }
 
 // Late hours = outside the learned workday window (start -30 min pad, end), or any time when the clock isn't set.

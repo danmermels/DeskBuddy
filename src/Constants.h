@@ -84,7 +84,7 @@
 #define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
 #define END_OF_DAY_JOURNAL_HOURS_BEFORE       1   // Hours before workday end to trigger end-of-day journal
 #define MIDDAY_TASK_CHECK_HOUR               12   // 12:00 PM midday threshold for task check observations
-#define NAGGING_TRIGGER_DELAY_MS       2100000UL  // 35 min seated: overdue-task nag cadence (first nag 35m into a session, then every 35m)
+#define NAGGING_TRIGGER_DELAY_MS        600000UL  // 10 min seated: overdue-task nag cadence (first nag 35m into a session, then every 35m)
 #define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
 #define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
 #define TASK_SYNTHESIS_MAX_CHARS            500   // Max length of the compact task synthesis injected into AI observations

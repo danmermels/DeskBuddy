@@ -116,6 +116,21 @@ struct StatsState {
   uint32_t fsWriteCount = 0;
   uint32_t fsReadCount = 0;
   uint32_t fsWritesToday = 0;
+
+  // Task diligence tally (persisted in stats.json)
+  int dailyTaskTotal = 0;        // active daily tasks today
+  int dailyTaskDone = 0;         // completed today
+  String dailyTallyDate = "";    // YYYY-MM-DD the daily tally was recorded for
+  int monthlyTaskTotal = 0;      // active monthly tasks this month
+  int monthlyTaskDone = 0;       // completed this month
+  String monthlyTallyMonth = ""; // YYYY-MM the monthly tally was recorded for
+  // Rolling diligence history (most-recent-first; empty key = unused slot)
+  String diligenceDailyDays[7];
+  int diligenceDailyDone[7];
+  int diligenceDailyTotal[7];
+  String diligenceMonthlyMonths[12];
+  int diligenceMonthlyDone[12];
+  int diligenceMonthlyTotal[12];
 };
 
 struct RuntimeState {

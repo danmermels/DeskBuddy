@@ -1,7 +1,7 @@
 {
     "broker_ip": "192.168.15.18",
     "broker_port": 1883,
-    "topic_listener_1": "deskbuddy/heap",
+    "topic_listener_1": "deskbuddy/debug/resp",
     "topic_listener_2": "deskbuddy/debug/ai/#",
     "buttons": [
         {
@@ -75,9 +75,9 @@
             "payload": "SET config.clockFace 3"
         },
         {
-            "label": "SIM radar 40 1 1",
+            "label": "SET config.clockFace 5",
             "topic": "deskbuddy/debug/cmd",
-            "payload": "sim radar 40 1 1"
+            "payload": "SET config.clockFace 5"
         },
         {
             "label": "SIM away",
@@ -100,9 +100,9 @@
             "payload": "sim busy"
         },
         {
-            "label": "SIM state AWAY",
+            "label": "SET config.clockFace 6",
             "topic": "deskbuddy/debug/cmd",
-            "payload": "sim away"
+            "payload": "SET config.clockFace 6"
         },
         {
             "label": "SIM loop",
@@ -130,29 +130,29 @@
             "payload": "sys factory_reset"
         },
         {
-            "label": "Empty 26",
-            "topic": "test",
-            "payload": ""
+            "label": "Trigger First Sit",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "TRIGGER FIRST_SIT ai"
         },
         {
-            "label": "Empty 27",
-            "topic": "test",
-            "payload": ""
+            "label": "Trigger Welcome Back",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "TRIGGER WELCOME_BACK ai"
         },
         {
-            "label": "Empty 28",
-            "topic": "test",
-            "payload": ""
+            "label": "Trigger Excessive Breaks",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "TRIGGER EXCESSIVE_BREAKS ai"
         },
         {
-            "label": "Empty 29",
-            "topic": "test",
-            "payload": ""
+            "label": "TRIGGER JOURNAL ai",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "TRIGGER JOURNAL ai"
         },
         {
-            "label": "Empty 30",
-            "topic": "test",
-            "payload": ""
+            "label": "Trigger Nagging",
+            "topic": "deskbuddy/debug/cmd",
+            "payload": "TRIGGER NAGGING ai"
         }
     ]
 }
