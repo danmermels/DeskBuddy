@@ -253,7 +253,7 @@ inline String getTodoObservations(int eventType) {
 
   // Format Observations output based on trigger event type
   if (eventType == EVENT_NAGGING) {
-    obs += "Highly Overdue Tasks Alert!\n";
+    obs += "Overdue Tasks Alert!\n";
     obs += synthesis;
   } else {
     // All AI prompt flows receive the task synthesis

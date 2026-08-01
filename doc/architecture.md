@@ -238,18 +238,18 @@ score = constrain(raw, 0, 100)
 |----|-------|-------------------|
 | 0 | `EVENT_FIRST_SIT` | User sits down for the first time today |
 | 1 | `EVENT_WELCOME_BACK` | User returns after a break (>= 3 min) |
-| 2 | `EVENT_STRETCH` | 45 minutes of continuous sitting |
+| 2 | `EVENT_STRETCH` | 60 minutes of continuous sitting |
 | 3 | `EVENT_FOCUS_END` | User leaves after a focus session (>= 5 min) |
 | 4 | `EVENT_SLACKER` | Sitting > 1 hour with productivity score < 35% |
 | 5 | `EVENT_STREAK_BEATEN` | Longest sitting streak record broken |
 | 6 | `EVENT_LUNCH_REMINDER` | At learned lunch hour + 15 min, if desk time > 30 min |
-| 8 | `EVENT_EXCESSIVE_BREAKS` | Break rate > 1/hour |
+| 8 | `EVENT_EXCESSIVE_BREAKS` | Break rate > 1/hour after 3 h worked |
 | 9 | `EVENT_GOAL_COMPLETED` | Desk time >= target hours |
 | 10 | `EVENT_JOURNAL` | Morning/pre-lunch/end-of-day task review |
-| 11 | `EVENT_NAGGING` | Tasks overdue by 3+ days, after 2h sitting |
+| 11 | `EVENT_NAGGING` | Overdue tasks: every 35 m seated, one task per ring, most-expired-first (cursor resets at midnight) |
 | 12 | `EVENT_TASK_DUE` | Scheduled daily task matches current time |
 | 13 | `EVENT_PAGE` | Follow-up screen for messages split at `MSG_PAGE_MAX_CHARS` (110) |
-| 14 | `EVENT_LATEHOURS_SIT` | Any sit-down during late hours (outside learned workday +/- 30m); replaces FIRST_SIT/WELCOME_BACK |
+| 14 | `EVENT_LATEHOURS_SIT` | Any sit-down during late hours (learned workday padded by 30 m on both sides); replaces FIRST_SIT/WELCOME_BACK |
 
 ### AI Decision Flow (`AI.h:277`)
 
@@ -268,7 +268,7 @@ triggerBehaviour(eventType, detail)
       NO --> Pick random local quote from persona array
 ```
 
-**Routing:** Every event path now goes through `MessageManager` before `triggerBehaviour()` (see `main.cpp` loop). FIRST_SIT/WELCOME_BACK/LATEHOURS_SIT use P_URGENT (3000), GOAL/JOURNAL/NAGGING use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS use P_NORMAL (1500, delay 0, R_NORMAL) — a true 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500, F9). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it so the greeting is never replaced by the roast (F8). If an AI query is already in flight when a trigger arrives, `triggerBehaviour` falls back to a local quote instead of dropping the event.
+**Routing:** Every event path now goes through `MessageManager` before `triggerBehaviour()` (see `main.cpp` loop). FIRST_SIT/WELCOME_BACK/LATEHOURS_SIT use P_URGENT (3000), GOAL/JOURNAL use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS/NAGGING use P_NORMAL (1500, delay 0, R_NORMAL) — a true 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500, F9). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it so the greeting is never replaced by the roast (F8). If an AI query is already in flight when a trigger arrives, `triggerBehaviour` falls back to a local quote instead of dropping the event.
 
 **aiMode whitelist (mode 1 = Balanced):** `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_LATEHOURS_SIT`, `EVENT_STRETCH`, `EVENT_LUNCH_REMINDER`, `EVENT_EXCESSIVE_BREAKS`, `EVENT_GOAL_COMPLETED`, `EVENT_NAGGING`. Mode 2 = all events use AI; mode 0 = local quotes only.
 
@@ -439,7 +439,7 @@ Atomic write pattern: write to `stats.json.tmp`, then `rename()` to `stats.json`
   "morningJournalTriggered": false,
   "preLunchJournalTriggered": false,
   "endOfDayJournalTriggered": false,
-  "naggingTriggeredToday": false,
+  "nagQueueIndex": 0,
   "fsWriteCount": 0,
   "fsReadCount": 0,
   "fsWritesToday": 0
@@ -529,7 +529,7 @@ The `getCurationObservations()` function generates behavioral observation string
 
 - **Break frequency:** Compares actual break rate to 1/hour target
 - **Break duration:** Compares break time ratio to 10% target
-- **Task synthesis (`getTodoObservations`):** injects a compact `[TASK SYNTHESIS]` block into every AI prompt — counts (daily pending today, monthly due today, daily overdue 3d+, monthly overdue this-month/3mo+) plus the task names with times/overdue durations (capped at `TASK_SYNTHESIS_MAX_CHARS`). NAGGING prepends a `Highly Overdue Tasks Alert!` framing.
+- **Task synthesis (`getTodoObservations`):** injects a compact `[TASK SYNTHESIS]` block into every AI prompt — counts (daily pending today, monthly due today, daily overdue 3d+, monthly overdue this-month/3mo+) plus the task names with times/overdue durations (capped at `TASK_SYNTHESIS_MAX_CHARS`). NAGGING prepends an `Overdue Tasks Alert!` framing.
 - **Midday task check:** At 12:00 PM, adds a past-midday observation when daily tasks remain
 - **Pattern anomalies:** Detects unusual deviations from learned occupancy patterns
 

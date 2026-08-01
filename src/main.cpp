@@ -222,7 +222,7 @@ void saveDailyStats() {
   doc["morningJournalTriggered"] = appStats.morningJournalTriggered;
   doc["preLunchJournalTriggered"] = appStats.preLunchJournalTriggered;
   doc["endOfDayJournalTriggered"] = appStats.endOfDayJournalTriggered;
-  doc["naggingTriggeredToday"] = appStats.naggingTriggeredToday;
+  doc["nagQueueIndex"] = appStats.nagQueueIndex;
   doc["dueFiredDay"] = appStats.dueFiredDay;
   doc["dueFiredKeys"] = appStats.dueFiredKeys;
   doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
@@ -315,7 +315,7 @@ void loadDailyStats() {
     appStats.morningJournalTriggered = doc["morningJournalTriggered"] | false;
     appStats.preLunchJournalTriggered = doc["preLunchJournalTriggered"] | false;
     appStats.endOfDayJournalTriggered = doc["endOfDayJournalTriggered"] | false;
-    appStats.naggingTriggeredToday = doc["naggingTriggeredToday"] | false;
+    appStats.nagQueueIndex = doc["nagQueueIndex"] | 0;
     appStats.dueFiredDay = doc["dueFiredDay"] | "";
     appStats.dueFiredKeys = doc["dueFiredKeys"] | "";
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
@@ -633,24 +633,30 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   }
 }
 
-inline String getHighlyOverdueTaskNames(String currentDayString, String currentMonthString, int currentDaysCount, int currentYear, int currentMonth) {
-  if (!LittleFS.exists("/todo.json")) return "";
+struct OverdueTask {
+  String text;
+  long expiredMinutes;
+};
+
+inline std::vector<OverdueTask> buildOverdueTaskQueue(String currentDayString, String currentMonthString, int currentDaysCount, int currentYear, int currentMonth, int currentDay, int nowMinutes) {
+  std::vector<OverdueTask> queue;
+  if (!LittleFS.exists("/todo.json")) return queue;
   fs::File file = LittleFS.open("/todo.json", "r");
-  if (!file) return "";
+  if (!file) return queue;
   DynamicJsonDocument doc(4096);
   DeserializationError err = deserializeJson(doc, file);
   file.close();
-  if (err) return "";
-  
-  std::vector<String> overdueNames;
+  if (err) return queue;
 
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
     for (JsonObject task : daily) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
-      String tDate = task["startDate"] | "";
+      int tHour = task["hour"] | 12;
+      int tMin = task["minute"] | 0;
       String taskText = task["text"] | "";
+      String tDate = task["startDate"] | "";
       if (isRecurrent) {
         if (task.containsKey("completedDates")) {
           JsonArray compDates = task["completedDates"].as<JsonArray>();
@@ -665,26 +671,42 @@ inline String getHighlyOverdueTaskNames(String currentDayString, String currentM
         isCompleted = task["completed"] | false;
         tDate = task["targetDate"] | "";
       }
-      
-      if (!isCompleted && tDate.length() == 10) {
-        int diff = currentDaysCount - dateToDays(tDate);
-        if (diff > TASK_OVERDUE_DAYS_LIMIT) {
-          overdueNames.push_back(taskText);
+
+      if (!isCompleted) {
+        long expired = 0;
+        bool overdue = false;
+        if (isRecurrent) {
+          // Standing daily task: overdue once today's due time has passed.
+          expired = (long)nowMinutes - (tHour * 60 + tMin);
+          overdue = expired > 0;
+        } else if (tDate.length() == 10) {
+          int diff = currentDaysCount - dateToDays(tDate);
+          if (diff > 0) {
+            overdue = true;
+            expired = diff * 1440L;
+          } else if (diff == 0) {
+            // Due today: overdue once the due time has passed.
+            expired = (long)nowMinutes - (tHour * 60 + tMin);
+            overdue = expired > 0;
+          }
+        }
+        if (overdue) {
+          queue.push_back({taskText, expired});
         }
       }
     }
   }
-  
+
   if (doc.containsKey("monthly")) {
     JsonArray monthly = doc["monthly"].as<JsonArray>();
     for (JsonObject task : monthly) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
+      int dueDay = task["day"] | 1;
       String taskText = task["text"] | "";
       int tMonth = 1;
       int tYear = 2026;
       if (isRecurrent) {
-        String startMonth = task["startMonth"] | "";
         if (task.containsKey("completedMonths")) {
           JsonArray compMonths = task["completedMonths"].as<JsonArray>();
           for (JsonVariant m : compMonths) {
@@ -694,37 +716,48 @@ inline String getHighlyOverdueTaskNames(String currentDayString, String currentM
             }
           }
         }
-        if (startMonth.length() == 7) {
-          tYear = startMonth.substring(0, 4).toInt();
-          tMonth = startMonth.substring(5, 7).toInt();
-        }
       } else {
         tMonth = task["month"] | 1;
         tYear = task["year"] | 2026;
         isCompleted = task["completed"] | false;
       }
-      
+
       if (!isCompleted) {
-        int diffMonths = (currentYear - tYear) * 12 + (currentMonth - tMonth);
-        if (diffMonths > TASK_OVERDUE_MONTHS_LIMIT) {
-          overdueNames.push_back(taskText);
+        long expired = 0;
+        bool overdue = false;
+        if (isRecurrent) {
+          if (currentDay > dueDay) {
+            overdue = true;
+            expired = (long)(currentDay - dueDay) * 1440L;
+          }
+        } else {
+          int monthDiff = (currentYear - tYear) * 12 + (currentMonth - tMonth);
+          if (monthDiff > 0) {
+            overdue = true;
+            expired = monthDiff * 30 * 1440L;
+          } else if (monthDiff == 0 && currentDay > dueDay) {
+            overdue = true;
+            expired = (long)(currentDay - dueDay) * 1440L;
+          }
+        }
+        if (overdue) {
+          queue.push_back({taskText, expired});
         }
       }
     }
   }
-  // Shuffle the overdue names so NAGGING doesn't always reference the first task in the list
-  for (int i = (int)overdueNames.size() - 1; i > 0; i--) {
-    int j = random(i + 1);
-    String tmp = overdueNames[i];
-    overdueNames[i] = overdueNames[j];
-    overdueNames[j] = tmp;
+
+  // Sort most-expired-first (stable insertion sort keeps small lists cheap)
+  for (size_t i = 1; i < queue.size(); i++) {
+    OverdueTask key = queue[i];
+    size_t j = i;
+    while (j > 0 && queue[j - 1].expiredMinutes < key.expiredMinutes) {
+      queue[j] = queue[j - 1];
+      j--;
+    }
+    queue[j] = key;
   }
-  String result = "";
-  for (size_t i = 0; i < overdueNames.size(); i++) {
-    if (i > 0) result += ", ";
-    result += overdueNames[i];
-  }
-  return result;
+  return queue;
 }
 
 // Late hours = outside the learned workday window (start -30 min pad, end), or any time when the clock isn't set.
@@ -733,8 +766,9 @@ static bool isLateHoursNow() {
   int learnedStart = getLearnedWorkdayStart(ts.tm_wday);
   int learnedEnd = getLearnedWorkdayEnd(ts.tm_wday);
   int currentLocalMinutes = ts.tm_hour * 60 + ts.tm_min;
-  int workdayStartMinutes = learnedStart * 60 - 30;
-  int workdayEndMinutes = learnedEnd * 60;
+  int paddingMinutes = LATEHOURS_PADDING_MS / 60000;
+  int workdayStartMinutes = learnedStart * 60 - paddingMinutes;
+  int workdayEndMinutes = learnedEnd * 60 + paddingMinutes;
   if (currentLocalMinutes >= workdayStartMinutes && currentLocalMinutes < workdayEndMinutes) {
     return false;
   }
@@ -991,6 +1025,7 @@ void loop(void) {
       // Transition: Away -> Present
       appState.sitDownTime = now;
       appState.sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
+      appState.lastNagTime = now;
       currentSitDownSessionId++;
       Logger::log("STATE", "Away->Present: sit=%lu epoch=%s session=%d state=%s", 
                   now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, presenceStateName(targetState));
@@ -1108,7 +1143,7 @@ void loop(void) {
           String tempBreakDuration = formatTime(appState.currentBreakDurationMs);
           double hoursWorked = (double)appStats.totalDeskTime / 3600000.0;
           bool excessive = false;
-          if (hoursWorked > 0.5) {
+          if (hoursWorked > EXCESSIVE_BREAKS_MIN_WORKED_HOURS) {
             double breakRate = (double)appStats.breakCount / hoursWorked;
             if (breakRate > EXCESSIVE_BREAKS_LIMIT_PER_HOUR) {
               excessive = true;
@@ -1542,10 +1577,10 @@ void loop(void) {
     }
   }
 
-  // Nagging check (2 hours sitting delay)
-  if (appState.currentPresenceState != STATE_AWAY && !appStats.naggingTriggeredToday) {
-    unsigned long sitDuration = now - appState.sitDownTime;
-    if (sitDuration >= NAGGING_TRIGGER_DELAY_MS && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+  // Nagging check (overdue-task queue): rings every 35 min seated, one task per ring,
+  // most-expired-first. The cursor persists across sessions and resets at midnight.
+  if (appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    if (now - appState.lastNagTime >= NAGGING_TRIGGER_DELAY_MS) {
       int currentYear = ts.tm_year + 1900;
       int currentMonth = ts.tm_mon + 1;
       int currentDay = ts.tm_mday;
@@ -1553,15 +1588,17 @@ void loop(void) {
       snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
       char mStr[8];
       snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
-      
-      String overdueTaskNames = getHighlyOverdueTaskNames(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth);
-      if (overdueTaskNames.length() > 0) {
-        appStats.naggingTriggeredToday = true;
+      int nowMinutes = ts.tm_hour * 60 + ts.tm_min;
+
+      std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
+      if (appStats.nagQueueIndex < (int)queue.size()) {
+        appState.lastNagTime = now;
+        appStats.nagQueueIndex++;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
           EVENT_NAGGING,
-          overdueTaskNames,
-          MessageManager::P_HIGH, 0, MessageManager::R_NORMAL
+          queue[appStats.nagQueueIndex - 1].text,
+          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
         );
       }
     }

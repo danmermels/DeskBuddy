@@ -107,7 +107,7 @@ struct StatsState {
   bool morningJournalTriggered = false;
   bool preLunchJournalTriggered = false;
   bool endOfDayJournalTriggered = false;
-  bool naggingTriggeredToday = false;
+  int nagQueueIndex = 0; // cursor into the sorted overdue-task list; advances per nag, resets at midnight
   String dueFiredDay = "";
   String dueFiredKeys = "";
   int lastNtpDay = -1;
@@ -136,6 +136,7 @@ struct RuntimeState {
   
   unsigned long sitDownTime = 0;
   uint32_t sitDownEpoch = 0;
+  unsigned long lastNagTime = 0; // per-session timer for the 35 min overdue-task nag cadence
   bool rolloverPending = false;
   unsigned long requiredValidationBufferMs = 180000UL;
 

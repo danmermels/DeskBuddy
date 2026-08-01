@@ -14,7 +14,7 @@
 #define DEBOUNCE_AWAY_MS         10000UL
 #define BREAK_MINIMUM_MS         180000UL   // 3 min minimum for break counting
 #define STOP_BY_THRESHOLD_MS     480000UL   // 8 min threshold for stop-by detection
-#define STRETCH_INTERVAL_MS     2700000UL   // 45 min between stretch reminders
+#define STRETCH_INTERVAL_MS     3600000UL   // 60 min between stretch reminders
 #define SLACKER_INTERVAL_MS     3600000UL   // 1 hr between slacker roasts
 #define STREAK_MINIMUM_MS        900000UL   // 15 min minimum for streak tracking
 #define FOCUS_MINIMUM_MS          300000UL  // 5 min minimum focus session
@@ -31,6 +31,7 @@
 #define WIFI_TIMEOUT_MS              5000UL // 5s WiFi connect timeout in setup
 #define RING_TRANSITION_MS           1000UL // 1s ring color transition
 #define STICKY_CONFIRM_MS           30000UL // 0.5 min sticky state confirmation window
+#define LATEHOURS_PADDING_MS       1800000UL // 30 min padding on both sides of the learned workday for late-hours detection
 #define DISPLAY_THROTTLE_MS           500UL // 500ms minimum between display faceplate redraws
 #define DEV_REFRESH_MS                200UL // 200ms refresh for dev faceplate
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay
@@ -53,6 +54,7 @@
 #define OVERNIGHT_THRESHOLD_S            14400UL  // 4 hours - overnight/sleep threshold for first-sit greeting
 #define G0S_SENS_DEFAULT                   90
 #define LUNCH_MIN_DESK_MS            1800000UL  // 30 min minimum desk time before lunch reminder
+#define EXCESSIVE_BREAKS_MIN_WORKED_HOURS 3.0f  // minimum hours worked before the excessive-breaks roast can fire
 #define NTP_TIME_OFFSET               -10800   // Argentina time (UTC-3)
 
 // --- Radar Constants ---
@@ -82,7 +84,7 @@
 #define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
 #define END_OF_DAY_JOURNAL_HOURS_BEFORE       1   // Hours before workday end to trigger end-of-day journal
 #define MIDDAY_TASK_CHECK_HOUR               12   // 12:00 PM midday threshold for task check observations
-#define NAGGING_TRIGGER_DELAY_MS       7200000UL  // 2 hours sitting delay for nagging trigger
+#define NAGGING_TRIGGER_DELAY_MS       2100000UL  // 35 min seated: overdue-task nag cadence (first nag 35m into a session, then every 35m)
 #define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
 #define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
 #define TASK_SYNTHESIS_MAX_CHARS            500   // Max length of the compact task synthesis injected into AI observations

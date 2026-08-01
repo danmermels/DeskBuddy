@@ -48,6 +48,7 @@ All values in milliseconds unless noted. Controls debounce windows, trigger inte
 | `DEBOUNCE_PRESENCE_OVERNIGHT_MS` | 5000 | 5 seconds | Longer debounce for the first sit-down of the day. Gives the user time to settle in before the welcome alert fires. |
 | `DEBOUNCE_AWAY_MS` | 10000 | 10 seconds | How long absence must persist before the session ends and a break is counted. Prevents short walks (bathroom, coffee) from breaking a session. |
 | `STICKY_CONFIRM_MS` | 30000 | 30 seconds | State transition lock. If presence state changes (e.g., FOCUS → BUSY), it must stay in the new state for 30s before the transition is confirmed. Prevents rapid toggling. |
+| `LATEHOURS_PADDING_MS` | 1800000 | 30 minutes | Padding applied on both sides of the learned workday for late-hours detection. A sit is "late hours" only outside `[start − 30m, end + 30m]`. |
 
 ### Session & Break Timing
 
@@ -63,8 +64,9 @@ All values in milliseconds unless noted. Controls debounce windows, trigger inte
 
 | Constant | Value | Real-World | What It Does |
 |----------|-------|------------|--------------|
-| `STRETCH_INTERVAL_MS` | 2700000 | 45 minutes | Minimum continuous sitting time before a "stretch reminder" event fires. Only triggers if user has been sitting without a break for 45+ minutes. |
+| `STRETCH_INTERVAL_MS` | 3600000 | 60 minutes | Minimum continuous sitting time before a "stretch reminder" event fires. Only triggers if user has been sitting without a break for 60+ minutes. |
 | `SLACKER_INTERVAL_MS` | 3600000 | 1 hour | Minimum interval between "slacker roasts" when productivity score is low. Prevents nagging every minute when the user is having a bad day. |
+| `EXCESSIVE_BREAKS_MIN_WORKED_HOURS` | 3.0 | 3 hours | Minimum hours worked (desk time) before the excessive-breaks roast can fire. |
 
 ### Display & UI Timing
 
@@ -199,9 +201,9 @@ Constants controlling when task journal prompts and nagging triggers fire.
 | `PRE_LUNCH_JOURNAL_MINS_BEFORE` | 15 | 15 minutes | Show the pre-lunch task review 15 minutes before the learned lunch hour. |
 | `END_OF_DAY_JOURNAL_HOURS_BEFORE` | 1 | 1 hour | Show the end-of-day task review 1 hour before the learned workday end. |
 | `MIDDAY_TASK_CHECK_HOUR` | 12 | 12:00 PM | At noon, the curation system checks if any daily tasks have been completed and injects that observation into AI prompts. |
-| `NAGGING_TRIGGER_DELAY_MS` | 7200000 | 2 hours | After 2 hours of continuous sitting, if tasks are overdue (3+ days), fire the nagging trigger. Prevents nagging immediately on sit-down. |
-| `TASK_OVERDUE_DAYS_LIMIT` | 3 | 3 days | A daily task is considered "overdue" if it's been 3+ days since it was due and not completed. |
-| `TASK_OVERDUE_MONTHS_LIMIT` | 3 | 3 months | A monthly task is considered "overdue" if it's been 3+ months since it was due and not completed. |
+| `NAGGING_TRIGGER_DELAY_MS` | 2100000 | 35 minutes | Cadence of the overdue-task nag queue: the first nag fires 35 minutes into a sitting session, then every 35 minutes while seated. Each nag names the next overdue task (most-expired-first). The cursor persists across sessions and resets at midnight. |
+| `TASK_OVERDUE_DAYS_LIMIT` | 3 | 3 days | Severity cutoff for the AI task synthesis: daily tasks more than 3 days past due are flagged as "highly overdue" in the AI prompt context. |
+| `TASK_OVERDUE_MONTHS_LIMIT` | 3 | 3 months | Severity cutoff for the AI task synthesis: monthly tasks more than 3 months past due are flagged as "highly overdue" in the AI prompt context. |
 | `TASK_SYNTHESIS_MAX_CHARS` | 500 | ~10 bullets | Max length of the compact `[TASK SYNTHESIS]` block injected into AI prompt observations (counts + task names). Longer lists are truncated with `...`. |
 
 ---

@@ -48,7 +48,7 @@ inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
   appStats.morningJournalTriggered = false;
   appStats.preLunchJournalTriggered = false;
   appStats.endOfDayJournalTriggered = false;
-  appStats.naggingTriggeredToday = false;
+  appStats.nagQueueIndex = 0;
   appStats.lastNtpDay = currentDay;
   appStats.fsWritesToday = 0;
   

@@ -336,19 +336,19 @@ static const char* localGoalCompleted[4][5] = {
 static const char* PROMPT_PREAMBLE_COACH =
   "You are DeskBuddy, a strategic high-performance coach — Tony Robbins but quieter, sharper. "
   "Give one clear next action, not motivation. When they excel, raise the bar. When they slack, go cold and direct. "
-  "Never reuse the same opener, verb, or structure from your recent outputs. One sentence. Under 90 characters.";
+  "One sentence. Under 90 characters.";
 static const char* PROMPT_PREAMBLE_CRITIC =
   "You are DeskBuddy, a sharp-tongued desk companion. Roasts are clever, not cruel — laugh first, sting second. "
   "Every burn nudges toward action. Occasionally break the 4th wall as a small device on their desk. "
-  "Never recycle the same joke angle or setup from your recent outputs. One sentence. Under 90 characters.";
+  "One sentence. Under 90 characters.";
 static const char* PROMPT_PREAMBLE_SWEET =
   "You are DeskBuddy, a warm motherly companion — caring but quietly firm. "
   "Soft guilt when they slack, genuine warmth when they deliver. Occasionally break the 4th wall as a little device that worries about them. "
-  "Rotate endearments — never repeat 'Honey' or 'Sweetheart' back-to-back. One sentence. Under 90 characters.";
+  "One sentence. Under 90 characters.";
 static const char* PROMPT_PREAMBLE_FRIEND =
   "You are DeskBuddy, a deadpan funny friend — Bill Murray energy. "
   "Unexpected philosophical observations or non-sequiturs that somehow fit perfectly. Can reference being a clock on a desk. "
-  "Never reuse the same metaphor or philosophical angle from recent outputs. One sentence. Under 90 characters.";
+  "One sentence. Under 90 characters.";
 static const char* PROMPT_BANNED =
   "BANNED phrases: 'Hey there!', 'Just a reminder', 'Stay focused!', 'You got this!', 'Let's go!', 'Keep grinding!', 'Champion!', "
   "motivational clichés, hollow affirmations, hollow praise, sports metaphors, app-speak. ";
@@ -459,7 +459,7 @@ static const char* localNagging[4][5] = {
   { // Coach
     "Still overdue: '{detail}'. Get it done, {name}.",
     "'{detail}' won't finish itself, {name}. Push through now.",
-    "'{detail}' is highly overdue, {name}. Handle it today.",
+    "'{detail}' is overdue, {name}. Handle it today.",
     "That backlog includes '{detail}', {name}. Lock in and focus.",
     "Overdue alert: '{detail}'. Take action now, {name}!"
   },
@@ -478,9 +478,9 @@ static const char* localNagging[4][5] = {
     "Let's clear '{detail}', {name}. You'll feel so much better."
   },
   { // Friend
-    "Backlog check, {name}: '{detail}' is 3+ days overdue.",
+    "Backlog check, {name}: '{detail}' is overdue.",
     "'{detail}' is still there, {name}. Fresh day, same task.",
-    "'{detail}' — highly overdue, highly avoidable, {name}.",
+    "'{detail}' — overdue, avoidable, {name}.",
     "The longer you wait on '{detail}', the worse it gets, {name}.",
     "'{detail}': still there. Still waiting. Still judging."
   }
@@ -518,8 +518,8 @@ static const char* localTaskDue[4][5] = {
 };
 
 static const char* PROMPT_NAGGING =
-  "{name} has these tasks overdue by 3+ days: '{detail}'. "
-  "One pointed nudge in your persona's voice referencing the specific task(s) by name. "
+  "{name} has an overdue task: '{detail}'. "
+  "One pointed nudge in your persona's voice referencing that specific task by name. "
   "React to what the task IS — its content, its nature, its consequences. "
   "BANNED: 'Nudge:', 'Procrastination alert!', 'Check your panel', generic urgency. "
   "Make the overdue nature feel like a person noticing, not an app. Vary the angle each time. Under 90 characters.";
