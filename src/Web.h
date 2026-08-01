@@ -1708,6 +1708,8 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           <option value="10">Journal Task Overview (10)</option>
           <option value="11">Nagging Overdue Alert (11)</option>
           <option value="12">Task Due Reminder (12)</option>
+          <option value="13">Page Follow-up (13)</option>
+          <option value="14">Late Hours Sit (14)</option>
         </select>
         <select id="debugMsgMode" style="width: 110px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px; padding: 8px; font-size: 0.9rem;">
           <option value="ai">AI Msg</option>

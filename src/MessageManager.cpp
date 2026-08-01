@@ -103,3 +103,19 @@ void MessageManager::scheduleFirstSitMessage(const String& overnightBreak) {
     P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
   );
 }
+
+void MessageManager::scheduleLateHoursSitMessage(const String& earlyLateDetail) {
+  messageQueue.erase(
+    std::remove_if(messageQueue.begin(), messageQueue.end(),
+      [](const QueuedMessage& msg) {
+        return msg.eventType == EVENT_WELCOME_BACK || msg.eventType == EVENT_FIRST_SIT || msg.eventType == EVENT_LATEHOURS_SIT;
+      }),
+    messageQueue.end()
+  );
+
+  scheduleMessageWithPriority(
+    EVENT_LATEHOURS_SIT,
+    earlyLateDetail,
+    P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
+  );
+}

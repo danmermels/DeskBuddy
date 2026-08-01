@@ -671,6 +671,7 @@ static int parseEventType(const String& s) {
   if (u == "NAGGING")                                     return EVENT_NAGGING;
   if (u == "TASK_DUE" || u == "TASKDUE")                  return EVENT_TASK_DUE;
   if (u == "PAGE")                                        return EVENT_PAGE;
+  if (u == "LATEHOURS" || u == "LATEHOURS_SIT" || u == "LATEHOURSSIT") return EVENT_LATEHOURS_SIT;
   return -1;
 }
 
@@ -680,9 +681,9 @@ static void handleTrigger(const String& args) {
   String rest = (sp < 0) ? "" : args.substring(sp + 1);
 
   int eventType = parseEventType(typeStr);
-  if (typeStr.length() == 0 || eventType < 0 || eventType > EVENT_PAGE) {
-    Logger::log("MQTT", "Invalid TRIGGER event type '%s'. Use 0-%d or a name (FIRST_SIT, WELCOME_BACK, STRETCH, FOCUS_END, SLACKER, STREAK_BEATEN, LUNCH, EXCESSIVE_BREAKS, GOAL_COMPLETED, JOURNAL, NAGGING, TASK_DUE, PAGE).", typeStr.c_str(), EVENT_PAGE);
-    publishDebug("{\"ok\":false,\"error\":\"Invalid event type. Use 0-" + String(EVENT_PAGE) + " or an event name (e.g. LUNCH, JOURNAL)\"}");
+  if (typeStr.length() == 0 || eventType < 0 || eventType > EVENT_LATEHOURS_SIT) {
+    Logger::log("MQTT", "Invalid TRIGGER event type '%s'. Use 0-%d or a name (FIRST_SIT, WELCOME_BACK, STRETCH, FOCUS_END, SLACKER, STREAK_BEATEN, LUNCH, EXCESSIVE_BREAKS, GOAL_COMPLETED, JOURNAL, NAGGING, TASK_DUE, PAGE, LATEHOURS).", typeStr.c_str(), EVENT_LATEHOURS_SIT);
+    publishDebug("{\"ok\":false,\"error\":\"Invalid event type. Use 0-" + String(EVENT_LATEHOURS_SIT) + " or an event name (e.g. LUNCH, JOURNAL, LATEHOURS)\"}");
     return;
   }
 

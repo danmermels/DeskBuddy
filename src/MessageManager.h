@@ -66,6 +66,7 @@ public:
   // Convenience scheduling methods
   void scheduleWelcomeBackMessage(const String& breakDuration);
   void scheduleFirstSitMessage(const String& overnightBreak);
+  void scheduleLateHoursSitMessage(const String& earlyLateDetail);
 };
 
 #endif

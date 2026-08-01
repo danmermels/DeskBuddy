@@ -4,14 +4,14 @@ Trigger registry, interaction map, prompt-quality findings, and fix log for the 
 
 ---
 
-## 1. Trigger Registry (13 events)
+## 1. Trigger Registry (14 events)
 
 | ID | Event | Fire site | Condition | Detail payload | Routing |
 |----|-------|-----------|-----------|----------------|---------|
-| 0 | `EVENT_FIRST_SIT` | `main.cpp:1036` | First sit of the day (rollover or `firstSitToday`) | overnight break string (empty if < 4h) | MM `scheduleFirstSitMessage` (P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT) |
+| 0 | `EVENT_FIRST_SIT` | `main.cpp:1036` | First sit of the day (rollover or `firstSitToday`), suppressed during late hours | overnight break string (empty if < 4h) | MM `scheduleFirstSitMessage` (P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT) |
 | 1 | `EVENT_WELCOME_BACK` | `main.cpp:1058` | Away >= BREAK_MINIMUM_MS (3m), always (even when excessive-breaks roast also fires) | break duration string | MM `scheduleWelcomeBackMessage` (P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT) -- outranks EXCESSIVE_BREAKS (F8) |
 | 2 | `EVENT_STRETCH` | `main.cpp:1094` | `now - lastStretchReminderTime > STRETCH_INTERVAL_MS` (45m) | none | direct `triggerBehaviour` (was) -> MM P_NORMAL/0/R_NORMAL (F4) |
-| 3 | `EVENT_FOCUS_END` | `main.cpp:1130` | Present->Away while STATE_FOCUS, focus >= FOCUS_MINIMUM_MS (15s) | focus duration string | direct `triggerBehaviour` (was) -> MM P_NORMAL/0/R_NORMAL (F4) |
+| 3 | `EVENT_FOCUS_END` | `main.cpp:1130` | Present->Away while STATE_FOCUS, focus >= FOCUS_MINIMUM_MS (5m) | focus duration string | direct `triggerBehaviour` (was) -> MM P_NORMAL/0/R_NORMAL (F4) |
 | 4 | `EVENT_SLACKER` | `main.cpp:1104` | Sitting > SLACKER_INTERVAL_MS (1h) AND score < 35, throttled 1h | none | direct `triggerBehaviour` (was) -> MM P_NORMAL/0/R_NORMAL (F4) |
 | 5 | `EVENT_STREAK_BEATEN` | `main.cpp:1113` | `currentStreak > longestSittingStreak` (both >= 15m), once per session | new record string (F3) | direct `triggerBehaviour` (was) -> MM P_NORMAL/0/R_NORMAL (F4) |
 | 6 | `EVENT_LUNCH_REMINDER` | `main.cpp:1343` | Hour == learned lunch AND min >= 15, desk > 30m, once/day | none | direct `triggerBehaviour` (was) -> MM P_NORMAL/0/R_NORMAL (F4) |
@@ -21,6 +21,8 @@ Trigger registry, interaction map, prompt-quality findings, and fix log for the 
 | 10 | `EVENT_JOURNAL` | `main.cpp:1368/1392/1417` | Morning (5m sit) / pre-lunch (-15m) / end-of-day (-1h), once each | "" -> pages generated | MM (P_HIGH); `triggerBehaviour` returns early (local render) |
 | 11 | `EVENT_NAGGING` | `main.cpp:1460` | 2h sitting AND tasks overdue 3+ days, once/day | overdue task names (pipe-delimited) | MM (P_HIGH) |
 | 12 | `EVENT_TASK_DUE` | `main.cpp:606` | Active, uncompleted daily task matches `hh:mm` exactly | pipe-delimited task names | direct `triggerBehaviour` (returns early, local render) |
+| 13 | `EVENT_PAGE` | `Display.h:554` | Follow-up page for messages split > `MSG_PAGE_MAX_CHARS` (110) | page text | MM (P_HIGH, 8000, R_NORMAL) (F12) |
+| 14 | `EVENT_LATEHOURS_SIT` | `main.cpp:1100` | Any sit-down while `isLateHoursNow()` (outside learned workday +/- 30m); replaces FIRST_SIT/WELCOME_BACK during quiet hours | early/late string (e.g. "3h 25m past the 18:00 end") | MM `scheduleLateHoursSitMessage` (P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT) |
 
 MM = MessageManager. Priorities as of F4: 0/2/4/5/6 all `P_NORMAL, delay 0, R_NORMAL`.
 
@@ -28,7 +30,7 @@ MM = MessageManager. Priorities as of F4: 0/2/4/5/6 all `P_NORMAL, delay 0, R_NO
 
 ```
 radar -> rawPresent/rawState -> presence state machine (debounce 2s/10s, sticky 30s)
-  -> AWAY->PRESENT: FIRST_SIT | WELCOME_BACK | EXCESSIVE_BREAKS  (via MM)
+  -> AWAY->PRESENT: LATEHOURS (late hours) | FIRST_SIT | WELCOME_BACK | EXCESSIVE_BREAKS  (via MM)
   -> PRESENT:       STRETCH | SLACKER | STREAK_BEATEN            (via MM, F4)
   -> PRESENT->AWAY: FOCUS_END                                    (via MM, F4)
 loop polls:         LUNCH | GOAL | JOURNAL x3 | NAGGING | TASK_DUE
@@ -54,14 +56,14 @@ All paths converge on triggerBehaviour() (AI.h:277) ->
 
 ## 3. Prompt & Quote Inventory
 
-- 12 prompt templates (`PROMPT_*`) + 4 preambles + 4 banned-phrase blocks in `Behaviour.h`.
+- 12 prompt templates (`PROMPT_*`) + 4 preambles + 1 shared banned-phrase block in `Behaviour.h`.
 - 12 quote categories x 4 personas x 5 quotes = 240 local quotes.
 - Personas: 0=Coach, 1=Critic, 2=Sweet, 3=Friend.
 - Flash cost: ~14.4 KB for quote arrays, ~5 KB for prompts/preambles (19.4 KB total string literals).
 
 ### Prompt-quality findings
 
-- **Q1 -- Anti-repetition instruction is a no-op.** All preambles demand "never reuse the same opener/verb/structure". The Groq API is stateless per call (no conversation/history sent), so the model cannot honor this. The only cross-call state is `bannedCounter` for persona banned phrases.
+- **Q1 -- Anti-repetition instruction is a no-op.** All preambles demand "never reuse the same opener/verb/structure". The Groq API is stateless per call (no conversation/history sent), so the model cannot honor this. The only cross-call state is `bannedCounter` for the shared banned-phrase block.
 - **Q2 -- No output-length enforcement.** The constraint says 75-85 chars (max 90), but nothing clamps the response. `AI_RESPONSE_MAX_CHARS = 90` is only used for `setChatMaxTokens` (tokens, not chars). A 200-char reply renders fully (wrap + scroll). Truncation/deferred.
 - **Q3 -- Constraint stacking.** WELCOME_BACK demands the literal `{detail}` be included; SLACKER demands `{score}` be stated. Combined with the length ceiling, the model often has to drop persona color. Both placeholders now resolve (F2), so templates are internally consistent.
 - **Q4 -- "the user" substitution risk.** `resolvePromptPlaceholders` randomly swaps `{name}` for "the user" (`AI.h:106`) in templates like "Task '{detail}' is due now. Notify {name}..." -> "Notify the user..." Fine for the LLM; it never reaches the display (only the prompt). Low risk.
@@ -89,7 +91,7 @@ Goal: English -> (future) Spanish/more, without breaking RAM budget.
 
 - **Where strings live:** all user-facing text is `const char*` in flash (`Behaviour.h` 19.4 KB, plus faceplate/`Display.h`/`Web.h` UI text). Adding a language roughly **doubles flash, adds ~0 RAM** (PROGMEM arrays).
 - **Budget:** flash image today (quotes+prompts ~19.4 KB) is trivial against the 4MB part; LittleFS is separate (`partitions.csv`). RAM cost is the risk: each language string is a `const char*` pointer (4 bytes x ~290 strings x N languages) plus `String` copies only while formatting. Negligible.
-- **Recommended future design (when implementing):** a PROGMEM `struct LangStrings { const char* q[12][4][5]; const char* prompts[12]; const char* preambles[4]; const char* banned[4]; };` selected by a `ConfigState.lang` index; replace direct array references with `strings(appConfig.lang).q[...]`. Keep `{name}`/`{detail}`/`{score}` placeholders so formatting logic is untouched. Weather via `&lang=<code>`.
+- **Recommended future design (when implementing):** a PROGMEM `struct LangStrings { const char* q[12][4][5]; const char* prompts[12]; const char* preambles[4]; const char* banned; };` selected by a `ConfigState.lang` index; replace direct array references with `strings(appConfig.lang).q[...]`. Keep `{name}`/`{detail}`/`{score}` placeholders so formatting logic is untouched. Weather via `&lang=<code>`.
 - **Measurement to revisit:** after any translation, re-check `.rodata` via `pio run -v` map output. Current baseline: 19.4 KB string literals in `Behaviour.h`.
 
 ## 6. Fix Log
@@ -108,6 +110,7 @@ Goal: English -> (future) Spanish/more, without breaking RAM budget.
 - **F12** (Behaviour/Display/Constants): added `EVENT_PAGE 13` + `MSG_PAGE_MAX_CHARS 110`; `triggerBehaviour` renders raw 2nd-screen text locally (no AI); Display.h splits messages > 110 chars into a follow-up `EVENT_PAGE` screen at `P_HIGH, 8000, R_NORMAL` (skipping JOURNAL/TASK_DUE layouts).
 - **F13** (MqttDebug/Display): MQTT `TRIGGER` commands produced no visible reaction on the device. Two causes fixed: (1) `handleTrigger` only accepted numeric event types, so named payloads from the client presets (`TRIGGER LUNCH ai`, `TRIGGER JOURNAL ai`, ...) were rejected with an error and never reached `triggerBehaviour` -- added `parseEventType()` name mapping (`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`/`LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`) and a range check, plus a log-stream line on rejection; (2) even successful triggers were suppressed on screen because events 0/1 route through `pendingWelcomeAlert` and every alert is dropped while the device believes the user is away -- added `appState.manualTriggerOverride`, set by `handleTrigger`, which routes manual triggers straight to the alert overlay and forces `targetPage = -2` during the alert even in the away state (`Display.h`).
 - **F14** (Curation/Constants): AI prompts previously saw task data only as scattered counts (no names) for normal events, and NAGGING/overdue detail only in the highly-overdue lists. Rebuilt `getTodoObservations` output around a compact `[TASK SYNTHESIS]` block injected into every AI prompt: counts (daily pending today, monthly due today, daily overdue 3d+, monthly overdue this-month/3mo+) plus task names with due times / overdue durations, capped at `TASK_SYNTHESIS_MAX_CHARS 500`. NAGGING prepends a `Highly Overdue Tasks Alert!` framing; the count-only observation lines were removed as redundant; midday past-12 observation kept. Local TASK_DUE/JOURNAL renders unchanged (AI-prompts-only placement). **F14b:** the synthesis bullets and the NAGGING `{detail}` name list are Fisher-Yates shuffled on every call so the AI doesn't keep latching onto the first task in the list.
+- **F15** (main.cpp/Behaviour/AI/MessageManager/MqttDebug/Constants): quiet-hours fix for night greeting spam and the missing morning FIRST_SIT. Added `EVENT_LATEHOURS_SIT` (14) fired on **every** sit-down while `isLateHoursNow()` (outside learned workday +/- 30m, start -30 / end exact; true when clock unset) -- replaces FIRST_SIT/WELCOME_BACK during late hours, queued `P_URGENT`/`WELCOME_DELAY_MS`/`R_IMPORTANT` like the greetings, with 4 new local quotes (`localLateHours[4][5]`, `{name}/{detail}/{time}`) and a `PROMPT_LATEHOURS_SIT` AI template (`{time}/{dayStart}/{dayEnd}/{earlyLate}` placeholders; `computeEarlyLateString` from learned, unpadded hours). The first-sit flag is now *held* through late hours of any duration (sit-down no longer burns it), and burns either on a work-hours sit-down (normal FIRST_SIT) or **silently at the workday crossing** (`firstSitEpoch = sitDownEpoch`, so the late-hours span counts in day stats; overnightBreak = sitDownEpoch - lastAwayEpoch; `saveDailyStats`). No `sitWasLateHours`, no `State.h` change; the Present->Away rollback condition is untouched. Result: late-hours sits never greet (no spam), the morning FIRST_SIT always fires on the first work-hours sit (no 1am day-start), and cross-boundary blips behave like the Span. Also raised `FOCUS_MINIMUM_MS` 15s -> 5m so a sub-5m focus session no longer renders "0m".
 
 ## 7. Proposed: Unified Elective Scheduler & Annoyance Budget (spec, no code yet)
 

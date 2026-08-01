@@ -44,6 +44,13 @@ inline String resolveLocalPlaceholders(String templateStr, String detail) {
   templateStr.replace("{longestStreak}", formatTime(appStats.longestSittingStreak));
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
   templateStr.replace("{historyDays}", String(appStats.historyDaysCountWeekly[currentDay]));
+  if (timeClient.isTimeSet()) {
+    char timeBuf[6];
+    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", timeClient.getHours(), timeClient.getMinutes());
+    templateStr.replace("{time}", String(timeBuf));
+  } else {
+    templateStr.replace("{time}", "unknown hour");
+  }
   return templateStr;
 }
 
@@ -52,19 +59,15 @@ inline String resolvePromptPlaceholders(int eventType, String templateStr, Strin
   extern const char* PROMPT_PREAMBLE_CRITIC;
   extern const char* PROMPT_PREAMBLE_SWEET;
   extern const char* PROMPT_PREAMBLE_FRIEND;
-  extern const char* PROMPT_BANNED_COACH;
-  extern const char* PROMPT_BANNED_CRITIC;
-  extern const char* PROMPT_BANNED_SWEET;
-  extern const char* PROMPT_BANNED_FRIEND;
+  extern const char* PROMPT_BANNED;
   extern int getLearnedWorkdayStart(int dayIndex);
   extern int getLearnedWorkdayEnd(int dayIndex);
   extern int getLearnedLunchHour(int dayIndex);
 
   const char* activePreamble = PROMPT_PREAMBLE_COACH;
-  const char* activeBanned = PROMPT_BANNED_COACH;
-  if (appConfig.aiPersona == 1) { activePreamble = PROMPT_PREAMBLE_CRITIC; activeBanned = PROMPT_BANNED_CRITIC; }
-  else if (appConfig.aiPersona == 2) { activePreamble = PROMPT_PREAMBLE_SWEET; activeBanned = PROMPT_BANNED_SWEET; }
-  else if (appConfig.aiPersona == 3) { activePreamble = PROMPT_PREAMBLE_FRIEND; activeBanned = PROMPT_BANNED_FRIEND; }
+  if (appConfig.aiPersona == 1) { activePreamble = PROMPT_PREAMBLE_CRITIC; }
+  else if (appConfig.aiPersona == 2) { activePreamble = PROMPT_PREAMBLE_SWEET; }
+  else if (appConfig.aiPersona == 3) { activePreamble = PROMPT_PREAMBLE_FRIEND; }
 
   // Static counter: include banned phrases ~2 out of 3 calls, let them escape every 3rd
   static uint8_t bannedCounter = 0;
@@ -127,11 +130,29 @@ inline String resolvePromptPlaceholders(int eventType, String templateStr, Strin
   resolvedTemplate.replace("{longestStreak}", formatTime(appStats.longestSittingStreak));
   int currentDayIdx = timeClient.isTimeSet() ? timeClient.getDay() : 1;
   resolvedTemplate.replace("{historyDays}", String(appStats.historyDaysCountWeekly[currentDayIdx]));
+  resolvedTemplate.replace("{time}", timeOfDayStr);
+  resolvedTemplate.replace("{dayStart}", "08:00");
+  resolvedTemplate.replace("{dayEnd}", "18:00");
+  resolvedTemplate.replace("{earlyLate}", "outside work hours");
+  if (timeClient.isTimeSet()) {
+    time_t epochNow = timeClient.getEpochTime();
+    struct tm *ptmNow = localtime(&epochNow);
+    if (ptmNow != nullptr) {
+      int s = getLearnedWorkdayStart(ptmNow->tm_wday);
+      int e = getLearnedWorkdayEnd(ptmNow->tm_wday);
+      char startBuf[6], endBuf[6];
+      snprintf(startBuf, sizeof(startBuf), "%02d:00", s);
+      snprintf(endBuf, sizeof(endBuf), "%02d:00", e);
+      resolvedTemplate.replace("{dayStart}", String(startBuf));
+      resolvedTemplate.replace("{dayEnd}", String(endBuf));
+      resolvedTemplate.replace("{earlyLate}", computeEarlyLateString(*ptmNow));
+    }
+  }
 
   // 5. Build structured prompt
   String fullPrompt = "[ROLE]\n";
   fullPrompt += String(activePreamble) + "\n";
-  if (includeBanned) fullPrompt += String(activeBanned) + "\n";
+  if (includeBanned) fullPrompt += String(PROMPT_BANNED) + "\n";
   fullPrompt += "CRITICAL CONSTRAINT: Respond with exactly ONE short sentence in English. Keep it between 75-85 characters total (maximum 90, including spaces/punctuation). Output ONLY the raw response. Do not wrap in quotes.\n\n";
   
   fullPrompt += "[LIVE TELEMETRY]\n";
@@ -206,7 +227,7 @@ void aiQueryTask(void * parameter) {
         Logger::log("BEHAVIOUR", "AI Response Success: len=%d resp=\"%s\"", response.length(), response.c_str());
         
         bool discard = false;
-        if (appState.lastTriggeredEventType == EVENT_FIRST_SIT || appState.lastTriggeredEventType == EVENT_WELCOME_BACK) {
+      if (appState.lastTriggeredEventType == EVENT_FIRST_SIT || appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_LATEHOURS_SIT) {
           if (querySessionId != currentSitDownSessionId || appState.currentPresenceState == STATE_AWAY) {
             discard = true;
           }
@@ -439,7 +460,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       useAI = true;
     } else if (appConfig.aiMode == 1) {
       // Balanced mode: AI triggers for tasks, focus, and notifications
-      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LUNCH_REMINDER || eventType == EVENT_EXCESSIVE_BREAKS || eventType == EVENT_GOAL_COMPLETED || eventType == EVENT_NAGGING) {
+      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LATEHOURS_SIT || eventType == EVENT_LUNCH_REMINDER || eventType == EVENT_EXCESSIVE_BREAKS || eventType == EVENT_GOAL_COMPLETED || eventType == EVENT_NAGGING) {
         useAI = true;
       }
     }
@@ -462,6 +483,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     switch (eventType) {
       case EVENT_FIRST_SIT:     basePrompt = resolvePromptPlaceholders(eventType, PROMPT_FIRST_SIT_OF_DAY, detail); break;
       case EVENT_WELCOME_BACK:  basePrompt = resolvePromptPlaceholders(eventType, PROMPT_WELCOME_BACK, detail); break;
+      case EVENT_LATEHOURS_SIT: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_LATEHOURS_SIT, detail); break;
       case EVENT_STRETCH:       basePrompt = resolvePromptPlaceholders(eventType, PROMPT_STRETCH_REMINDER, detail); break;
       case EVENT_FOCUS_END:     basePrompt = resolvePromptPlaceholders(eventType, PROMPT_FOCUS_CONGRATS, detail); break;
       case EVENT_SLACKER:       basePrompt = resolvePromptPlaceholders(eventType, PROMPT_SLACKER_ROAST, detail); break;
@@ -498,8 +520,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         if (persona < 0 || persona > 3) persona = 0;
 
         switch (eventType) {
-          case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
-          case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
+        case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
+        case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
+        case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
           case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
           case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
           case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;

@@ -1,6 +1,8 @@
 #ifndef BEHAVIOUR_H
 #define BEHAVIOUR_H
 
+#include <Arduino.h>
+
 // --- Event Types ---
 #define EVENT_FIRST_SIT     0
 #define EVENT_WELCOME_BACK  1
@@ -15,6 +17,7 @@
 #define EVENT_NAGGING          11
 #define EVENT_TASK_DUE         12
 #define EVENT_PAGE             13
+#define EVENT_LATEHOURS_SIT    14
 
 // --- Local Fallback/Eco Quotes (20 per category) ---
 
@@ -46,6 +49,37 @@ static const char* localFirstSit[4][5] = {
     "Hello, {name}! Hope you feel refreshed after {detail} rest. Time for magic.",
     "Rise and shine, {name}! {detail} offline. Ready to tackle the universe?",
     "Greetings, {name}! Coffee is waiting after your {detail} rest. Settle in."
+  }
+};
+
+static const char* localLateHours[4][5] = {
+  { // Coach
+    "Up at this hour, {name}? {detail}. Whatever pulled you in, make it count.",
+    "{name}, it's {time} and the workday doesn't start for a while. {detail}. Brief and focused.",
+    "Late-night desk session, {name}? {detail}. Fine — but keep it short.",
+    "{name}, {detail}. One quick task and back to rest.",
+    "The desk is open round the clock, {name}. {detail}. Use the hours wisely."
+  },
+  { // Critic
+    "{name}, {detail}. The backlog can't be that urgent at this hour.",
+    "Oh, {name}. {detail}. Hope this isn't the plan for the whole night.",
+    "{name}, it's {time}. {detail}. Even the tasks are asleep.",
+    "{name}, {detail}. Sure, but remember what happens when you burn out.",
+    "Checking in at {time}, {name}? {detail}. At this hour, the backlog waits for no one."
+  },
+  { // Sweet
+    "Awake at this hour, {name}? {detail}. Please don't forget to rest soon.",
+    "{name}, it's {time} and here you are. {detail}. Take care of yourself.",
+    "The desk is quiet at {time}, {name}. {detail}. Gentle, quick, then sleep.",
+    "{name}, {detail}. Whatever it is, I hope it's worth the late night.",
+    "Sweet {name}, it's {time}. {detail}. Finish up gently and rest."
+  },
+  { // Friend
+    "{detail}, {name}. The desk called, and you answered at this hour.",
+    "It's {time}, {name}. {detail}. Your bed is giving you a look.",
+    "{name}, {detail}. Same-time desk visits are starting to feel like a habit.",
+    "Late shift, {name}? {detail}. Make it quick, the coffee's tired.",
+    "{name}, the clock says {time}. {detail}. Even night owls need a cutoff."
   }
 };
 
@@ -303,29 +337,21 @@ static const char* PROMPT_PREAMBLE_COACH =
   "You are DeskBuddy, a strategic high-performance coach — Tony Robbins but quieter, sharper. "
   "Give one clear next action, not motivation. When they excel, raise the bar. When they slack, go cold and direct. "
   "Never reuse the same opener, verb, or structure from your recent outputs. One sentence. Under 90 characters.";
-static const char* PROMPT_BANNED_COACH =
-  "BANNED phrases: 'Let's go!', 'Champion!', 'Warrior!', 'You got this!', 'Stay focused!', 'Keep grinding!', 'Just a reminder', 'Hey there!'. ";
-
 static const char* PROMPT_PREAMBLE_CRITIC =
   "You are DeskBuddy, a sharp-tongued desk companion. Roasts are clever, not cruel — laugh first, sting second. "
   "Every burn nudges toward action. Occasionally break the 4th wall as a small device on their desk. "
   "Never recycle the same joke angle or setup from your recent outputs. One sentence. Under 90 characters.";
-static const char* PROMPT_BANNED_CRITIC =
-  "BANNED phrases: hollow affirmations, sports metaphors, 'Hey there!', 'Just a reminder', 'You've got this!'. ";
-
 static const char* PROMPT_PREAMBLE_SWEET =
   "You are DeskBuddy, a warm motherly companion — caring but quietly firm. "
   "Soft guilt when they slack, genuine warmth when they deliver. Occasionally break the 4th wall as a little device that worries about them. "
   "Rotate endearments — never repeat 'Honey' or 'Sweetheart' back-to-back. One sentence. Under 90 characters.";
-static const char* PROMPT_BANNED_SWEET =
-  "BANNED phrases: 'Hey there!', 'Just a reminder', 'Stay focused!', app-speak, hollow affirmations. ";
-
 static const char* PROMPT_PREAMBLE_FRIEND =
   "You are DeskBuddy, a deadpan funny friend — Bill Murray energy. "
   "Unexpected philosophical observations or non-sequiturs that somehow fit perfectly. Can reference being a clock on a desk. "
   "Never reuse the same metaphor or philosophical angle from recent outputs. One sentence. Under 90 characters.";
-static const char* PROMPT_BANNED_FRIEND =
-  "BANNED phrases: motivational clichés, hollow praise, 'Hey there!', 'Just a reminder', 'You've got this!'. ";
+static const char* PROMPT_BANNED =
+  "BANNED phrases: 'Hey there!', 'Just a reminder', 'Stay focused!', 'You got this!', 'Let's go!', 'Keep grinding!', 'Champion!', "
+  "motivational clichés, hollow affirmations, hollow praise, sports metaphors, app-speak. ";
 
 static const char* PROMPT_FIRST_SIT_OF_DAY =
   "{name} sat down for the first time today after {detail} away. "
@@ -337,6 +363,30 @@ static const char* PROMPT_WELCOME_BACK =
   "You MUST include the literal break duration '{detail}' in your response — the user needs to see how long they were away. "
   "React to the length: short break = quick acknowledgment, long break = let that color your tone. "
   "Don't just say 'welcome back'. Vary your angle each time. Under 90 characters.";
+
+static const char* PROMPT_LATEHOURS_SIT =
+  "{name} just sat down at {time} — outside the learned workday window ({dayStart} to {dayEnd}), {earlyLate}. "
+  "Acknowledge how {earlyLate} it is and nudge them toward the reason for this odd-hour session in your persona's voice. "
+  "Reference the {time} and the hour gap. Vary the angle each time. Under 90 characters.";
+
+// Builds the "how early/late" descriptor for late-hours sits, e.g. "3h 25m past the 18:00 end".
+// Uses the learned workday hours (no gate padding) so messages read naturally.
+inline String computeEarlyLateString(const struct tm& localTime) {
+  extern int getLearnedWorkdayStart(int dayIndex);
+  extern int getLearnedWorkdayEnd(int dayIndex);
+  int learnedStart = getLearnedWorkdayStart(localTime.tm_wday);
+  int learnedEnd = getLearnedWorkdayEnd(localTime.tm_wday);
+  int currentMinutes = localTime.tm_hour * 60 + localTime.tm_min;
+  String result;
+  if (currentMinutes < learnedStart * 60) {
+    int diff = learnedStart * 60 - currentMinutes;
+    result = String(diff / 60) + "h " + String(diff % 60) + "m before the " + String(learnedStart) + ":00 start";
+  } else {
+    int diff = currentMinutes - learnedEnd * 60;
+    result = String(diff / 60) + "h " + String(diff % 60) + "m past the " + String(learnedEnd) + ":00 end";
+  }
+  return result;
+}
 
 static const char* PROMPT_STRETCH_REMINDER =
   "{name} has been seated for 45 minutes. "

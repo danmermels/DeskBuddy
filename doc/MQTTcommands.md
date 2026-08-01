@@ -497,13 +497,13 @@ TRIGGER <eventType> [ai|fallback|0|1|2] [detail]
 
 | Argument | Description |
 |----------|-------------|
-| `eventType` | Numeric event type **or** a case-insensitive name (see table below): `0`=FirstSit, `1`=WelcomeBack, `2`=Stretch, `3`=FocusEnd, `4`=Slacker, `5`=StreakBeaten, `6`=Lunch, `8`=ExcessiveBreaks, `9`=GoalCompleted, `10`=Journal, `11`=Nagging, `12`=TaskDue |
+| `eventType` | Numeric event type **or** a case-insensitive name (see table below): `0`=FirstSit, `1`=WelcomeBack, `2`=Stretch, `3`=FocusEnd, `4`=Slacker, `5`=StreakBeaten, `6`=Lunch, `8`=ExcessiveBreaks, `9`=GoalCompleted, `10`=Journal, `11`=Nagging, `12`=TaskDue, `13`=Page, `14`=LateHours |
 | `mode` | `ai` → force AI generation, `fallback` → force local quote, `0`/`1`/`2` → numeric equivalent (`0`=auto, `1`=ai, `2`=fallback). Default `0`. |
 | `detail` | Optional detail string passed to the event (e.g. break duration). |
 
 **Accepted names** (numeric and named forms are interchangeable):
 
-`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`.
+`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`, `LATEHOURS` (also `LATEHOURS_SIT`/`LATEHOURSSIT`).
 
 **Examples:**
 ```
@@ -797,7 +797,7 @@ States: `AWAY|FOCUS|BUSY|DISTRACTED|REGULAR`.
 | `TRIGGER 3 fallback 25m` | `{"ok":true,"triggered":"3","mode":2}` |
 | `TRIGGER 10 0` | `{"ok":true,"triggered":"10","mode":0}` |
 
-`<eventType>`: numeric (0=FirstSit, 1=WelcomeBack, 2=Stretch, 3=FocusEnd, 4=Slacker, 5=StreakBeaten, 6=Lunch, 8=ExcessiveBreaks, 9=GoalCompleted, 10=Journal, 11=Nagging, 12=TaskDue) or a case-insensitive name (`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`). Mode: `ai`/`1`=force AI, `fallback`/`2`=force local quote, `0`=auto. Manual triggers bypass the welcome-hold and away-screen suppression so they always render.
+`<eventType>`: numeric (0=FirstSit, 1=WelcomeBack, 2=Stretch, 3=FocusEnd, 4=Slacker, 5=StreakBeaten, 6=Lunch, 8=ExcessiveBreaks, 9=GoalCompleted, 10=Journal, 11=Nagging, 12=TaskDue, 13=Page, 14=LateHours) or a case-insensitive name (`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`, `LATEHOURS`/`LATEHOURS_SIT`/`LATEHOURSSIT`). Mode: `ai`/`1`=force AI, `fallback`/`2`=force local quote, `0`=auto. Manual triggers bypass the welcome-hold and away-screen suppression so they always render.
 
 ### Examples (mosquitto_pub)
 

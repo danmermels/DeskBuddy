@@ -56,7 +56,7 @@ All values in milliseconds unless noted. Controls debounce windows, trigger inte
 | `BREAK_MINIMUM_MS` | 180000 | 3 minutes | Minimum absence duration to count as a "break". Shorter absences (bathroom, stretch) don't increment break count. |
 | `STOP_BY_THRESHOLD_MS` | 480000 | 8 minutes | If a present session is shorter than 8 minutes and during off-hours, it's treated as a "stop-by" rather than real work. Break count is rolled back. |
 | `STREAK_MINIMUM_MS` | 900000 | 15 minutes | Minimum unbroken presence to qualify as a "streak" for the longest-streak tracker. Quick sits don't count. |
-| `FOCUS_MINIMUM_MS` | 15000 | 15 seconds | Minimum presence duration in FOCUS state to trigger a focus-end event when the user leaves. Prevents focus events from brief moments. |
+| `FOCUS_MINIMUM_MS` | 300000 | 5 minutes | Minimum presence duration in FOCUS state to trigger a focus-end event when the user leaves. Prevents focus events from brief moments. |
 | `WELCOME_DELAY_MS` | 3000 | 3 seconds | Delay after first sit-down before showing the welcome/sit-down alert. Gives display time to settle. |
 
 ### Behaviour Trigger Intervals

@@ -206,6 +206,11 @@ AWAY --[presence stable]--> PRESENT (triggers EVENT_FIRST_SIT or EVENT_WELCOME_B
 Stop-By Detection: If present session < 8 min and during off-hours,
   roll back the break count and treat as a brief return.
 
+Late-Hours First Sit: A first sit during late hours holds the flag
+  (no greeting, no day-start). It burns at the workday crossing
+  (silent, firstSitEpoch = sitDownEpoch) or on a work-hours sit-down
+  (normal FIRST_SIT). LATEHOURS_SIT greets instead during quiet hours.
+
 Day Rollover: On first sit after midnight (or 4+ hour absence):
   mergeCurrentDayPresence() --> resetDailyStats() --> new workday
 ```
@@ -234,7 +239,7 @@ score = constrain(raw, 0, 100)
 | 0 | `EVENT_FIRST_SIT` | User sits down for the first time today |
 | 1 | `EVENT_WELCOME_BACK` | User returns after a break (>= 3 min) |
 | 2 | `EVENT_STRETCH` | 45 minutes of continuous sitting |
-| 3 | `EVENT_FOCUS_END` | User leaves after a focus session (>= 15s) |
+| 3 | `EVENT_FOCUS_END` | User leaves after a focus session (>= 5 min) |
 | 4 | `EVENT_SLACKER` | Sitting > 1 hour with productivity score < 35% |
 | 5 | `EVENT_STREAK_BEATEN` | Longest sitting streak record broken |
 | 6 | `EVENT_LUNCH_REMINDER` | At learned lunch hour + 15 min, if desk time > 30 min |
@@ -243,6 +248,8 @@ score = constrain(raw, 0, 100)
 | 10 | `EVENT_JOURNAL` | Morning/pre-lunch/end-of-day task review |
 | 11 | `EVENT_NAGGING` | Tasks overdue by 3+ days, after 2h sitting |
 | 12 | `EVENT_TASK_DUE` | Scheduled daily task matches current time |
+| 13 | `EVENT_PAGE` | Follow-up screen for messages split at `MSG_PAGE_MAX_CHARS` (110) |
+| 14 | `EVENT_LATEHOURS_SIT` | Any sit-down during late hours (outside learned workday +/- 30m); replaces FIRST_SIT/WELCOME_BACK |
 
 ### AI Decision Flow (`AI.h:277`)
 
@@ -251,7 +258,7 @@ triggerBehaviour(eventType, detail)
   --> Is event a Journal or Task Due? --> handle locally (no AI)
   --> Should use AI? (aiMode, dailyCap=30, WiFi available)
       YES --> Build structured prompt:
-                [ROLE] persona preamble + banned phrases
+                [ROLE] persona preamble + shared banned-phrase block
                 [LIVE TELEMETRY] name, time, weather, desk/focus/break stats
                 [OBSERVATIONS] curation discrepancies
                 [ACTION REQUIRED] event-specific template
@@ -261,9 +268,9 @@ triggerBehaviour(eventType, detail)
       NO --> Pick random local quote from persona array
 ```
 
-**Routing:** Every event path now goes through `MessageManager` before `triggerBehaviour()` (see `main.cpp` loop). FIRST_SIT/WELCOME_BACK use P_URGENT (3000), GOAL/JOURNAL/NAGGING use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS use P_NORMAL (1500, delay 0, R_NORMAL) — a true 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500, F9). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it so the greeting is never replaced by the roast (F8). If an AI query is already in flight when a trigger arrives, `triggerBehaviour` falls back to a local quote instead of dropping the event.
+**Routing:** Every event path now goes through `MessageManager` before `triggerBehaviour()` (see `main.cpp` loop). FIRST_SIT/WELCOME_BACK/LATEHOURS_SIT use P_URGENT (3000), GOAL/JOURNAL/NAGGING use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS use P_NORMAL (1500, delay 0, R_NORMAL) — a true 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500, F9). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it so the greeting is never replaced by the roast (F8). If an AI query is already in flight when a trigger arrives, `triggerBehaviour` falls back to a local quote instead of dropping the event.
 
-**aiMode whitelist (mode 1 = Balanced):** `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_STRETCH`, `EVENT_LUNCH_REMINDER`, `EVENT_EXCESSIVE_BREAKS`, `EVENT_GOAL_COMPLETED`, `EVENT_NAGGING`. Mode 2 = all events use AI; mode 0 = local quotes only.
+**aiMode whitelist (mode 1 = Balanced):** `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_LATEHOURS_SIT`, `EVENT_STRETCH`, `EVENT_LUNCH_REMINDER`, `EVENT_EXCESSIVE_BREAKS`, `EVENT_GOAL_COMPLETED`, `EVENT_NAGGING`. Mode 2 = all events use AI; mode 0 = local quotes only.
 
 ### 4 Personas
 
@@ -274,7 +281,7 @@ triggerBehaviour(eventType, detail)
 | 2 | Sweet | Warm motherly companion. Soft guilt, genuine warmth. |
 | 3 | Friend | Bill Murray energy. Deadpan, philosophical non-sequiturs. |
 
-Each event type has 5 pre-written local fallback quotes per persona (20 quotes per event). AI prompts include persona-specific banned phrases to avoid cliches.
+Each event type has 5 pre-written local fallback quotes per persona (20 quotes per event). AI prompts include a shared banned-phrase block (all personas) to avoid cliches.
 
 ### FreeRTOS Task
 

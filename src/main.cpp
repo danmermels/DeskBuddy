@@ -727,6 +727,20 @@ inline String getHighlyOverdueTaskNames(String currentDayString, String currentM
   return result;
 }
 
+// Late hours = outside the learned workday window (start -30 min pad, end), or any time when the clock isn't set.
+static bool isLateHoursNow() {
+  if (!timeClient.isTimeSet()) return true;
+  int learnedStart = getLearnedWorkdayStart(ts.tm_wday);
+  int learnedEnd = getLearnedWorkdayEnd(ts.tm_wday);
+  int currentLocalMinutes = ts.tm_hour * 60 + ts.tm_min;
+  int workdayStartMinutes = learnedStart * 60 - 30;
+  int workdayEndMinutes = learnedEnd * 60;
+  if (currentLocalMinutes >= workdayStartMinutes && currentLocalMinutes < workdayEndMinutes) {
+    return false;
+  }
+  return true;
+}
+
 void loop(void) {
   // Poll critical background systems
   ArduinoOTA.handle();
@@ -1019,25 +1033,42 @@ void loop(void) {
       }
       Logger::log("STATE", "Away->Present: rollover=%d isFirstSit=%d wasFirstToday=%d", willRollover, isFirstSit, wasFirstSitToday);
 
+      bool sitIsLateHours = isLateHoursNow();
+
       if (appStats.firstSitToday) {
-        appStats.firstSitToday = false;
-        appStats.firstSitEpoch = appState.sitDownEpoch;
-        if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
-          appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
+        if (sitIsLateHours) {
+          // Late-hours sit: the day hasn't started yet, so HOLD the first-sit flag.
+          // Mirror the burn's session bookkeeping so the StopBy rollback can still
+          // preserve lastAwayEpoch if this turns out to be a blip.
+          appStats.latestBreakDuration = 0;
+          appStats.totalBreakTime = 0;
+          appState.wasFirstSitThisSession = true;
+          appState.isStopByTracking = true;
+          appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
+          appState.totalStopByTimeMs = 0;
+          appStats.previousLatestBreakDuration = 0;
+          resetSessionStats();
+          Logger::log("STATE", "Away->Present: Late-hours sit: first-sit flag held");
         } else {
-          appStats.overnightBreakDuration = appState.currentBreakDurationMs / 1000UL;
+          appStats.firstSitToday = false;
+          appStats.firstSitEpoch = appState.sitDownEpoch;
+          if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
+            appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
+          } else {
+            appStats.overnightBreakDuration = appState.currentBreakDurationMs / 1000UL;
+          }
+          appStats.latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
+          
+          appStats.totalBreakTime = 0;
+          appState.wasFirstSitThisSession = true;
+          appState.isStopByTracking = true;
+          appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
+          appState.totalStopByTimeMs = 0;
+          appStats.previousLatestBreakDuration = 0;
+          Logger::log("STATE", "Away->Present: Handled firstSit: firstSitEpoch=%u overnight=%lu", appStats.firstSitEpoch, appStats.overnightBreakDuration);
+          saveDailyStats();
+          resetSessionStats();
         }
-        appStats.latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
-        
-        appStats.totalBreakTime = 0;
-        appState.wasFirstSitThisSession = true;
-        appState.isStopByTracking = true;
-        appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
-        appState.totalStopByTimeMs = 0;
-        appStats.previousLatestBreakDuration = 0;
-        Logger::log("STATE", "Away->Present: Handled firstSit: firstSitEpoch=%u overnight=%lu", appStats.firstSitEpoch, appStats.overnightBreakDuration);
-        saveDailyStats();
-        resetSessionStats();
       } else {
         // Standard break return check using pre-calculated duration from transition
         if (appState.currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
@@ -1065,7 +1096,10 @@ void loop(void) {
 
       // Smooth transition: schedule API welcome/fallback query on sit-down
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
-      if (wasFirstSitToday || willRollover) {
+      if (sitIsLateHours) {
+        // Late hours: every sit-down gets a late-hours message instead of the standard greetings.
+        messageManager.scheduleLateHoursSitMessage(computeEarlyLateString(ts));
+      } else if (wasFirstSitToday || willRollover) {
         unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
         String breakStr = (overnightBreak >= OVERNIGHT_THRESHOLD_S) ? formatTime(overnightBreak * 1000) : "";
         messageManager.scheduleFirstSitMessage(breakStr);
@@ -1127,6 +1161,21 @@ void loop(void) {
       }
     }
       
+    // Day-start: a held late-hours sit still active when work hours begin burns the flag silently
+    // (the day started with this sit). firstSitEpoch = sitDownEpoch so the late-hours time counts.
+    if (appStats.firstSitToday && appState.wasFirstSitThisSession && appState.currentPresenceState != STATE_AWAY && !isLateHoursNow()) {
+      appStats.firstSitToday = false;
+      appStats.firstSitEpoch = appState.sitDownEpoch;
+      if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
+        appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
+      } else {
+        appStats.overnightBreakDuration = (now - appState.sitDownTime) / 1000UL;
+      }
+      appState.wasFirstSitThisSession = false;
+      saveDailyStats();
+      Logger::log("STATE", "Late-hours sit crossed into work hours: day started firstSitEpoch=%u overnight=%lu", appStats.firstSitEpoch, appStats.overnightBreakDuration);
+    }
+
     // Process MessageManager for proactive scheduling
     // Dispatch direct, bypassing triggerBehaviour's local-quote/AI pipeline
     messageManager.update(millis());
@@ -1191,19 +1240,7 @@ void loop(void) {
       Logger::log("STATE", "Present->Away: prevState=%s presDur=%lu s focusDur=%lu s stopByTrack=%d", 
                   presenceStateName(appState.currentPresenceState), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
       
-      bool isLateHours = true;
-      if (timeClient.isTimeSet()) {
-        int learnedStart = getLearnedWorkdayStart(ts.tm_wday);
-        int learnedEnd = getLearnedWorkdayEnd(ts.tm_wday);
-        int currentLocalMinutes = ts.tm_hour * 60 + ts.tm_min;
-        
-        int workdayStartMinutes = learnedStart * 60 - 30; // 30 minutes padding
-        int workdayEndMinutes = learnedEnd * 60;
-        
-        if (currentLocalMinutes >= workdayStartMinutes && currentLocalMinutes < workdayEndMinutes) {
-          isLateHours = false;
-        }
-      }
+      bool isLateHours = isLateHoursNow();
 
       if (appState.isStopByTracking && presenceDurationMs < STOP_BY_THRESHOLD_MS && isLateHours) {
         if (appState.wasFirstSitThisSession) {
