@@ -418,37 +418,6 @@ static const char* PROMPT_GOAL_COMPLETED =
   "{name} hit their daily desk hours goal. Make it land in your persona's voice — don't just say 'great job'. "
   "Coach pushes further. Critic admits it grudgingly. Sweet is genuinely moved. Friend is proud but won't show it. Under 90 characters.";
 
-static const char* localJournal[4][5] = {
-  { // Coach
-    "Journal time, {name}: check your tasks and execute them.",
-    "Kickstart your output, {name}: check off your daily goals now!",
-    "Goal review, {name}: stay organized and focus on what's due.",
-    "Task brief, {name}: daily checklist is active. Complete it!",
-    "Let's wrap up tasks, {name}: check your daily list and act."
-  },
-  { // Critic
-    "Task overview, {name}: check your board for pending tasks.",
-    "To-do list is waiting, {name}. Don't pretend you didn't see it.",
-    "Quick reminder, {name}: tasks are still pending. Hop to it.",
-    "Task list check, {name}. Mark items done or stay forever.",
-    "Pending tasks status: check your panel, {name}, and fix them."
-  },
-  { // Sweet
-    "Journal time, {name}: you have some sweet tasks waiting today.",
-    "Check-in, {name}: don't forget your scheduled monthly objectives.",
-    "Just a quick nudge, {name}: uncompleted daily tasks are still open.",
-    "Productivity check, dear {name}: keep track of your daily checklist.",
-    "Review time, {name}: some tasks are still waiting for your care."
-  },
-  { // Friend
-    "Workday check-in, {name}: review your uncompleted tasks on the board.",
-    "Quick reminder, {name}: stay on top of today's pending daily tasks.",
-    "Keep pushing, {name}: monthly goals are approaching their limits.",
-    "Task brief, {name}: check your TODO list and mark them done.",
-    "Review time, {name}: some tasks are waiting for action."
-  }
-};
-
 static const char* PROMPT_JOURNAL =
   "{name} has uncompleted tasks on their board. This message is ONLY about tasks — nothing else. "
   "Tell them to check their task list and complete what's pending. Be direct and specific about the action: review tasks, check them off, finish what's open. "
@@ -483,37 +452,6 @@ static const char* localNagging[4][5] = {
     "'{detail}' — overdue, avoidable, {name}.",
     "The longer you wait on '{detail}', the worse it gets, {name}.",
     "'{detail}': still there. Still waiting. Still judging."
-  }
-};
-
-static const char* localTaskDue[4][5] = {
-  { // Coach
-    "Task due now, {name}: '{detail}'. Execute!",
-    "Focus alert, {name}: '{detail}' is due at this hour. Lock in!",
-    "Nudge: '{detail}' is scheduled now. Get it done, {name}!",
-    "Hourly target due: '{detail}', {name}. Settle down and execute.",
-    "Task due now: '{detail}'. Stay on track and deliver!"
-  },
-  { // Critic
-    "Task due, {name}: '{detail}'. Don't tell me you forgot.",
-    "Reminder: '{detail}' is due now. Time is ticking, {name}.",
-    "Hourly target: '{detail}' is due right now. Stop slacking.",
-    "Nudge: '{detail}' is due. Hope you've actually started it.",
-    "Deadline alert, {name}: time to work on '{detail}'."
-  },
-  { // Sweet
-    "Task due now, dear {name}: '{detail}'. You can do it!",
-    "Reminder: '{detail}' is scheduled for this hour, {name}.",
-    "Hour deadline: don't forget to complete '{detail}', {name}.",
-    "Nudge: check off '{detail}' from today's list, {name}.",
-    "Check-in, {name}: time to work on your sweet task '{detail}'."
-  },
-  { // Friend
-    "Check-in: is '{detail}' completed yet, {name}?",
-    "Time for '{detail}', {name}. Check it off when you're done.",
-    "Nudge: '{detail}' is scheduled for now. Settle in.",
-    "Task due: '{detail}'. Check your TODO list when complete.",
-    "Reminder, {name}: '{detail}' is waiting for completion."
   }
 };
 

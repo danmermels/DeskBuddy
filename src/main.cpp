@@ -683,15 +683,18 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   }
 }
 
-// Late hours = outside the learned workday window (start -30 min pad, end), or any time when the clock isn't set.
+// Late hours = outside the learned workday window (start -30 min pad, end +2h grace),
+// or any time when the clock isn't set. The grace period keeps normal workday behaviour
+// (welcome-backs, breaks) running for a while after the learned workday ends.
 static bool isLateHoursNow() {
   if (!timeClient.isTimeSet()) return true;
   int learnedStart = getLearnedWorkdayStart(ts.tm_wday);
   int learnedEnd = getLearnedWorkdayEnd(ts.tm_wday);
   int currentLocalMinutes = ts.tm_hour * 60 + ts.tm_min;
   int paddingMinutes = LATEHOURS_PADDING_MS / 60000;
+  int graceMinutes = LATEHOURS_POST_END_GRACE_MS / 60000;
   int workdayStartMinutes = learnedStart * 60 - paddingMinutes;
-  int workdayEndMinutes = learnedEnd * 60 + paddingMinutes;
+  int workdayEndMinutes = learnedEnd * 60 + graceMinutes;
   if (currentLocalMinutes >= workdayStartMinutes && currentLocalMinutes < workdayEndMinutes) {
     return false;
   }
@@ -1055,8 +1058,11 @@ void loop(void) {
       // Smooth transition: schedule API welcome/fallback query on sit-down
       // (The display will render the clock faceplate, and the welcome message will show 15s later)
       if (sitIsLateHours) {
-        // Late hours: every sit-down gets a late-hours message instead of the standard greetings.
-        messageManager.scheduleLateHoursSitMessage(computeEarlyLateString(ts));
+        // Late hours: a real break (over the standard leeway) gets a late-hours message
+        // instead of the standard greetings. Brief returns under the leeway stay silent.
+        if (appState.currentBreakDurationMs >= BREAK_MINIMUM_MS) {
+          messageManager.scheduleLateHoursSitMessage(computeEarlyLateString(ts));
+        }
       } else if (wasFirstSitToday || willRollover) {
         unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
         String breakStr = (overnightBreak >= OVERNIGHT_THRESHOLD_S) ? formatTime(overnightBreak * 1000) : "";

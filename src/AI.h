@@ -272,11 +272,15 @@ void aiQueryTask(void * parameter) {
       switch (appState.lastTriggeredEventType) {
         case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
         case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
+        case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
         case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
         case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
         case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
         case EVENT_STREAK_BEATEN: quote = localStreakBeaten[persona][randIdx]; break;
         case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
+        case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
+        case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
+        case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
         default:                  quote = localWelcomeBack[persona][randIdx]; break;
       }
       
@@ -572,6 +576,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       switch (eventType) {
         case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
         case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
+        case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
         case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
         case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
         case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
@@ -600,6 +605,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     switch (eventType) {
       case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
       case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
+      case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
       case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
       case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
       case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;

@@ -31,7 +31,8 @@
 #define WIFI_TIMEOUT_MS              5000UL // 5s WiFi connect timeout in setup
 #define RING_TRANSITION_MS           1000UL // 1s ring color transition
 #define STICKY_CONFIRM_MS           30000UL // 0.5 min sticky state confirmation window
-#define LATEHOURS_PADDING_MS       1800000UL // 30 min padding on both sides of the learned workday for late-hours detection
+#define LATEHOURS_PADDING_MS       1800000UL // 30 min early-day padding before the learned workday start for late-hours detection
+#define LATEHOURS_POST_END_GRACE_MS (2UL * 3600000UL) // keep normal workday behaviour for 2h after the learned workday end before switching to late-hours
 #define DISPLAY_THROTTLE_MS           500UL // 500ms minimum between display faceplate redraws
 #define DEV_REFRESH_MS                200UL // 200ms refresh for dev faceplate
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay

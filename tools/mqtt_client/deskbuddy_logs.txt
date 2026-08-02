@@ -364,3 +364,451 @@
 [16:43:00] [BEHAVIOUR] [16:43:11] Journal trigger: scheduled remaining pages in 4000 ms
 [16:43:04] [BEHAVIOUR] [16:43:15] triggerBehaviour: event=10 detail="PAGE:2|8|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [RED]10:00 | Banho [RED]10:00 | Dentes [Y
 [16:43:04] [BEHAVIOUR] [16:43:15] Journal trigger: showing page 2 (lines=8)
+[16:46:08] [STATE] [16:46:19] Present->Away: prevState=Busy presDur=197 s focusDur=0 s stopByTrack=0
+[16:46:08] [STATE] [16:46:19] Present->Away: Real session completed. lastAwayEpoch=16:46:19 reset stopByTracking
+[18:33:14] [STATE] [18:33:24] Away->Present: sit=6633369 epoch=18:33:24 session=2 state=Busy
+[18:33:14] [STATE] [18:33:24] Away->Present: refAway=16:46:19 gross=6425 s break=6425 s stopBy=0 s
+[18:33:14] [STATE] [18:33:24] ResetCheck: cur=18:33:24 ref=16:46:19 curDay=6 refDay=6
+[18:33:14] [STATE] [18:33:24] ResetCheck: abs=6425 s (1 h 47 m) dep=16:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:33:14] [STATE] [18:33:24] ResetCheck: false (same-day, resume session)
+[18:33:14] [STATE] [18:33:24] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:33:14] [STATE] [18:33:24] Away->Present: Handled standard break return: breakCount=5 duration=6425 s
+[18:33:17] [BEHAVIOUR] [18:33:28] triggerBehaviour: event=14 detail="0h 33m past the 18:00 end" force=0
+[18:33:17] [BEHAVIOUR] [18:33:28] Starting AI query task (dailyCount=13)
+[18:33:17] [BEHAVIOUR] [18:33:28] AI Request: session=2 promptLen=1691
+[18:33:19] [BEHAVIOUR] [18:33:30] AI Response Success: len=23 resp="Past 6, what's burning?"
+[18:38:13] [STATE] [18:38:23] Present->Away: prevState=Busy presDur=298 s focusDur=0 s stopByTrack=1
+[18:38:13] [STATE] [18:38:23] Present->Away: Stop-By! breakCount 5->4 restoreLatestBreak=1214 lastAwayEpoch=18:38:23
+[18:38:52] [STATE] [18:39:03] Away->Present: sit=6972316 epoch=18:39:03 session=3 state=Busy
+[18:38:52] [STATE] [18:39:03] Away->Present: refAway=18:38:23 gross=40 s break=40 s stopBy=0 s
+[18:38:52] [STATE] [18:39:03] ResetCheck: cur=18:39:03 ref=18:38:23 curDay=6 refDay=6
+[18:38:52] [STATE] [18:39:03] ResetCheck: abs=40 s (0 h 0 m) dep=18:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:38:52] [STATE] [18:39:03] ResetCheck: false (same-day, resume session)
+[18:38:53] [STATE] [18:39:03] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:38:53] [STATE] [18:39:03] Away->Present: Ignored brief return (breakMs=40000 < min=180000)
+[18:38:56] [BEHAVIOUR] [18:39:06] triggerBehaviour: event=14 detail="0h 39m past the 18:00 end" force=0
+[18:38:56] [BEHAVIOUR] [18:39:06] Starting AI query task (dailyCount=14)
+[18:38:56] [BEHAVIOUR] [18:39:06] AI Request: session=3 promptLen=1686
+[18:38:58] [BEHAVIOUR] [18:39:09] AI Response Success: len=29 resp="Past 6, what's the emergency?"
+[18:39:27] [STATE] [18:39:38] Present->Away: prevState=Busy presDur=34 s focusDur=0 s stopByTrack=0
+[18:39:27] [STATE] [18:39:38] Present->Away: Real session completed. lastAwayEpoch=18:39:38 reset stopByTracking
+[18:40:12] [STATE] [18:40:22] Away->Present: sit=7051473 epoch=18:40:22 session=4 state=Distracted
+[18:40:12] [STATE] [18:40:22] Away->Present: refAway=18:39:38 gross=44 s break=44 s stopBy=0 s
+[18:40:12] [STATE] [18:40:22] ResetCheck: cur=18:40:22 ref=18:39:38 curDay=6 refDay=6
+[18:40:12] [STATE] [18:40:22] ResetCheck: abs=44 s (0 h 0 m) dep=18:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:40:12] [STATE] [18:40:22] ResetCheck: false (same-day, resume session)
+[18:40:12] [STATE] [18:40:22] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:40:12] [STATE] [18:40:22] Away->Present: Ignored brief return (breakMs=44000 < min=180000)
+[18:40:15] [BEHAVIOUR] [18:40:26] triggerBehaviour: event=14 detail="0h 40m past the 18:00 end" force=0
+[18:40:15] [BEHAVIOUR] [18:40:26] Starting AI query task (dailyCount=15)
+[18:40:15] [BEHAVIOUR] [18:40:26] AI Request: session=4 promptLen=1470
+[18:40:17] [BEHAVIOUR] [18:40:28] AI Response Success: len=31 resp="Past 6 PM, Dan, what's brewing?"
+[18:40:46] [STATE] [18:40:57] Present->Away: prevState=Distracted presDur=34 s focusDur=0 s stopByTrack=0
+[18:40:46] [STATE] [18:40:57] Present->Away: Real session completed. lastAwayEpoch=18:40:57 reset stopByTracking
+[18:41:14] [STATE] [18:41:25] Away->Present: sit=7113805 epoch=18:41:25 session=5 state=Busy
+[18:41:14] [STATE] [18:41:25] Away->Present: refAway=18:40:57 gross=28 s break=28 s stopBy=0 s
+[18:41:14] [STATE] [18:41:25] ResetCheck: cur=18:41:25 ref=18:40:57 curDay=6 refDay=6
+[18:41:14] [STATE] [18:41:25] ResetCheck: abs=28 s (0 h 0 m) dep=18:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:41:14] [STATE] [18:41:25] ResetCheck: false (same-day, resume session)
+[18:41:14] [STATE] [18:41:25] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:41:14] [STATE] [18:41:25] Away->Present: Ignored brief return (breakMs=28000 < min=180000)
+[18:41:17] [BEHAVIOUR] [18:41:28] triggerBehaviour: event=14 detail="0h 41m past the 18:00 end" force=0
+[18:41:17] [BEHAVIOUR] [18:41:28] Starting AI query task (dailyCount=16)
+[18:41:17] [BEHAVIOUR] [18:41:28] AI Request: session=5 promptLen=1686
+[18:41:20] [BEHAVIOUR] [18:41:30] AI Response Success: len=31 resp="Past 6 PM, Dan, what's burning?"
+[18:41:46] [STATE] [18:41:57] Present->Away: prevState=Busy presDur=32 s focusDur=0 s stopByTrack=0
+[18:41:46] [STATE] [18:41:57] Present->Away: Real session completed. lastAwayEpoch=18:41:57 reset stopByTracking
+[18:42:05] [STATE] [18:42:16] Away->Present: sit=7164620 epoch=18:42:16 session=6 state=Busy
+[18:42:05] [STATE] [18:42:16] Away->Present: refAway=18:41:57 gross=19 s break=19 s stopBy=0 s
+[18:42:05] [STATE] [18:42:16] ResetCheck: cur=18:42:16 ref=18:41:57 curDay=6 refDay=6
+[18:42:05] [STATE] [18:42:16] ResetCheck: abs=19 s (0 h 0 m) dep=18:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:42:05] [STATE] [18:42:16] ResetCheck: false (same-day, resume session)
+[18:42:05] [STATE] [18:42:16] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:42:05] [STATE] [18:42:16] Away->Present: Ignored brief return (breakMs=19000 < min=180000)
+[18:42:08] [BEHAVIOUR] [18:42:19] triggerBehaviour: event=14 detail="0h 42m past the 18:00 end" force=0
+[18:42:08] [BEHAVIOUR] [18:42:19] Starting AI query task (dailyCount=17)
+[18:42:08] [BEHAVIOUR] [18:42:19] AI Request: session=6 promptLen=1686
+[18:42:10] [BEHAVIOUR] [18:42:21] AI Response Success: len=30 resp="Past 6 PM, what's left undone?"
+[18:42:40] [STATE] [18:42:50] Present->Away: prevState=Busy presDur=34 s focusDur=0 s stopByTrack=0
+[18:42:40] [STATE] [18:42:50] Present->Away: Real session completed. lastAwayEpoch=18:42:50 reset stopByTracking
+[18:43:07] [STATE] [18:43:17] Away->Present: sit=7226787 epoch=18:43:17 session=7 state=Busy
+[18:43:07] [STATE] [18:43:17] Away->Present: refAway=18:42:50 gross=27 s break=27 s stopBy=0 s
+[18:43:07] [STATE] [18:43:17] ResetCheck: cur=18:43:17 ref=18:42:50 curDay=6 refDay=6
+[18:43:07] [STATE] [18:43:17] ResetCheck: abs=27 s (0 h 0 m) dep=18:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:43:07] [STATE] [18:43:17] ResetCheck: false (same-day, resume session)
+[18:43:07] [STATE] [18:43:17] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:43:07] [STATE] [18:43:17] Away->Present: Ignored brief return (breakMs=27000 < min=180000)
+[18:43:10] [BEHAVIOUR] [18:43:20] triggerBehaviour: event=14 detail="0h 43m past the 18:00 end" force=0
+[18:43:10] [BEHAVIOUR] [18:43:20] Starting AI query task (dailyCount=18)
+[18:43:10] [BEHAVIOUR] [18:43:20] AI Request: session=7 promptLen=1470
+[18:43:13] [BEHAVIOUR] [18:43:22] AI Response Success: len=31 resp="Past 6 PM, Dan, what's burning?"
+[18:43:46] [STATE] [18:43:56] Present->Away: prevState=Busy presDur=39 s focusDur=0 s stopByTrack=0
+[18:43:46] [STATE] [18:43:56] Present->Away: Real session completed. lastAwayEpoch=18:43:56 reset stopByTracking
+[18:44:05] [STATE] [18:44:15] Away->Present: sit=7284686 epoch=18:44:15 session=8 state=Distracted
+[18:44:05] [STATE] [18:44:15] Away->Present: refAway=18:43:56 gross=19 s break=19 s stopBy=0 s
+[18:44:05] [STATE] [18:44:15] ResetCheck: cur=18:44:15 ref=18:43:56 curDay=6 refDay=6
+[18:44:05] [STATE] [18:44:15] ResetCheck: abs=19 s (0 h 0 m) dep=18:00 depDay=6 depWork=0 th=25200 s (7 h)
+[18:44:05] [STATE] [18:44:15] ResetCheck: false (same-day, resume session)
+[18:44:05] [STATE] [18:44:15] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[18:44:05] [STATE] [18:44:15] Away->Present: Ignored brief return (breakMs=19000 < min=180000)
+[18:44:08] [BEHAVIOUR] [18:44:18] triggerBehaviour: event=14 detail="0h 44m past the 18:00 end" force=0
+[18:44:08] [BEHAVIOUR] [18:44:18] Starting AI query task (dailyCount=19)
+[18:44:08] [BEHAVIOUR] [18:44:18] AI Request: session=8 promptLen=1686
+[18:44:10] [BEHAVIOUR] [18:44:20] AI Response Success: len=31 resp="Past 6 PM, Dan, what's burning?"
+[18:54:05] [BEHAVIOUR] [18:54:15] triggerBehaviour: event=11 detail="Alice 2" force=0
+[18:54:05] [BEHAVIOUR] [18:54:15] Starting AI query task (dailyCount=20)
+[18:54:05] [BEHAVIOUR] [18:54:15] AI Request: session=8 promptLen=1803
+[18:54:07] [BEHAVIOUR] [18:54:17] AI Response Success: len=33 resp="Alice 2 is still pending, really?"
+[19:04:43] [STATE] [19:04:54] Present->Away: prevState=P ?  presDur=58 s focusDur=0 s stopByTrack=0
+[19:04:43] [STATE] [19:04:54] Present->Away: Real session completed. lastAwayEpoch=19:04:54 reset stopByTracking
+[19:05:01] [STATE] [19:05:11] Away->Present: sit=87210 epoch=19:05:11 session=2 state=Focus
+[19:05:01] [STATE] [19:05:11] Away->Present: refAway=19:04:54 gross=17 s break=17 s stopBy=0 s
+[19:05:01] [STATE] [19:05:11] ResetCheck: cur=19:05:11 ref=19:04:54 curDay=6 refDay=6
+[19:05:01] [STATE] [19:05:11] ResetCheck: abs=17 s (0 h 0 m) dep=19:00 depDay=6 depWork=0 th=25200 s (7 h)
+[19:05:01] [STATE] [19:05:11] ResetCheck: false (same-day, resume session)
+[19:05:01] [STATE] [19:05:11] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[19:05:01] [STATE] [19:05:11] Away->Present: Ignored brief return (breakMs=17000 < min=180000)
+[19:05:29] [STATE] [19:05:40] Present->Away: prevState=Focus presDur=28 s focusDur=28 s stopByTrack=0
+[19:05:29] [STATE] [19:05:40] Present->Away: Real session completed. lastAwayEpoch=19:05:40 reset stopByTracking
+[19:06:35] [STATE] [19:06:46] Away->Present: sit=181820 epoch=19:06:46 session=3 state=Focus
+[19:06:35] [STATE] [19:06:46] Away->Present: refAway=19:05:40 gross=66 s break=66 s stopBy=0 s
+[19:06:35] [STATE] [19:06:46] ResetCheck: cur=19:06:46 ref=19:05:40 curDay=6 refDay=6
+[19:06:35] [STATE] [19:06:46] ResetCheck: abs=66 s (0 h 1 m) dep=19:00 depDay=6 depWork=0 th=25200 s (7 h)
+[19:06:35] [STATE] [19:06:46] ResetCheck: false (same-day, resume session)
+[19:06:35] [STATE] [19:06:46] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[19:06:35] [STATE] [19:06:46] Away->Present: Ignored brief return (breakMs=66000 < min=180000)
+[19:07:07] [STATE] [19:07:17] Present->Away: prevState=Focus presDur=31 s focusDur=31 s stopByTrack=0
+[19:07:07] [STATE] [19:07:17] Present->Away: Real session completed. lastAwayEpoch=19:07:17 reset stopByTracking
+[20:14:30] [STATE] [20:14:40] Away->Present: sit=4256012 epoch=20:14:40 session=4 state=Focus
+[20:14:30] [STATE] [20:14:40] Away->Present: refAway=19:07:17 gross=4043 s break=4043 s stopBy=0 s
+[20:14:30] [STATE] [20:14:40] ResetCheck: cur=20:14:40 ref=19:07:17 curDay=6 refDay=6
+[20:14:30] [STATE] [20:14:40] ResetCheck: abs=4043 s (1 h 7 m) dep=19:00 depDay=6 depWork=0 th=25200 s (7 h)
+[20:14:30] [STATE] [20:14:40] ResetCheck: false (same-day, resume session)
+[20:14:30] [STATE] [20:14:40] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[20:14:30] [STATE] [20:14:40] Away->Present: Handled standard break return: breakCount=5 duration=4043 s
+[20:14:33] [BEHAVIOUR] [20:14:43] triggerBehaviour: event=14 detail="2h 14m past the 18:00 end" force=0
+[20:14:33] [BEHAVIOUR] [20:14:44] Starting AI query task (dailyCount=20)
+[20:14:33] [BEHAVIOUR] [20:14:44] AI Request: session=4 promptLen=1686
+[20:14:35] [BEHAVIOUR] [20:14:46] AI Response Success: len=25 resp="Past 8pm, what's burning?"
+[20:24:30] [BEHAVIOUR] [20:24:41] triggerBehaviour: event=11 detail="Banho" force=0
+[20:24:30] [BEHAVIOUR] [20:24:41] Starting AI query task (dailyCount=21)
+[20:24:30] [BEHAVIOUR] [20:24:41] AI Request: session=4 promptLen=1801
+[20:24:32] [BEHAVIOUR] [20:24:43] AI Response Success: len=26 resp="Dan, Banho's been waiting."
+[20:34:30] [BEHAVIOUR] [20:34:41] triggerBehaviour: event=11 detail="Dentes" force=0
+[20:34:30] [BEHAVIOUR] [20:34:41] Starting AI query task (dailyCount=22)
+[20:34:30] [BEHAVIOUR] [20:34:41] AI Request: session=4 promptLen=1586
+[20:34:33] [BEHAVIOUR] [20:34:43] AI Response Success: len=36 resp="Dentes is overdue, brush up already."
+[20:42:45] [BEHAVIOUR] [20:42:56] triggerBehaviour: event=3 detail="9m" force=0
+[20:42:45] [BEHAVIOUR] [20:42:56] Starting AI query task (dailyCount=23)
+[20:42:45] [BEHAVIOUR] [20:42:56] AI Request: session=4 promptLen=1591
+[20:42:47] [BEHAVIOUR] [20:42:58] AI Response Success: len=32 resp="Nice 9m focus, now tackle Banho."
+[20:56:28] [BEHAVIOUR] [20:56:38] triggerBehaviour: event=3 detail="8m" force=0
+[20:56:28] [BEHAVIOUR] [20:56:39] Starting AI query task (dailyCount=24)
+[20:56:28] [BEHAVIOUR] [20:56:39] AI Request: session=4 promptLen=1592
+[20:56:30] [BEHAVIOUR] [20:56:41] AI Response Success: len=32 resp="Nice 8m focus, now tackle Banho."
+[21:04:51] [BEHAVIOUR] [21:05:02] triggerBehaviour: event=5 detail="50m" force=0
+[21:04:51] [BEHAVIOUR] [21:05:02] Starting AI query task (dailyCount=25)
+[21:04:51] [BEHAVIOUR] [21:05:02] AI Request: session=4 promptLen=1442
+[21:04:53] [BEHAVIOUR] [21:05:04] AI Response Success: len=23 resp="Nice streak, now focus."
+[21:07:27] [BEHAVIOUR] [21:07:37] triggerBehaviour: event=3 detail="5m" force=0
+[21:07:27] [BEHAVIOUR] [21:07:38] Starting AI query task (dailyCount=26)
+[21:07:27] [BEHAVIOUR] [21:07:38] AI Request: session=4 promptLen=1588
+[21:07:29] [BEHAVIOUR] [21:07:40] AI Response Success: len=34 resp="Nice 5 minutes, now tackle Dentes."
+[21:10:01] [STATE] [21:10:11] Present->Away: prevState=Busy presDur=3330 s focusDur=0 s stopByTrack=1
+[21:10:01] [STATE] [21:10:11] Present->Away: Real session completed. lastAwayEpoch=21:10:11 reset stopByTracking
+[21:10:46] [STATE] [21:10:57] Away->Present: sit=7632287 epoch=21:10:57 session=5 state=Busy
+[21:10:46] [STATE] [21:10:57] Away->Present: refAway=21:10:11 gross=46 s break=46 s stopBy=0 s
+[21:10:46] [STATE] [21:10:57] ResetCheck: cur=21:10:57 ref=21:10:11 curDay=6 refDay=6
+[21:10:46] [STATE] [21:10:57] ResetCheck: abs=46 s (0 h 0 m) dep=21:00 depDay=6 depWork=0 th=25200 s (7 h)
+[21:10:46] [STATE] [21:10:57] ResetCheck: false (same-day, resume session)
+[21:10:46] [STATE] [21:10:57] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[21:10:46] [STATE] [21:10:57] Away->Present: Ignored brief return (breakMs=46000 < min=180000)
+[21:14:08] [STATE] [21:14:19] Present->Away: prevState=Busy presDur=202 s focusDur=0 s stopByTrack=0
+[21:14:08] [STATE] [21:14:19] Present->Away: Real session completed. lastAwayEpoch=21:14:19 reset stopByTracking
+[21:14:37] [STATE] [21:14:48] Away->Present: sit=7863441 epoch=21:14:48 session=6 state=Busy
+[21:14:37] [STATE] [21:14:48] Away->Present: refAway=21:14:19 gross=29 s break=29 s stopBy=0 s
+[21:14:37] [STATE] [21:14:48] ResetCheck: cur=21:14:48 ref=21:14:19 curDay=6 refDay=6
+[21:14:37] [STATE] [21:14:48] ResetCheck: abs=29 s (0 h 0 m) dep=21:00 depDay=6 depWork=0 th=25200 s (7 h)
+[21:14:37] [STATE] [21:14:48] ResetCheck: false (same-day, resume session)
+[21:14:37] [STATE] [21:14:48] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[21:14:37] [STATE] [21:14:48] Away->Present: Ignored brief return (breakMs=29000 < min=180000)
+[21:18:18] [STATE] [21:18:28] Present->Away: prevState=Busy presDur=220 s focusDur=0 s stopByTrack=0
+[21:18:18] [STATE] [21:18:28] Present->Away: Real session completed. lastAwayEpoch=21:18:28 reset stopByTracking
+[21:18:26] [STATE] [21:18:36] Away->Present: sit=8092087 epoch=21:18:36 session=7 state=Busy
+[21:18:26] [STATE] [21:18:36] Away->Present: refAway=21:18:28 gross=8 s break=8 s stopBy=0 s
+[21:18:26] [STATE] [21:18:36] ResetCheck: cur=21:18:36 ref=21:18:28 curDay=6 refDay=6
+[21:18:26] [STATE] [21:18:36] ResetCheck: abs=8 s (0 h 0 m) dep=21:00 depDay=6 depWork=0 th=25200 s (7 h)
+[21:18:26] [STATE] [21:18:36] ResetCheck: false (same-day, resume session)
+[21:18:26] [STATE] [21:18:36] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[21:18:26] [STATE] [21:18:36] Away->Present: Ignored brief return (breakMs=8000 < min=180000)
+[21:20:58] [STATE] [21:21:09] Present->Away: prevState=Busy presDur=152 s focusDur=0 s stopByTrack=0
+[21:20:58] [STATE] [21:21:09] Present->Away: Real session completed. lastAwayEpoch=21:21:09 reset stopByTracking
+[21:21:17] [STATE] [21:21:28] Away->Present: sit=8263405 epoch=21:21:28 session=8 state=Busy
+[21:21:17] [STATE] [21:21:28] Away->Present: refAway=21:21:09 gross=19 s break=19 s stopBy=0 s
+[21:21:17] [STATE] [21:21:28] ResetCheck: cur=21:21:28 ref=21:21:09 curDay=6 refDay=6
+[21:21:17] [STATE] [21:21:28] ResetCheck: abs=19 s (0 h 0 m) dep=21:00 depDay=6 depWork=0 th=25200 s (7 h)
+[21:21:17] [STATE] [21:21:28] ResetCheck: false (same-day, resume session)
+[21:21:17] [STATE] [21:21:28] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[21:21:17] [STATE] [21:21:28] Away->Present: Ignored brief return (breakMs=19000 < min=180000)
+[21:28:51] [BEHAVIOUR] [21:29:02] triggerBehaviour: event=3 detail="5m" force=0
+[21:28:51] [BEHAVIOUR] [21:29:02] Starting AI query task (dailyCount=27)
+[21:28:51] [BEHAVIOUR] [21:29:02] AI Request: session=8 promptLen=1593
+[21:28:54] [BEHAVIOUR] [21:29:04] AI Response Success: len=33 resp="Nice 5 minutes, now tackle Banho."
+[21:29:37] [STATE] [21:29:47] Present->Away: prevState=Busy presDur=499 s focusDur=0 s stopByTrack=0
+[21:29:37] [STATE] [21:29:47] Present->Away: Real session completed. lastAwayEpoch=21:29:47 reset stopByTracking
+[21:46:47] [STATE] [21:46:57] Away->Present: sit=9793019 epoch=21:46:57 session=9 state=Busy
+[21:46:47] [STATE] [21:46:57] Away->Present: refAway=21:29:47 gross=1030 s break=1030 s stopBy=0 s
+[21:46:47] [STATE] [21:46:57] ResetCheck: cur=21:46:57 ref=21:29:47 curDay=6 refDay=6
+[21:46:47] [STATE] [21:46:57] ResetCheck: abs=1030 s (0 h 17 m) dep=21:00 depDay=6 depWork=0 th=25200 s (7 h)
+[21:46:47] [STATE] [21:46:57] ResetCheck: false (same-day, resume session)
+[21:46:47] [STATE] [21:46:57] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[21:46:47] [STATE] [21:46:57] Away->Present: Handled standard break return: breakCount=6 duration=1030 s
+[21:46:50] [BEHAVIOUR] [21:47:01] triggerBehaviour: event=14 detail="3h 46m past the 18:00 end" force=0
+[21:46:50] [BEHAVIOUR] [21:47:01] Starting AI query task (dailyCount=28)
+[21:46:50] [BEHAVIOUR] [21:47:01] AI Request: session=9 promptLen=1550
+[21:46:52] [BEHAVIOUR] [21:47:03] AI Response Success: len=46 resp="Late night grind, Dan, 3.5 hours past bedtime."
+[21:47:27] [STATE] [21:47:38] Present->Away: prevState=Busy presDur=40 s focusDur=0 s stopByTrack=1
+[21:47:27] [STATE] [21:47:38] Present->Away: Stop-By! breakCount 6->5 restoreLatestBreak=4043 lastAwayEpoch=21:47:38
+[03:45:59] [STATE] [03:46:08] Away->Present: sit=31345204 epoch=03:46:08 session=10 state=L? 
+[03:45:59] [STATE] [03:46:08] Away->Present: refAway=21:47:38 gross=21510 s break=21510 s stopBy=0 s
+[03:45:59] [STATE] [03:46:08] ResetCheck: cur=03:46:08 ref=21:47:38 curDay=0 refDay=0
+[03:45:59] [STATE] [03:46:08] ResetCheck: abs=21510 s (5 h 58 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[03:45:59] [STATE] [03:46:08] ResetCheck: true (same-day reset, deskTime=12)
+[03:45:59] [STATE] [03:46:09] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[03:45:59] [STATE] [03:46:09] Away->Present: Late-hours sit: first-sit flag held
+[03:46:02] [BEHAVIOUR] [03:46:12] triggerBehaviour: event=14 detail="4h 14m before the 8:00 start" force=0
+[03:46:02] [BEHAVIOUR] [03:46:12] Starting AI query task (dailyCount=1)
+[03:46:02] [BEHAVIOUR] [03:46:12] AI Request: session=10 promptLen=1677
+[03:46:04] [BEHAVIOUR] [03:46:14] AI Response Success: len=24 resp="3:46 AM, what's burning?"
+[03:46:11] [STATE] [03:46:21] Present->Away: prevState=L?  presDur=12 s focusDur=0 s stopByTrack=1
+[03:46:11] [STATE] [03:46:21] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[04:53:08] [STATE] [04:53:18] Away->Present: sit=35375214 epoch=04:53:18 session=11 state=Focus
+[04:53:09] [STATE] [04:53:18] Away->Present: refAway=21:47:38 gross=25540 s break=25540 s stopBy=0 s
+[04:53:09] [STATE] [04:53:18] ResetCheck: cur=04:53:18 ref=21:47:38 curDay=0 refDay=0
+[04:53:09] [STATE] [04:53:18] ResetCheck: abs=25540 s (7 h 5 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[04:53:09] [STATE] [04:53:18] ResetCheck: true (same-day reset, deskTime=12722)
+[04:53:09] [STATE] [04:53:19] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[04:53:09] [STATE] [04:53:19] Away->Present: Late-hours sit: first-sit flag held
+[04:53:12] [BEHAVIOUR] [04:53:22] triggerBehaviour: event=14 detail="3h 7m before the 8:00 start" force=0
+[04:53:12] [BEHAVIOUR] [04:53:22] Starting AI query task (dailyCount=1)
+[04:53:12] [BEHAVIOUR] [04:53:22] AI Request: session=11 promptLen=1672
+[04:53:14] [BEHAVIOUR] [04:53:24] AI Response Success: len=34 resp="4:53, what's the midnight oil for?"
+[04:53:42] [STATE] [04:53:52] Present->Away: prevState=Focus presDur=33 s focusDur=33 s stopByTrack=1
+[04:53:42] [STATE] [04:53:52] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:32:09] [STATE] [05:32:17] Away->Present: sit=37713325 epoch=05:32:17 session=12 state=Busy
+[05:32:10] [STATE] [05:32:17] Away->Present: refAway=21:47:38 gross=27879 s break=27879 s stopBy=0 s
+[05:32:10] [STATE] [05:32:17] ResetCheck: cur=05:32:17 ref=21:47:38 curDay=0 refDay=0
+[05:32:10] [STATE] [05:32:17] ResetCheck: abs=27879 s (7 h 44 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:32:10] [STATE] [05:32:17] ResetCheck: true (same-day reset, deskTime=33402)
+[05:32:10] [STATE] [05:32:17] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:32:10] [STATE] [05:32:17] Away->Present: Late-hours sit: first-sit flag held
+[05:32:10] [BEHAVIOUR] [05:32:20] triggerBehaviour: event=14 detail="2h 28m before the 8:00 start" force=0
+[05:32:10] [BEHAVIOUR] [05:32:20] Starting AI query task (dailyCount=1)
+[05:32:10] [BEHAVIOUR] [05:32:20] AI Request: session=12 promptLen=1456
+[05:32:13] [BEHAVIOUR] [05:32:22] AI Response Success: len=21 resp="Up at 05:32, eh, Dan?"
+[05:36:17] [STATE] [05:36:27] Present->Away: prevState=Busy presDur=250 s focusDur=0 s stopByTrack=1
+[05:36:17] [STATE] [05:36:27] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:37:08] [STATE] [05:37:18] Away->Present: sit=38014625 epoch=05:37:18 session=13 state=Busy
+[05:37:08] [STATE] [05:37:18] Away->Present: refAway=21:47:38 gross=28180 s break=28180 s stopBy=0 s
+[05:37:08] [STATE] [05:37:18] ResetCheck: cur=05:37:18 ref=21:47:38 curDay=0 refDay=0
+[05:37:08] [STATE] [05:37:18] ResetCheck: abs=28180 s (7 h 49 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:37:08] [STATE] [05:37:18] ResetCheck: true (same-day reset, deskTime=250928)
+[05:37:08] [STATE] [05:37:18] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:37:08] [STATE] [05:37:18] Away->Present: Late-hours sit: first-sit flag held
+[05:37:11] [BEHAVIOUR] [05:37:21] triggerBehaviour: event=14 detail="2h 23m before the 8:00 start" force=0
+[05:37:11] [BEHAVIOUR] [05:37:21] Starting AI query task (dailyCount=1)
+[05:37:11] [BEHAVIOUR] [05:37:21] AI Request: session=13 promptLen=1672
+[05:37:13] [BEHAVIOUR] [05:37:23] AI Response Success: len=18 resp="Up at 05:37, nice."
+[05:37:42] [STATE] [05:37:52] Present->Away: prevState=Busy presDur=34 s focusDur=0 s stopByTrack=1
+[05:37:42] [STATE] [05:37:52] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:41:50] [STATE] [05:42:00] Away->Present: sit=38296923 epoch=05:42:00 session=14 state=Focus
+[05:41:50] [STATE] [05:42:00] Away->Present: refAway=21:47:38 gross=28462 s break=28462 s stopBy=0 s
+[05:41:50] [STATE] [05:42:00] ResetCheck: cur=05:42:00 ref=21:47:38 curDay=0 refDay=0
+[05:41:50] [STATE] [05:42:00] ResetCheck: abs=28462 s (7 h 54 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:41:50] [STATE] [05:42:00] ResetCheck: true (same-day reset, deskTime=34394)
+[05:41:50] [STATE] [05:42:00] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:41:50] [STATE] [05:42:00] Away->Present: Late-hours sit: first-sit flag held
+[05:41:53] [BEHAVIOUR] [05:42:03] triggerBehaviour: event=14 detail="2h 18m before the 8:00 start" force=0
+[05:41:53] [BEHAVIOUR] [05:42:03] Starting AI query task (dailyCount=1)
+[05:41:53] [BEHAVIOUR] [05:42:03] AI Request: session=14 promptLen=1677
+[05:41:55] [BEHAVIOUR] [05:42:05] AI Response Success: len=28 resp="Up at 05:42, what's burning?"
+[05:43:20] [STATE] [05:43:30] Present->Away: prevState=L?  presDur=89 s focusDur=0 s stopByTrack=1
+[05:43:20] [STATE] [05:43:30] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:45:10] [STATE] [05:45:20] Away->Present: sit=38496821 epoch=05:45:20 session=15 state=Focus
+[05:45:10] [STATE] [05:45:20] Away->Present: refAway=21:47:38 gross=28662 s break=28662 s stopBy=0 s
+[05:45:10] [STATE] [05:45:20] ResetCheck: cur=05:45:20 ref=21:47:38 curDay=0 refDay=0
+[05:45:10] [STATE] [05:45:20] ResetCheck: abs=28662 s (7 h 57 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:45:10] [STATE] [05:45:20] ResetCheck: true (same-day reset, deskTime=89740)
+[05:45:10] [STATE] [05:45:20] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:45:10] [STATE] [05:45:20] Away->Present: Late-hours sit: first-sit flag held
+[05:45:13] [BEHAVIOUR] [05:45:23] triggerBehaviour: event=14 detail="2h 15m before the 8:00 start" force=0
+[05:45:13] [BEHAVIOUR] [05:45:23] Starting AI query task (dailyCount=1)
+[05:45:13] [BEHAVIOUR] [05:45:23] AI Request: session=15 promptLen=1461
+[05:45:15] [BEHAVIOUR] [05:45:25] AI Response Success: len=26 resp="Up at 05:45, eager beaver."
+[05:45:51] [STATE] [05:46:01] Present->Away: prevState=Focus presDur=40 s focusDur=40 s stopByTrack=1
+[05:45:51] [STATE] [05:46:01] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:46:38] [STATE] [05:46:48] Away->Present: sit=38584819 epoch=05:46:48 session=16 state=Busy
+[05:46:38] [STATE] [05:46:48] Away->Present: refAway=21:47:38 gross=28750 s break=28750 s stopBy=0 s
+[05:46:38] [STATE] [05:46:48] ResetCheck: cur=05:46:48 ref=21:47:38 curDay=0 refDay=0
+[05:46:38] [STATE] [05:46:48] ResetCheck: abs=28750 s (7 h 59 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:46:38] [STATE] [05:46:48] ResetCheck: true (same-day reset, deskTime=40785)
+[05:46:38] [STATE] [05:46:48] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:46:38] [STATE] [05:46:48] Away->Present: Late-hours sit: first-sit flag held
+[05:46:41] [BEHAVIOUR] [05:46:51] triggerBehaviour: event=14 detail="2h 14m before the 8:00 start" force=0
+[05:46:41] [BEHAVIOUR] [05:46:51] Starting AI query task (dailyCount=1)
+[05:46:41] [BEHAVIOUR] [05:46:51] AI Request: session=16 promptLen=1677
+[05:46:43] [BEHAVIOUR] [05:46:53] AI Response Success: len=28 resp="Up at 05:46, what's burning?"
+[05:46:54] [STATE] [05:47:04] Present->Away: prevState=Busy presDur=15 s focusDur=0 s stopByTrack=1
+[05:46:54] [STATE] [05:47:04] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:51:15] [STATE] [05:51:25] Away->Present: sit=38861335 epoch=05:51:25 session=17 state=Focus
+[05:51:15] [STATE] [05:51:25] Away->Present: refAway=21:47:38 gross=29027 s break=29027 s stopBy=0 s
+[05:51:15] [STATE] [05:51:25] ResetCheck: cur=05:51:25 ref=21:47:38 curDay=0 refDay=0
+[05:51:15] [STATE] [05:51:25] ResetCheck: abs=29027 s (8 h 3 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:51:15] [STATE] [05:51:25] ResetCheck: true (same-day reset, deskTime=15475)
+[05:51:15] [STATE] [05:51:25] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:51:15] [STATE] [05:51:25] Away->Present: Late-hours sit: first-sit flag held
+[05:51:18] [BEHAVIOUR] [05:51:28] triggerBehaviour: event=14 detail="2h 9m before the 8:00 start" force=0
+[05:51:18] [BEHAVIOUR] [05:51:28] Starting AI query task (dailyCount=1)
+[05:51:18] [BEHAVIOUR] [05:51:28] AI Request: session=17 promptLen=1677
+[05:51:20] [BEHAVIOUR] [05:51:30] AI Response Success: len=34 resp="Up at 05:51, huh, 2.5 hours early."
+[05:52:21] [STATE] [05:52:31] Present->Away: prevState=Focus presDur=66 s focusDur=66 s stopByTrack=1
+[05:52:21] [STATE] [05:52:31] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[05:57:07] [STATE] [05:57:17] Away->Present: sit=39213449 epoch=05:57:17 session=18 state=Busy
+[05:57:07] [STATE] [05:57:17] Away->Present: refAway=21:47:38 gross=29379 s break=29379 s stopBy=0 s
+[05:57:07] [STATE] [05:57:17] ResetCheck: cur=05:57:17 ref=21:47:38 curDay=0 refDay=0
+[05:57:07] [STATE] [05:57:17] ResetCheck: abs=29379 s (8 h 9 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[05:57:07] [STATE] [05:57:17] ResetCheck: true (same-day reset, deskTime=66542)
+[05:57:07] [STATE] [05:57:17] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[05:57:07] [STATE] [05:57:17] Away->Present: Late-hours sit: first-sit flag held
+[05:57:10] [BEHAVIOUR] [05:57:20] triggerBehaviour: event=14 detail="2h 3m before the 8:00 start" force=0
+[05:57:10] [BEHAVIOUR] [05:57:20] Starting AI query task (dailyCount=1)
+[05:57:10] [BEHAVIOUR] [05:57:20] AI Request: session=18 promptLen=1459
+[05:57:12] [BEHAVIOUR] [05:57:22] AI Response Success: len=39 resp="Dan, it's 05:57, a bit early, isn't it?"
+[05:57:58] [STATE] [05:58:08] Present->Away: prevState=Busy presDur=51 s focusDur=0 s stopByTrack=1
+[05:57:58] [STATE] [05:58:08] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[06:00:36] [STATE] [06:00:46] Away->Present: sit=39423287 epoch=06:00:46 session=19 state=Busy
+[06:00:37] [STATE] [06:00:46] Away->Present: refAway=21:47:38 gross=29588 s break=29588 s stopBy=0 s
+[06:00:37] [STATE] [06:00:46] ResetCheck: cur=06:00:46 ref=21:47:38 curDay=0 refDay=0
+[06:00:37] [STATE] [06:00:46] ResetCheck: abs=29588 s (8 h 13 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[06:00:37] [STATE] [06:00:46] ResetCheck: true (same-day reset, deskTime=51410)
+[06:00:37] [STATE] [06:00:47] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[06:00:37] [STATE] [06:00:47] Away->Present: Late-hours sit: first-sit flag held
+[06:00:40] [BEHAVIOUR] [06:00:50] triggerBehaviour: event=14 detail="2h 0m before the 8:00 start" force=0
+[06:00:40] [BEHAVIOUR] [06:00:50] Starting AI query task (dailyCount=1)
+[06:00:40] [BEHAVIOUR] [06:00:50] AI Request: session=19 promptLen=1675
+[06:00:42] [BEHAVIOUR] [06:00:52] AI Response Success: len=49 resp="It's 06:00, two hours early, what's on your mind?"
+[06:01:34] [STATE] [06:01:43] Present->Away: prevState=Busy presDur=56 s focusDur=0 s stopByTrack=1
+[06:01:34] [STATE] [06:01:43] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[06:01:56] [STATE] [06:02:06] Away->Present: sit=39502805 epoch=06:02:06 session=20 state=Busy
+[06:01:56] [STATE] [06:02:06] Away->Present: refAway=21:47:38 gross=29668 s break=29668 s stopBy=0 s
+[06:01:56] [STATE] [06:02:06] ResetCheck: cur=06:02:06 ref=21:47:38 curDay=0 refDay=0
+[06:01:56] [STATE] [06:02:06] ResetCheck: abs=29668 s (8 h 14 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[06:01:56] [STATE] [06:02:06] ResetCheck: true (same-day reset, deskTime=56865)
+[06:01:56] [STATE] [06:02:06] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[06:01:56] [STATE] [06:02:06] Away->Present: Late-hours sit: first-sit flag held
+[06:01:59] [BEHAVIOUR] [06:02:09] triggerBehaviour: event=14 detail="1h 58m before the 8:00 start" force=0
+[06:01:59] [BEHAVIOUR] [06:02:09] Starting AI query task (dailyCount=1)
+[06:01:59] [BEHAVIOUR] [06:02:09] AI Request: session=20 promptLen=1675
+[06:02:01] [BEHAVIOUR] [06:02:11] AI Response Success: len=34 resp="It's 06:02, a bit early, isn't it?"
+[06:02:17] [STATE] [06:02:27] Present->Away: prevState=Busy presDur=21 s focusDur=0 s stopByTrack=1
+[06:02:17] [STATE] [06:02:27] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=21:47:38
+[08:37:05] [STATE] [08:37:14] Away->Present: sit=48811767 epoch=08:37:14 session=21 state=Focus
+[08:37:05] [STATE] [08:37:14] Away->Present: refAway=21:47:38 gross=38976 s break=38976 s stopBy=0 s
+[08:37:05] [STATE] [08:37:14] ResetCheck: cur=08:37:14 ref=21:47:38 curDay=0 refDay=0
+[08:37:05] [STATE] [08:37:14] ResetCheck: abs=38976 s (10 h 49 m) dep=21:00 depDay=6 depWork=1 th=10800 s (3 h)
+[08:37:05] [STATE] [08:37:14] ResetCheck: true (same-day reset, deskTime=21231)
+[08:37:05] [STATE] [08:37:14] Away->Present: rollover=1 isFirstSit=1 wasFirstToday=1
+[08:37:05] [STATE] [08:37:14] Away->Present: Handled firstSit: firstSitEpoch=1785659834 overnight=38976
+[08:37:08] [BEHAVIOUR] [08:37:17] triggerBehaviour: event=0 detail="10h49m" force=0
+[08:37:08] [BEHAVIOUR] [08:37:17] Starting AI query task (dailyCount=1)
+[08:37:08] [BEHAVIOUR] [08:37:17] AI Request: session=21 promptLen=1465
+[08:37:10] [BEHAVIOUR] [08:37:20] AI Response Success: len=42 resp="Good morning, welcome back after 10 hours."
+[08:37:57] [STATE] [08:38:06] Present->Away: prevState=Busy presDur=52 s focusDur=0 s stopByTrack=1
+[08:37:57] [STATE] [08:38:06] Present->Away: Real session completed. lastAwayEpoch=08:38:06 reset stopByTracking
+[08:55:53] [STATE] [08:56:02] Away->Present: sit=49939969 epoch=08:56:02 session=22 state=Busy
+[08:55:53] [STATE] [08:56:02] Away->Present: refAway=08:38:06 gross=1076 s break=1076 s stopBy=0 s
+[08:55:53] [STATE] [08:56:02] ResetCheck: cur=08:56:02 ref=08:38:06 curDay=0 refDay=0
+[08:55:53] [STATE] [08:56:02] ResetCheck: abs=1076 s (0 h 17 m) dep=08:00 depDay=0 depWork=1 th=10800 s (3 h)
+[08:55:53] [STATE] [08:56:02] ResetCheck: false (same-day, resume session)
+[08:55:53] [STATE] [08:56:02] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[08:55:53] [STATE] [08:56:02] Away->Present: Handled standard break return: breakCount=1 duration=1076 s
+[08:55:58] [BEHAVIOUR] [08:56:05] triggerBehaviour: event=1 detail="17m" force=0
+[08:55:58] [BEHAVIOUR] [08:56:06] Starting AI query task (dailyCount=2)
+[08:55:58] [BEHAVIOUR] [08:56:06] AI Request: session=22 promptLen=1701
+[08:55:58] [BEHAVIOUR] [08:56:07] AI Response Success: len=31 resp="Back after 17m, let's catch up."
+[09:00:53] [BEHAVIOUR] [09:01:02] triggerBehaviour: event=10 detail="" force=0
+[09:00:53] [BEHAVIOUR] [09:01:03] Journal trigger: generated 2 pages
+[09:00:53] [BEHAVIOUR] [09:01:03] Journal trigger: scheduled remaining pages in 4000 ms
+[09:00:57] [BEHAVIOUR] [09:01:07] triggerBehaviour: event=10 detail="PAGE:2|12|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [GREEN]11:00 | Arrumar a cama [GREEN]11:
+[09:00:57] [BEHAVIOUR] [09:01:07] Journal trigger: showing page 2 (lines=12)
+[09:05:53] [BEHAVIOUR] [09:06:02] triggerBehaviour: event=11 detail="Alice 1" force=0
+[09:05:53] [BEHAVIOUR] [09:06:02] Starting AI query task (dailyCount=3)
+[09:05:53] [BEHAVIOUR] [09:06:02] AI Request: session=22 promptLen=1882
+[09:05:56] [BEHAVIOUR] [09:06:05] AI Response Success: len=19 resp="Alice 1 is waiting."
+[09:10:53] [BEHAVIOUR] [09:11:02] triggerBehaviour: event=5 detail="15m" force=0
+[09:10:53] [BEHAVIOUR] [09:11:02] Starting AI query task (dailyCount=4)
+[09:10:53] [BEHAVIOUR] [09:11:02] AI Request: session=22 promptLen=1356
+[09:10:56] [BEHAVIOUR] [09:11:05] AI Response Success: len=30 resp="Proud of you, Dan, 15m record."
+[09:15:54] [BEHAVIOUR] [09:16:03] triggerBehaviour: event=11 detail="Alice 2" force=0
+[09:15:54] [BEHAVIOUR] [09:16:03] Starting AI query task (dailyCount=5)
+[09:15:54] [BEHAVIOUR] [09:16:03] AI Request: session=22 promptLen=1877
+[09:15:56] [BEHAVIOUR] [09:16:05] AI Response Success: len=24 resp="Dan, Alice 2 is waiting."
+[09:16:04] [BEHAVIOUR] [09:16:13] triggerBehaviour: event=3 detail="5m" force=0
+[09:16:04] [BEHAVIOUR] [09:16:13] Starting AI query task (dailyCount=6)
+[09:16:04] [BEHAVIOUR] [09:16:13] AI Request: session=22 promptLen=1506
+[09:16:06] [BEHAVIOUR] [09:16:15] AI Response Success: len=38 resp="Good 5 minutes, now tackle Check Mail."
+[09:30:58] [STATE] [09:31:08] Present->Away: prevState=Busy presDur=2105 s focusDur=0 s stopByTrack=1
+[09:30:58] [STATE] [09:31:08] Present->Away: Real session completed. lastAwayEpoch=09:31:08 reset stopByTracking
+[09:31:28] [STATE] [09:31:38] Away->Present: sit=52075409 epoch=09:31:38 session=23 state=Busy
+[09:31:28] [STATE] [09:31:38] Away->Present: refAway=09:31:08 gross=30 s break=30 s stopBy=0 s
+[09:31:28] [STATE] [09:31:38] ResetCheck: cur=09:31:38 ref=09:31:08 curDay=0 refDay=0
+[09:31:28] [STATE] [09:31:38] ResetCheck: abs=30 s (0 h 0 m) dep=09:00 depDay=0 depWork=1 th=10800 s (3 h)
+[09:31:28] [STATE] [09:31:38] ResetCheck: false (same-day, resume session)
+[09:31:28] [STATE] [09:31:38] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:31:28] [STATE] [09:31:38] Away->Present: Ignored brief return (breakMs=30000 < min=180000)
+[09:34:10] [STATE] [09:34:19] Present->Away: prevState= ?  presDur=161 s focusDur=0 s stopByTrack=0
+[09:34:10] [STATE] [09:34:19] Present->Away: Real session completed. lastAwayEpoch=09:34:19 reset stopByTracking
+[09:34:34] [STATE] [09:34:43] Away->Present: sit=52261230 epoch=09:34:43 session=24 state= ? 
+[09:34:34] [STATE] [09:34:43] Away->Present: refAway=09:34:19 gross=24 s break=24 s stopBy=0 s
+[09:34:34] [STATE] [09:34:43] ResetCheck: cur=09:34:43 ref=09:34:19 curDay=0 refDay=0
+[09:34:34] [STATE] [09:34:43] ResetCheck: abs=24 s (0 h 0 m) dep=09:00 depDay=0 depWork=1 th=10800 s (3 h)
+[09:34:34] [STATE] [09:34:43] ResetCheck: false (same-day, resume session)
+[09:34:34] [STATE] [09:34:43] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:34:34] [STATE] [09:34:43] Away->Present: Ignored brief return (breakMs=24000 < min=180000)
+[09:35:36] [STATE] [09:35:45] Present->Away: prevState=Focus presDur=61 s focusDur=61 s stopByTrack=0
+[09:35:36] [STATE] [09:35:45] Present->Away: Real session completed. lastAwayEpoch=09:35:45 reset stopByTracking
+[09:35:48] [STATE] [09:35:58] Away->Present: sit=52335484 epoch=09:35:58 session=25 state=Focus
+[09:35:48] [STATE] [09:35:58] Away->Present: refAway=09:35:45 gross=13 s break=13 s stopBy=0 s
+[09:35:48] [STATE] [09:35:58] ResetCheck: cur=09:35:58 ref=09:35:45 curDay=0 refDay=0
+[09:35:48] [STATE] [09:35:58] ResetCheck: abs=13 s (0 h 0 m) dep=09:00 depDay=0 depWork=1 th=10800 s (3 h)
+[09:35:48] [STATE] [09:35:58] ResetCheck: false (same-day, resume session)
+[09:35:48] [STATE] [09:35:58] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:35:48] [STATE] [09:35:58] Away->Present: Ignored brief return (breakMs=13000 < min=180000)
+[09:39:22] [STATE] [09:39:31] Present->Away: prevState=Busy presDur=212 s focusDur=0 s stopByTrack=0
+[09:39:22] [STATE] [09:39:31] Present->Away: Real session completed. lastAwayEpoch=09:39:31 reset stopByTracking
+[09:40:25] [STATE] [09:40:35] Away->Present: sit=52612583 epoch=09:40:35 session=26 state=Busy
+[09:40:25] [STATE] [09:40:35] Away->Present: refAway=09:39:31 gross=64 s break=64 s stopBy=0 s
+[09:40:25] [STATE] [09:40:35] ResetCheck: cur=09:40:35 ref=09:39:31 curDay=0 refDay=0
+[09:40:25] [STATE] [09:40:35] ResetCheck: abs=64 s (0 h 1 m) dep=09:00 depDay=0 depWork=1 th=10800 s (3 h)
+[09:40:25] [STATE] [09:40:35] ResetCheck: false (same-day, resume session)
+[09:40:25] [STATE] [09:40:35] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:40:25] [STATE] [09:40:35] Away->Present: Ignored brief return (breakMs=64000 < min=180000)
+[09:41:43] [MQTT] [09:41:52] CMD: "SET config.clockFace 3"
+[09:43:05] [STATE] [09:43:14] Present->Away: prevState=Busy presDur=159 s focusDur=0 s stopByTrack=0
+[09:43:05] [STATE] [09:43:14] Present->Away: Real session completed. lastAwayEpoch=09:43:14 reset stopByTracking
+[09:43:14] [STATE] [09:43:23] Away->Present: sit=52780688 epoch=09:43:23 session=27 state=Busy
+[09:43:14] [STATE] [09:43:23] Away->Present: refAway=09:43:14 gross=9 s break=9 s stopBy=0 s
+[09:43:14] [STATE] [09:43:23] ResetCheck: cur=09:43:23 ref=09:43:14 curDay=0 refDay=0
+[09:43:14] [STATE] [09:43:23] ResetCheck: abs=9 s (0 h 0 m) dep=09:00 depDay=0 depWork=1 th=10800 s (3 h)
+[09:43:14] [STATE] [09:43:23] ResetCheck: false (same-day, resume session)
+[09:43:14] [STATE] [09:43:23] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:43:14] [STATE] [09:43:23] Away->Present: Ignored brief return (breakMs=9000 < min=180000)
+[09:44:44] [STATE] [09:44:53] Present->Away: prevState=Focus presDur=90 s focusDur=51 s stopByTrack=0
+[09:44:44] [STATE] [09:44:53] Present->Away: Real session completed. lastAwayEpoch=09:44:53 reset stopByTracking
+[09:45:37] [STATE] [09:45:47] Away->Present: sit=52924476 epoch=09:45:47 session=28 state=Focus
+[09:45:37] [STATE] [09:45:47] Away->Present: refAway=09:44:53 gross=54 s break=54 s stopBy=0 s
+[09:45:37] [STATE] [09:45:47] ResetCheck: cur=09:45:47 ref=09:44:53 curDay=0 refDay=0
+[09:45:37] [STATE] [09:45:47] ResetCheck: abs=54 s (0 h 0 m) dep=09:00 depDay=0 depWork=1 th=10800 s (3 h)
+[09:45:37] [STATE] [09:45:47] ResetCheck: false (same-day, resume session)
+[09:45:37] [STATE] [09:45:47] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0
+[09:45:37] [STATE] [09:45:47] Away->Present: Ignored brief return (breakMs=54000 < min=180000)
