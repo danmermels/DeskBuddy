@@ -1,0 +1,114 @@
+[
+  {
+    "name": "test_get_config",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 10.052
+  },
+  {
+    "name": "test_get_filters",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.285
+  },
+  {
+    "name": "test_get_generic_key",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.397
+  },
+  {
+    "name": "test_get_radar",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.591
+  },
+  {
+    "name": "test_get_session",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.31
+  },
+  {
+    "name": "test_get_state",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.708
+  },
+  {
+    "name": "test_get_stats",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.271
+  },
+  {
+    "name": "test_get_system",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.413
+  },
+  {
+    "name": "test_get_time",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.865
+  },
+  {
+    "name": "test_get_unknown_target",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.562
+  },
+  {
+    "name": "test_set_invalid_key",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.498
+  },
+  {
+    "name": "test_set_roundtrip",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 2.3
+  },
+  {
+    "name": "test_sim_usage_errors",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 1.46
+  },
+  {
+    "name": "test_trigger_bad_name",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.497
+  },
+  {
+    "name": "test_trigger_invalid_event",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.409
+  },
+  {
+    "name": "test_unknown_command",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.589
+  }
+]

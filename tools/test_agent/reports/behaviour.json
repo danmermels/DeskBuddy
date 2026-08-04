@@ -1,0 +1,65 @@
+[
+  {
+    "name": "test_ai_e2e",
+    "suite": "behaviour",
+    "status": "skip",
+    "message": "--allow-ai not set",
+    "duration": 0.0
+  },
+  {
+    "name": "test_event7_undefined_acceptance",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 10.149
+  },
+  {
+    "name": "test_trigger_ai_mode_skipped_without_flag",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.208
+  },
+  {
+    "name": "test_trigger_all_events_fallback",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 10.062
+  },
+  {
+    "name": "test_trigger_journal_echo",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.871
+  },
+  {
+    "name": "test_trigger_latehours",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.243
+  },
+  {
+    "name": "test_trigger_nagging",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.666
+  },
+  {
+    "name": "test_trigger_numeric_mode",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.799
+  },
+  {
+    "name": "test_trigger_page",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.661
+  }
+]

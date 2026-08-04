@@ -1,7 +1,7 @@
 {
     "broker_ip": "192.168.15.18",
     "broker_port": 1883,
-    "topic_listener_1": "deskbuddy/debug/resp",
+    "topic_listener_1": "deskbuddy/heap",
     "topic_listener_2": "deskbuddy/debug/ai/#",
     "buttons": [
         {

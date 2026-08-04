@@ -1,0 +1,44 @@
+[
+  {
+    "name": "test_classify_busy",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 0.407
+  },
+  {
+    "name": "test_classify_distracted",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 200.521
+  },
+  {
+    "name": "test_classify_focus",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 125.607
+  },
+  {
+    "name": "test_classify_regular",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 200.555
+  },
+  {
+    "name": "test_recent_motion_ratio_tracks_sim_motion",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 19.647
+  },
+  {
+    "name": "test_telemetry_exposes_classifier_inputs",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 0.0
+  }
+]

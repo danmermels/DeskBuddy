@@ -1,0 +1,77 @@
+{
+  "mode": "passive-shadow",
+  "started_epoch": 1785692471.6700087,
+  "duration_s": 2,
+  "summary": {
+    "state_transition_count": 0,
+    "log_counts_by_category": {},
+    "ai_requests": 0,
+    "ai_responses": 0,
+    "ai_avg_latency_s": null,
+    "ai_error_lines": 0,
+    "mqtt_drops": 0,
+    "mqtt_uptime_s": 0.0,
+    "telemetry_last_error": null
+  },
+  "anomalies": [],
+  "transitions": [],
+  "events": [],
+  "serial_lines": [],
+  "shadow_checks": [
+    {
+      "name": "stretch_reminder",
+      "status": "not-exercised",
+      "expected": "after 60 min of continuous sitting, a stretch prompt (eventType 2) appears within 5 min",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "break_return_welcome",
+      "status": "not-exercised",
+      "expected": "returning from a break >= 3 min shows Welcome Back (eventType 1) or a late-hours message (eventType 14) within 90 s",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "first_sit_greeting",
+      "status": "not-exercised",
+      "expected": "the day's first sit shows the first-sit greeting (eventType 0) within 90 s",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "classifier_sane",
+      "status": "not-exercised",
+      "expected": "reported state matches distance+motion thresholds; no sustained mismatches",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "motion_ratio_range",
+      "status": "not-exercised",
+      "expected": "recentMotionRatio always stays in [0,100]",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    }
+  ]
+}

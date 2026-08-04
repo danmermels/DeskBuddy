@@ -5,6 +5,7 @@
 #include <ESP32_AI_Connect.h>
 #include "Behaviour.h"
 #include "Curation.h"
+#include "Points.h"
 #include "MqttService.h"
 #include "MessageManager.h"
 
@@ -281,6 +282,7 @@ void aiQueryTask(void * parameter) {
         case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
         case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
         case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
+        case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
         default:                  quote = localWelcomeBack[persona][randIdx]; break;
       }
       
@@ -339,6 +341,14 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         Logger::log("BEHAVIOUR", "Nagging detail resolved to most-overdue \"%s\" (queue size=%d)", detail.c_str(), (int)queue.size());
       }
     }
+  }
+
+  // Points check-in without an explicit detail (e.g. debug TRIGGER POINTS)
+  // resolves the current-month points snapshot so the nudge always references
+  // the live running total and category.
+  if (eventType == EVENT_POINTS && detail.length() == 0) {
+    detail = buildPointsDetail();
+    Logger::log("BEHAVIOUR", "Points detail resolved to \"%s\"", detail.c_str());
   }
 
   if (eventType == EVENT_PAGE) {
@@ -486,7 +496,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       useAI = true;
     } else if (appConfig.aiMode == 1) {
       // Balanced mode: AI triggers for tasks, focus, and notifications
-      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LATEHOURS_SIT || eventType == EVENT_LUNCH_REMINDER || eventType == EVENT_EXCESSIVE_BREAKS || eventType == EVENT_GOAL_COMPLETED || eventType == EVENT_NAGGING) {
+      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LATEHOURS_SIT || eventType == EVENT_LUNCH_REMINDER || eventType == EVENT_EXCESSIVE_BREAKS || eventType == EVENT_GOAL_COMPLETED || eventType == EVENT_NAGGING || eventType == EVENT_POINTS) {
         useAI = true;
       }
     }
@@ -518,6 +528,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_EXCESSIVE_BREAKS: basePrompt = resolvePromptPlaceholders(eventType, PROMPT_EXCESSIVE_BREAKS, detail); break;
       case EVENT_GOAL_COMPLETED:   basePrompt = resolvePromptPlaceholders(eventType, PROMPT_GOAL_COMPLETED, detail); break;
       case EVENT_NAGGING:          basePrompt = resolvePromptPlaceholders(eventType, PROMPT_NAGGING, detail); break;
+      case EVENT_POINTS:           basePrompt = resolvePromptPlaceholders(eventType, PROMPT_POINTS, detail); break;
     }
 
     if (!appState.isAILoading) {
@@ -557,6 +568,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
           case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
           case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
           case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
+          case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
         }
 
         String personalQuote = resolveLocalPlaceholders(String(quote), detail);
@@ -585,6 +597,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
         case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
         case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
+        case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
       }
 
       String personalQuote = resolveLocalPlaceholders(String(quote), detail);
@@ -614,6 +627,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
       case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
       case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
+      case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
     }
 
     String personalQuote = resolveLocalPlaceholders(String(quote), detail);

@@ -1,0 +1,9 @@
+[
+  {
+    "name": "test_telemetry_exposes_classifier_inputs",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 0.363
+  }
+]

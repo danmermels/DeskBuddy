@@ -1088,22 +1088,17 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 //                           stamped from 100x100 LittleFS RLE files on pure TFT_BLACK.
 //   Bottom 50% (Y=120-240): Time (built-in Font 6), date, rotating stat.
 //
-// Eye Bitmaps (LittleFS RLE, 100x100 px each, 27 KB total):
-//   /buddy_eye_o.rle  — Open ring eye with cyan bloom (STATE_REGULAR)
-//   /buddy_eye_h.rle  — Half-lidded / relaxed halo (STATE_AWAY)
-//   /buddy_eye_c.rle  — Closed glowing seam pair (STATE_FOCUS)
-//   /buddy_eye_s.rle  — Happy / squint crescent (STATE_BUSY / DISTRACTED)
+// Eye Bitmaps (LittleFS RLE, 100x100 px each):
+//   /buddy_eye_o.rle  — Open ring eye with cyan bloom (default render mode)
+//   /buddy_eye_s.rle  — Happy / squint crescent (cameo mode)
 //
 // Refined Rules & Physics:
-//   - Paired Eye States: All 4 states present in PAIRS (including Closed pair!).
+//   - Paired Eye States: Eyes are always stamped in pairs.
 //   - Pure Black Background: Visor sprite fills TFT_BLACK (no background box).
-//   - Primary Mood / Presence State Mapping:
-//       STATE_REGULAR / default -> OPEN   (/buddy_eye_o.rle)
-//       STATE_FOCUS              -> CLOSED (/buddy_eye_c.rle, excludes glitches & cameos)
-//       STATE_BUSY / DISTRACTED  -> SQUINT (/buddy_eye_s.rle)
-//       STATE_AWAY               -> HALFED (/buddy_eye_h.rle)
+//   - Render Mode: The primary eye mode is fixed at EYE_MODE_OPEN, so the open sprite
+//     is always rendered. EYE_MODE_CLOSED / EYE_MODE_HALFED / EYE_MODE_SQUINT are
+//     reserved enum modes; CLOSED/HALFED currently fall back to the open sprite.
 //   - Resting Elevation: Resting gaze sits above 0 (-6px) when far/idle.
-//   - Focus Exclusion: Closed/Focus mode is excluded from glitches and cameos.
 //   - Blinking: Top-down masking blink occurs ONLY when in OPEN mode!
 //   - Eye Convergence: Eyes move 6px closer together as radar distance decreases
 //                       (LX=69->75, RX=151->145 when <=45cm).
@@ -1159,7 +1154,7 @@ struct DeskbuddyThemeConfig {
   const char* eyeSquintRle;
   
   const char* timeFont;    // Font filename for the digital clock time (e.g. "7Segment50")
-  const char* dateFont;    // Font filename for the calendar date string (e.g. "Unicode.impact19")
+  const char* dateFont;    // Font filename for the calendar date string (e.g. "Unicode.impact17")
   const char* metricFont;  // Font filename for telemetry metrics carousel (e.g. "GoodTiming20")
   const char* weatherFont; // Font filename for the weather display (e.g. "GoodTiming20")
   
@@ -1623,26 +1618,6 @@ static void pushBrowRotated(TFT_eSprite &dst, TFT_eSprite &src,
     }
   }
 }
-
-/**
- * Apply visor frame edge mask to block eyes/eyebrows from drawing over the background frame (20px from screen edges).
- */
-static void applyVisorFrameMask(TFT_eSprite &visor, uint16_t bgColor) {
-  // Left 10px edge block (screen X < 20)
-  visor.fillRect(0, 0, 10, BUDDY_SPR_H, bgColor);
-
-  // Right 10px edge block (screen X > 220)
-  visor.fillRect(BUDDY_SPR_W - 10, 0, 10, BUDDY_SPR_H, bgColor);
-
-  // Top 10px edge block (screen Y < 15)
-  visor.fillRect(0, 0, BUDDY_SPR_W, 10, bgColor);
-
-  // Curved corner blocks for circular screen bezel (top-left & top-right)
-  visor.fillTriangle(0, 0, 26, 0, 0, 26, bgColor);
-  visor.fillTriangle(BUDDY_SPR_W - 26, 0, BUDDY_SPR_W, 0, BUDDY_SPR_W, 26, bgColor);
-}
-
-
 
 
 

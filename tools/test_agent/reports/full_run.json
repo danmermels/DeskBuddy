@@ -1,0 +1,240 @@
+[
+  {
+    "name": "test_get_config",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.226
+  },
+  {
+    "name": "test_get_filters",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.317
+  },
+  {
+    "name": "test_get_generic_key",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.584
+  },
+  {
+    "name": "test_get_radar",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.392
+  },
+  {
+    "name": "test_get_session",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.38
+  },
+  {
+    "name": "test_get_state",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.3
+  },
+  {
+    "name": "test_get_stats",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.39
+  },
+  {
+    "name": "test_get_system",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.621
+  },
+  {
+    "name": "test_get_time",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.443
+  },
+  {
+    "name": "test_get_unknown_target",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.179
+  },
+  {
+    "name": "test_set_invalid_key",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.778
+  },
+  {
+    "name": "test_set_roundtrip",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 2.485
+  },
+  {
+    "name": "test_sim_usage_errors",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 1.414
+  },
+  {
+    "name": "test_trigger_bad_name",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.386
+  },
+  {
+    "name": "test_trigger_invalid_event",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.702
+  },
+  {
+    "name": "test_unknown_command",
+    "suite": "protocol",
+    "status": "pass",
+    "message": "",
+    "duration": 0.389
+  },
+  {
+    "name": "test_sim_presets",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 5.007
+  },
+  {
+    "name": "test_sim_radar_sit",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.956
+  },
+  {
+    "name": "test_sim_state_away",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 11.864
+  },
+  {
+    "name": "test_sim_state_busy",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 3.441
+  },
+  {
+    "name": "test_sim_state_distracted",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.445
+  },
+  {
+    "name": "test_sim_state_focus",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.884
+  },
+  {
+    "name": "test_sim_state_regular",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.493
+  },
+  {
+    "name": "test_sim_stop_clears",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.99
+  },
+  {
+    "name": "test_telemetry_exposes_classifier_inputs",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 0.0
+  },
+  {
+    "name": "test_ai_e2e",
+    "suite": "behaviour",
+    "status": "skip",
+    "message": "--allow-ai not set",
+    "duration": 0.0
+  },
+  {
+    "name": "test_event7_undefined_acceptance",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.445
+  },
+  {
+    "name": "test_trigger_ai_mode_skipped_without_flag",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.317
+  },
+  {
+    "name": "test_trigger_all_events_fallback",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 25.103
+  },
+  {
+    "name": "test_trigger_journal_echo",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.645
+  },
+  {
+    "name": "test_trigger_latehours",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.111
+  },
+  {
+    "name": "test_trigger_nagging",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.637
+  },
+  {
+    "name": "test_trigger_numeric_mode",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.54
+  },
+  {
+    "name": "test_trigger_page",
+    "suite": "behaviour",
+    "status": "pass",
+    "message": "",
+    "duration": 0.788
+  }
+]

@@ -35,6 +35,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 #include "../Credentials.h"
 #include "MqttService.h"
 #include "MqttDebug.h"
+#include "Timer.h"
 #include "Display.h"
 #include "Radar.h"
 #include "Stats.h"
@@ -46,6 +47,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 // State management definitions
 // ============================================================
 #include "State.h"
+#include "Points.h"
 #include "Logger.h"
 
 ConfigState appConfig;
@@ -53,6 +55,7 @@ StatsState appStats;
 RuntimeState appState;
 TodoState appTodo;
 TftMessageHistory tftMsgHistory;
+TimerState timerState;
 
 // Hardware Instances
 TFT_eSPI tft = TFT_eSPI();
@@ -96,6 +99,18 @@ PubSubClient mqttClient;
 #include <queue>
 std::queue<MqttQueueMessage> mqttPublishQueue;
 SemaphoreHandle_t mqttPublishQueueMutex = NULL;
+
+// Boot snapshot captured at the end of setup() and emitted from loop() once
+// MQTT is connected (enqueueMqttPublish drops messages while disconnected).
+static bool gBootLogPending = true;
+static uint32_t gBootUptimeSec = 0;
+static String gBootReasonName = "unknown";
+static int gBootLastNtpDay = -1;
+static uint32_t gBootLastAwayEpoch = 0;
+static int gBootDistLimit = 0;
+static bool gBootRadarOk = false;
+static String gBootStateMsg;
+static bool gBootStateMsgPending = false;
 
 // Persistent Settings (NVS Preferences)
 Preferences preferences;
@@ -446,12 +461,8 @@ void setup(void) {
   appState.aiMutex = xSemaphoreCreateMutex();
   Serial.println("[DIAGNOSTICS] Mutex created");
 
-  // Setup Mutex for MQTT History Thread Safety
-  
   // Setup Mutex for MQTT Publish Queue Thread Safety
   mqttPublishQueueMutex = xSemaphoreCreateMutex();
-
-  // Setup Mutex for System Logging Thread Safety
 
   // Setup persistent background task for AI HTTPS Queries
   xTaskCreate(
@@ -476,6 +487,10 @@ void setup(void) {
   appConfig.motionRatioLimit = preferences.getInt("motionRatioLim", 15);
   appConfig.deskDistanceLimit = preferences.getInt("distLimit", 120);
   appConfig.filterWindow = preferences.getFloat("filterWindow", 2.0);
+  int motionWindow = preferences.getInt("motionWindow", RECENT_MOTION_WINDOW_S);
+  if (motionWindow < 1) motionWindow = 1;
+  if (motionWindow > RECENT_MOTION_WINDOW_S) motionWindow = RECENT_MOTION_WINDOW_S;
+  appConfig.motionWindow = motionWindow;
   appConfig.hasMail = preferences.getBool("hasMail", false);
   appConfig.time24h = preferences.getBool("time24h", true);
   appConfig.buddyFontIndex = preferences.getInt("buddyFontIdx", 0);
@@ -493,6 +508,8 @@ void setup(void) {
   appConfig.g5sSens = preferences.getInt("g5sSens", 40);
   appConfig.g6mSens = preferences.getInt("g6mSens", 50);
   appConfig.g6sSens = preferences.getInt("g6sSens", 40);
+  appConfig.pointsPoorMax = preferences.getInt("pointsPoorMax", 30);
+  appConfig.pointsExcellentMin = preferences.getInt("pointsExcellentMin", 120);
 
   // Load WiFi credentials
   appConfig.wifiSsid = preferences.getString("wifiSsid", DEFAULT_SSID);
@@ -602,6 +619,30 @@ void setup(void) {
   if (elapsedBoot < BOOT_SPLASH_MS) {
     delay(BOOT_SPLASH_MS - elapsedBoot);
   }
+
+  // Capture a boot snapshot now (MQTT may not be connected yet). The actual
+  // [SYSTEM] log line is emitted from loop() once the broker is reachable,
+  // otherwise enqueueMqttPublish() drops it while disconnected.
+  esp_reset_reason_t bootReason = esp_reset_reason();
+  const char* bootReasonName = "unknown";
+  switch (bootReason) {
+    case ESP_RST_POWERON:   bootReasonName = "power-on"; break;
+    case ESP_RST_SW:        bootReasonName = "software"; break;
+    case ESP_RST_PANIC:     bootReasonName = "panic"; break;
+    case ESP_RST_INT_WDT:   bootReasonName = "int-wdt"; break;
+    case ESP_RST_TASK_WDT:  bootReasonName = "task-wdt"; break;
+    case ESP_RST_WDT:       bootReasonName = "wdt"; break;
+    case ESP_RST_DEEPSLEEP: bootReasonName = "deep-sleep"; break;
+    case ESP_RST_BROWNOUT:  bootReasonName = "brownout"; break;
+    case ESP_RST_EXT:       bootReasonName = "external"; break;
+    default: break;
+  }
+  gBootUptimeSec = millis() / 1000UL;
+  gBootReasonName = bootReasonName;
+  gBootLastNtpDay = appStats.lastNtpDay;
+  gBootLastAwayEpoch = appStats.lastAwayEpoch;
+  gBootDistLimit = appConfig.deskDistanceLimit;
+  gBootRadarOk = radar.isConnected();
 }
 
 extern int dateToDays(String dateStr);
@@ -610,7 +651,7 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   if (!LittleFS.exists("/todo.json")) return;
   fs::File file = LittleFS.open("/todo.json", "r");
   if (!file) return;
-  DynamicJsonDocument doc(4096);
+  DynamicJsonDocument doc(8192);
   DeserializationError err = deserializeJson(doc, file);
   file.close();
   if (err) return;
@@ -669,6 +710,14 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
           appStats.dueFiredKeys += dueKey + ";";
         }
       }
+    }
+  }
+
+  // Task points: live overdue accrual (current month only). Persists markers/running.
+  if (currentDayString.length() == 10) {
+    String curMonth = currentDayString.substring(0, 7);
+    if (pointsApplyOverdue(doc.as<JsonObject>(), nowMins, currentDayString, curMonth)) {
+      pointsSaveDoc(doc);
     }
   }
 
@@ -750,6 +799,8 @@ void loop(void) {
         int currentDay = timeClient.getDay();
         uint32_t referenceAwayEpoch = appState.isStopByTracking ? appState.originalLastAwayEpoch : appStats.lastAwayEpoch;
         if (shouldResetDaySession(currentEpoch, referenceAwayEpoch, currentDay, appStats.lastNtpDay)) {
+          gBootStateMsg = "Boot-state: day rollover -> reset. refAway=" + Logger::formatEpoch(referenceAwayEpoch) + " day=" + String(currentDay);
+          gBootStateMsgPending = true;
           // A day rollover is verified (e.g. overnight absence or timezone transition).
           // Merge accumulated presence statistics from the prior day into history before clearing.
           int mergeDay = (appStats.lastNtpDay != -1) ? appStats.lastNtpDay : currentDay;
@@ -757,6 +808,8 @@ void loop(void) {
           resetDailyStats(appStats.lastAwayEpoch, currentDay);
           currentSessionState = PRESENCE_AWAY;
         } else {
+          gBootStateMsg = "Boot-state: crash recovery -> resume session. refAway=" + Logger::formatEpoch(referenceAwayEpoch) + " day=" + String(currentDay);
+          gBootStateMsgPending = true;
           // Resume current day's active session (crash recovery during workday).
           // Transition to PRESENCE_BREAK to allow session continuity.
           currentSessionState = PRESENCE_BREAK;
@@ -766,6 +819,9 @@ void loop(void) {
           appState.totalStopByTimeMs = 0;
           appState.isStopByTracking = false;
         }
+      } else {
+        gBootStateMsg = "Boot-state: fresh start (no prior session). lastAwayEpoch=" + Logger::formatEpoch(appStats.lastAwayEpoch);
+        gBootStateMsgPending = true;
       }
     }
     time_t epochTime = timeClient.getEpochTime();
@@ -793,6 +849,25 @@ void loop(void) {
       mergeCurrentDayPresence(mergeDay);
       appStats.lastMidnightCheckDay = currentDay;
       resetDailyStats(appStats.lastAwayEpoch, currentDay);
+
+      // Month rollover: bake the task-points running total into the archive.
+      time_t ptsEpoch = timeClient.getEpochTime();
+      struct tm* ptsTm = localtime(&ptsEpoch);
+      if (ptsTm != nullptr) {
+        char mStr[8];
+        snprintf(mStr, sizeof(mStr), "%04d-%02d", ptsTm->tm_year + 1900, ptsTm->tm_mon + 1);
+        if (LittleFS.exists("/todo.json")) {
+          fs::File tf = LittleFS.open("/todo.json", "r");
+          if (tf) {
+            DynamicJsonDocument tdoc(8192);
+            bool ok = (deserializeJson(tdoc, tf) == DeserializationError::Ok);
+            tf.close();
+            if (ok && pointsBake(tdoc.as<JsonObject>(), String(mStr))) {
+              pointsSaveDoc(tdoc);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -874,27 +949,40 @@ void loop(void) {
       recentMotionBuckets[recentBucketHead] += tickMs;
     }
 
-    // Calculate windowed motion ratio over the last RECENT_MOTION_WINDOW_S seconds
+    // Calculate windowed motion ratio over the last appConfig.motionWindow seconds
     uint32_t windowMotionMs = 0;
     uint32_t windowDeskMs = 0;
-    for (int i = 0; i < RECENT_MOTION_WINDOW_S; i++) {
-      windowMotionMs += recentMotionBuckets[i];
-      windowDeskMs += recentDeskBuckets[i];
+    int motionWindow = appConfig.motionWindow;
+    if (motionWindow < 1) motionWindow = 1;
+    if (motionWindow > RECENT_MOTION_WINDOW_S) motionWindow = RECENT_MOTION_WINDOW_S;
+    for (int i = 0; i < motionWindow; i++) {
+      int idx = (recentBucketHead - i + RECENT_MOTION_WINDOW_S) % RECENT_MOTION_WINDOW_S;
+      windowMotionMs += recentMotionBuckets[idx];
+      windowDeskMs += recentDeskBuckets[idx];
     }
     int recentMotionRatio = (windowDeskMs > 0) ? (int)((windowMotionMs * 100) / windowDeskMs) : 0;
     if (recentMotionRatio > 100) recentMotionRatio = 100;
+    appState.recentMotionRatio = recentMotionRatio;
 
-    float currentDist = (appState.sessionDistanceAverage > 0.0) ? appState.sessionDistanceAverage : (float)appState.rawDetectionDist;
+    float currentDist = (appState.filteredDetectionDist > 0.0) ? (float)appState.filteredDetectionDist : (float)appState.rawDetectionDist;
     bool inFocusZone = (currentDist > 0.0 && currentDist < appConfig.focusDistanceLimit);
     bool highMotion = (recentMotionRatio > appConfig.motionRatioLimit);
 
     if (inFocusZone) {
       rawState = highMotion ? STATE_BUSY : STATE_FOCUS;
     } else {
-      rawState = highMotion ? STATE_DISTRACTED : STATE_REGULAR;
+      // Far side ignores motion: the relaxed (Distracted) mood fires only after
+      // DISTRACTED_FAR_MIN_MS of continuous present-but-far. That promotion is
+      // applied further down once the debounced presence is known.
+      rawState = STATE_REGULAR;
     }
   } else {
     rawState = STATE_AWAY;
+  }
+
+  // Debug simulation state override (SIM state <NAME>) takes precedence over classification
+  if (appState.simulationMode && appState.simulatedStateOverride >= 0) {
+    rawState = appState.simulatedStateOverride;
   }
 
   // Debouncing logic to filter sensor instability/boundary jitter
@@ -912,6 +1000,30 @@ void loop(void) {
     }
     if (now - lastRawPresentChangeTime >= debounceLimit) {
       stablePresence = rawPresent;
+    }
+  }
+
+  // Relaxed (Distracted) mood: fires once the user has been present but
+  // continuously far from the desk for DISTRACTED_FAR_MIN_MS. Motion plays no
+  // role on the far side anymore. Resets when they come back to the focus zone
+  // or leave. Uses the debounced presence so brief radar dropouts don't reset
+  // the timer. A SIM state override keeps precedence.
+  if (!(appState.simulationMode && appState.simulatedStateOverride >= 0)) {
+    float farDist = (appState.filteredDetectionDist > 0.0) ? (float)appState.filteredDetectionDist : (float)appState.rawDetectionDist;
+    bool farInFocus = (farDist > 0.0 && farDist < appConfig.focusDistanceLimit);
+    if (stablePresence && farDist > 0.0) {
+      if (farInFocus) {
+        appState.farFromDeskSince = 0;
+      } else {
+        if (appState.farFromDeskSince == 0) {
+          appState.farFromDeskSince = now;
+        }
+        if (now - appState.farFromDeskSince >= DISTRACTED_FAR_MIN_MS) {
+          rawState = STATE_DISTRACTED;
+        }
+      }
+    } else {
+      appState.farFromDeskSince = 0;
     }
   }
 
@@ -954,7 +1066,7 @@ void loop(void) {
       appState.lastNagTime = now;
       currentSitDownSessionId++;
       Logger::log("STATE", "Away->Present: sit=%lu epoch=%s session=%d state=%s", 
-                  now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, presenceStateName(targetState));
+                  now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, presenceStateName(targetState).c_str());
       
       // Calculate currentBreakDurationMs immediately at the transition using transition timestamps
       appState.currentBreakDurationMs = 0;
@@ -1096,7 +1208,12 @@ void loop(void) {
       static int candidateState = -1;
       static unsigned long stateConfirmationTime = 0;
       
-      if (targetState != appState.currentPresenceState && targetState != STATE_AWAY) {
+      if (appState.simulationMode && appState.simulatedStateOverride >= 0 &&
+          targetState != appState.currentPresenceState) {
+        // Debug SIM state override: apply instantly, bypass sticky confirmation
+        appState.currentPresenceState = targetState;
+        appState.lastStateTransitionTime = now;
+      } else if (targetState != appState.currentPresenceState && targetState != STATE_AWAY) {
         if (targetState != candidateState) {
           candidateState = targetState;
           stateConfirmationTime = now;
@@ -1151,7 +1268,7 @@ void loop(void) {
       }
     }
       
-    // Trigger Stretch alert after 45 minutes of continuous presence
+    // Trigger Stretch alert after 60 minutes of continuous presence
     if (now - appState.lastStretchReminderTime > STRETCH_INTERVAL_MS) {
       appState.lastStretchReminderTime = now;
       messageManager.scheduleMessageWithPriority(
@@ -1202,7 +1319,7 @@ void loop(void) {
       
       unsigned long presenceDurationMs = now - appState.sitDownTime;
       Logger::log("STATE", "Present->Away: prevState=%s presDur=%lu s focusDur=%lu s stopByTrack=%d", 
-                  presenceStateName(appState.currentPresenceState), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
+                  presenceStateName(appState.currentPresenceState).c_str(), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
       
       bool isLateHours = isLateHoursNow();
 
@@ -1338,7 +1455,7 @@ void loop(void) {
     }
   }
 
-  // Periodically save stats to LittleFS (every 60 seconds) if anything has changed
+  // Periodically save stats to LittleFS (every 10 minutes) if anything has changed
   static unsigned long lastStatsSave = 0;
   static bool statsInit = false;
   static unsigned long lastSavedDeskTime = 0;
@@ -1506,7 +1623,7 @@ void loop(void) {
     }
   }
 
-  // Nagging check (overdue-task queue): rings every 35 min seated, one task per ring,
+  // Nagging check (overdue-task queue): rings every 10 min seated, one task per ring,
   // most-expired-first. The cursor persists across sessions and resets at midnight.
   if (appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     if (now - appState.lastNagTime >= NAGGING_TRIGGER_DELAY_MS) {
@@ -1521,7 +1638,8 @@ void loop(void) {
 
       std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
       if (appStats.nagQueueIndex < (int)queue.size()) {
-        appState.lastNagTime = now;
+      appState.lastNagTime = now;
+      appState.lastPointsTime = now;
         appStats.nagQueueIndex++;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1533,24 +1651,37 @@ void loop(void) {
     }
   }
 
+  // Points check-in: rings every 55 min seated with the live running total so
+  // the nudge references the actual points tracker state.
+  if (appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    if (now - appState.lastPointsTime >= POINTS_TRIGGER_DELAY_MS) {
+      appState.lastPointsTime = now;
+      messageManager.scheduleMessageWithPriority(
+        EVENT_POINTS,
+        buildPointsDetail(),
+        MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+      );
+    }
+  }
+
   // Process MQTT service loop
   loopMqtt();
 
-  // Handle Web Server requests (duplicate — already called at top of loop)
-  // server.handleClient();
-
-  // Handle OTA updates in the background (duplicate — already called at top of loop)
-  // ArduinoOTA.handle();
+  // Emit deferred boot logs now that MQTT is (re)connected
+  if (gBootLogPending && appState.mqttConnected) {
+    gBootLogPending = false;
+    Logger::log("SYSTEM", "Boot: uptime=%lu s reason=%s lastNtpDay=%d lastAway=%s distLimit=%d radar=%s",
+                gBootUptimeSec, gBootReasonName.c_str(), gBootLastNtpDay,
+                Logger::formatEpoch(gBootLastAwayEpoch).c_str(), gBootDistLimit,
+                gBootRadarOk ? "ok" : "down");
+  }
+  if (gBootStateMsgPending && appState.mqttConnected) {
+    gBootStateMsgPending = false;
+    Logger::log("SYSTEM", "%s", gBootStateMsg.c_str());
+  }
 
   // Update TFT Display
   updateTFTDisplay(now);
-
-  // Periodic Log Flusher to Flash (every 5 seconds)
-  static unsigned long lastLogFlushTime = 0;
-  if (now - lastLogFlushTime >= 5000) {
-    lastLogFlushTime = now;
-
-  }
 
   delay(LOOP_DELAY_MS);
 }

@@ -10,6 +10,7 @@
 #include "Stats.h"
 #include "Learning.h"
 #include "Constants.h"
+#include "Points.h"
 
 // Thresholds defined as constants
 #define EXCESSIVE_BREAKS_LIMIT_PER_HOUR 1.0
@@ -346,6 +347,12 @@ inline String getTodoObservations(int eventType) {
   // Format Observations output based on trigger event type
   if (eventType == EVENT_NAGGING) {
     obs += "Overdue Tasks Alert!\n";
+    obs += synthesis;
+  } else if (eventType == EVENT_POINTS) {
+    // Points tracker check-in: surface the live running total so the AI can
+    // react to an actual number instead of a placeholder.
+    obs += "Points Tracker Check-in!\n";
+    obs += "- " + buildPointsDetail() + " (running total this month).\n";
     obs += synthesis;
   } else {
     // All AI prompt flows receive the task synthesis

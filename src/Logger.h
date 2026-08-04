@@ -54,9 +54,6 @@ public:
     enqueueMqttPublish(topicBuffer, fullMsg);
   }
 
-  static void flushToFlash() {
-    // No-op, removed local saving
-  }
 };
 
 #endif // LOGGER_H

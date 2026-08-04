@@ -1,0 +1,670 @@
+{
+  "mode": "passive-shadow",
+  "started_epoch": 1785724547.16607,
+  "duration_s": 21600,
+  "summary": {
+    "state_dwell_seconds": {
+      "Regular Activity": 1601.184689283371,
+      "Away": 19771.243223905563,
+      "Distracted": 143.45097947120667,
+      "Focus": 84.19904446601868
+    },
+    "state_dwell_pct": {
+      "Regular Activity": 7.4,
+      "Away": 91.5,
+      "Distracted": 0.7,
+      "Focus": 0.4
+    },
+    "state_transition_count": 15,
+    "log_counts_by_category": {
+      "MQTT": 5,
+      "STATE": 47,
+      "BEHAVIOUR": 21
+    },
+    "ai_requests": 4,
+    "ai_responses": 4,
+    "ai_avg_latency_s": 1.8,
+    "ai_error_lines": 0,
+    "mqtt_drops": 0,
+    "mqtt_uptime_s": 0.0,
+    "telemetry_last_error": null
+  },
+  "anomalies": [
+    "state flapping detected (14 rapid reversals)"
+  ],
+  "transitions": [
+    {
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785724588.100432
+    },
+    {
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785724602.784014
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Distracted",
+      "ts": 1785724933.334818
+    },
+    {
+      "from": "Distracted",
+      "to": "Regular Activity",
+      "ts": 1785725076.7857974
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785725724.5641384
+    },
+    {
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785725769.6759925
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Focus",
+      "ts": 1785725899.3174663
+    },
+    {
+      "from": "Focus",
+      "to": "Regular Activity",
+      "ts": 1785725983.5165107
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785726372.172895
+    },
+    {
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785726940.796118
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785726982.6774473
+    },
+    {
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785729975.3897865
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785729986.3745737
+    },
+    {
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785740204.2397907
+    },
+    {
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785740215.263542
+    }
+  ],
+  "events": [
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:36] Present->Away: prevState=\ufffdZ\ufffd?  presDur=107 s focusDur=0 s stopByTrack=0",
+      "ts": 1785724587.6102502
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:36] Present->Away: Real session completed. lastAwayEpoch=23:36:36 reset stopByTracking",
+      "ts": 1785724587.9600503
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785724588.100432
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] Away->Present: sit=134574 epoch=23:36:52 session=2 state=\ufffdZ\ufffd? ",
+      "ts": 1785724602.5789952
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] Away->Present: refAway=23:36:36 gross=16 s break=16 s stopBy=0 s",
+      "ts": 1785724602.6256382
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] ResetCheck: cur=23:36:52 ref=23:36:36 curDay=0 refDay=0",
+      "ts": 1785724602.625689
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] ResetCheck: abs=16 s (0 h 0 m) dep=23:00 depDay=0 depWork=0 th=25200 s (7 h)",
+      "ts": 1785724602.6257162
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] ResetCheck: false (same-day, resume session)",
+      "ts": 1785724602.6257622
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0",
+      "ts": 1785724602.6258051
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:36:52] Away->Present: Ignored brief return (breakMs=16000 < min=180000)",
+      "ts": 1785724602.62585
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785724602.784014
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Distracted",
+      "ts": 1785724933.334818
+    },
+    {
+      "type": "state",
+      "from": "Distracted",
+      "to": "Regular Activity",
+      "ts": 1785725076.7857974
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:55:33] Present->Away: prevState= presDur=1121 s focusDur=0 s stopByTrack=0",
+      "ts": 1785725724.3862872
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:55:33] Present->Away: Real session completed. lastAwayEpoch=23:55:33 reset stopByTracking",
+      "ts": 1785725724.4396713
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785725724.5641384
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] Away->Present: sit=1301491 epoch=23:56:19 session=3 state=4\ufffd\ufffd? ",
+      "ts": 1785725769.4826555
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] Away->Present: refAway=23:55:33 gross=46 s break=46 s stopBy=0 s",
+      "ts": 1785725769.5363395
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] ResetCheck: cur=23:56:19 ref=23:55:33 curDay=0 refDay=0",
+      "ts": 1785725769.5364017
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] ResetCheck: abs=46 s (0 h 0 m) dep=23:00 depDay=0 depWork=0 th=25200 s (7 h)",
+      "ts": 1785725769.5364316
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] ResetCheck: false (same-day, resume session)",
+      "ts": 1785725769.5364563
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0",
+      "ts": 1785725769.5364788
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[23:56:19] Away->Present: Ignored brief return (breakMs=46000 < min=180000)",
+      "ts": 1785725769.5365026
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785725769.6759925
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Focus",
+      "ts": 1785725899.3174663
+    },
+    {
+      "type": "state",
+      "from": "Focus",
+      "to": "Regular Activity",
+      "ts": 1785725983.5165107
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:01:19] triggerBehaviour: event=10 detail=\"\" force=0",
+      "ts": 1785726070.1241393
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:01:19] Journal trigger: generated 2 pages",
+      "ts": 1785726070.1756752
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:01:19] Journal trigger: scheduled remaining pages in 4000 ms",
+      "ts": 1785726070.221147
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:01:23] triggerBehaviour: event=10 detail=\"PAGE:2|12|[YELLOW]TASK LIST (1) [YELLOW]-- DAILY -- [GREEN]11:50 | Check Mail [GREEN]10:00 |",
+      "ts": 1785726074.1536992
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:01:23] Journal trigger: showing page 2 (lines=12)",
+      "ts": 1785726074.2099674
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:06:19] triggerBehaviour: event=11 detail=\"Alice 1\" force=0",
+      "ts": 1785726369.9241338
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:06:19] Starting AI query task (dailyCount=1)",
+      "ts": 1785726370.0980937
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:06:19] AI Request: session=3 promptLen=1879",
+      "ts": 1785726370.1156628
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:06:20] Present->Away: prevState=\\\ufffd\ufffd?  presDur=601 s focusDur=0 s stopByTrack=0",
+      "ts": 1785726370.9195595
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:06:20] Present->Away: Real session completed. lastAwayEpoch=00:06:20 reset stopByTracking",
+      "ts": 1785726370.9695
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785726372.172895
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:06:21] AI Response Success: len=24 resp=\"Dan, Alice 1 is waiting.\"",
+      "ts": 1785726372.229412
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] Away->Present: sit=2471165 epoch=00:15:48 session=4 state=Lh\ufffd? ",
+      "ts": 1785726939.1428654
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] Away->Present: refAway=00:06:20 gross=568 s break=568 s stopBy=0 s",
+      "ts": 1785726939.189541
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] ResetCheck: cur=00:15:48 ref=00:06:20 curDay=1 refDay=1",
+      "ts": 1785726939.189726
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] ResetCheck: abs=568 s (0 h 9 m) dep=00:00 depDay=1 depWork=0 th=25200 s (7 h)",
+      "ts": 1785726939.1899025
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] ResetCheck: false (same-day, resume session)",
+      "ts": 1785726939.1899812
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=1",
+      "ts": 1785726939.1900427
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:15:48] Away->Present: Late-hours sit: first-sit flag held",
+      "ts": 1785726939.2351103
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785726940.796118
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:15:51] triggerBehaviour: event=14 detail=\"7h 45m before the 8:00 start\" force=0",
+      "ts": 1785726942.3022373
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:15:51] Starting AI query task (dailyCount=2)",
+      "ts": 1785726942.3591278
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:15:51] AI Request: session=4 promptLen=1681",
+      "ts": 1785726942.3594067
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[00:15:54] AI Response Success: len=33 resp=\"It's 00:15, quite late, isn't it?\"",
+      "ts": 1785726944.5489168
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:16:31] Present->Away: prevState=te\ufffd?  presDur=42 s focusDur=0 s stopByTrack=1",
+      "ts": 1785726982.1959467
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[00:16:31] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=00:06:20",
+      "ts": 1785726982.2867873
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785726982.6774473
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] Away->Present: sit=5505816 epoch=01:06:22 session=5 state=lh\ufffd? ",
+      "ts": 1785729973.7556298
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] Away->Present: refAway=00:06:20 gross=3602 s break=3602 s stopBy=0 s",
+      "ts": 1785729973.8057528
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] ResetCheck: cur=01:06:22 ref=00:06:20 curDay=1 refDay=1",
+      "ts": 1785729973.8059871
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] ResetCheck: abs=3602 s (1 h 0 m) dep=00:00 depDay=1 depWork=0 th=25200 s (7 h)",
+      "ts": 1785729973.8061225
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] ResetCheck: false (same-day, resume session)",
+      "ts": 1785729973.8062632
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=1",
+      "ts": 1785729973.8063793
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:22] Away->Present: Late-hours sit: first-sit flag held",
+      "ts": 1785729973.8065004
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785729975.3897865
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[01:06:25] triggerBehaviour: event=14 detail=\"6h 54m before the 8:00 start\" force=0",
+      "ts": 1785729976.8712726
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[01:06:25] Starting AI query task (dailyCount=3)",
+      "ts": 1785729976.9291275
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[01:06:25] AI Request: session=5 promptLen=1465",
+      "ts": 1785729976.9291797
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[01:06:27] AI Response Success: len=38 resp=\"Dan, it's 01:06, a bit late, isn't it?\"",
+      "ts": 1785729978.9948192
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:34] Present->Away: prevState=lh\ufffd?  presDur=11 s focusDur=0 s stopByTrack=1",
+      "ts": 1785729985.5657747
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[01:06:34] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=00:06:20",
+      "ts": 1785729985.6502333
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785729986.3745737
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] Away->Present: sit=15734783 epoch=03:56:51 session=6 state=\ufffd%\ufffd? ",
+      "ts": 1785740202.594477
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] Away->Present: refAway=00:06:20 gross=13831 s break=13831 s stopBy=0 s",
+      "ts": 1785740202.6493084
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] ResetCheck: cur=03:56:51 ref=00:06:20 curDay=1 refDay=1",
+      "ts": 1785740202.6494853
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] ResetCheck: abs=13831 s (3 h 50 m) dep=00:00 depDay=1 depWork=0 th=25200 s (7 h)",
+      "ts": 1785740202.6495843
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] ResetCheck: false (same-day, resume session)",
+      "ts": 1785740202.6496625
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=1",
+      "ts": 1785740202.6497405
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:56:51] Away->Present: Late-hours sit: first-sit flag held",
+      "ts": 1785740202.6498218
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Regular Activity",
+      "ts": 1785740204.2397907
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[03:56:54] triggerBehaviour: event=14 detail=\"4h 4m before the 8:00 start\" force=0",
+      "ts": 1785740205.7366784
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[03:56:54] Starting AI query task (dailyCount=4)",
+      "ts": 1785740205.7915552
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[03:56:54] AI Request: session=6 promptLen=1676",
+      "ts": 1785740206.0626903
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[03:56:56] AI Response Success: len=45 resp=\"It's 03:56, quite early, what's on your mind?\"",
+      "ts": 1785740207.9094195
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:57:03] Present->Away: prevState=Lh\ufffd?  presDur=11 s focusDur=0 s stopByTrack=1",
+      "ts": 1785740214.647323
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[03:57:03] Present->Away: Rolled back firstSit stop-by! firstSitToday=1 lastAwayEpoch=00:06:20",
+      "ts": 1785740214.7104733
+    },
+    {
+      "type": "state",
+      "from": "Regular Activity",
+      "to": "Away",
+      "ts": 1785740215.263542
+    }
+  ],
+  "serial_lines": [],
+  "shadow_checks": [
+    {
+      "name": "stretch_reminder",
+      "status": "not-exercised",
+      "expected": "after 60 min of continuous sitting, a stretch prompt (eventType 2) appears within 5 min",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "break_return_welcome",
+      "status": "pass",
+      "expected": "returning from a break >= 3 min shows Welcome Back (eventType 1) or a late-hours message (eventType 14) within 90 s",
+      "received": "[late-hours] It's 03:56, quite early, what's on your mind?",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 3,
+      "fails": 0
+    },
+    {
+      "name": "first_sit_greeting",
+      "status": "not-exercised",
+      "expected": "the day's first sit shows the first-sit greeting (eventType 0) within 90 s",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "classifier_sane",
+      "status": "pass",
+      "expected": "reported state matches distance+time thresholds (motion only splits the near zone into Focus/Busy); no sustained mismatches",
+      "received": "reported state matched distance/motion model across 2839 samples",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 34867,
+      "fails": 0
+    },
+    {
+      "name": "motion_ratio_range",
+      "status": "not-exercised",
+      "expected": "recentMotionRatio always stays in [0,100]",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    }
+  ]
+}

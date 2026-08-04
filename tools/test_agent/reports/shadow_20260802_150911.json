@@ -1,0 +1,564 @@
+{
+  "mode": "passive-shadow",
+  "started_epoch": 1785693551.0854542,
+  "duration_s": 600,
+  "summary": {
+    "state_dwell_seconds": {
+      "Focus": 58.785908222198486,
+      "Away": 217.96753931045532,
+      "Busy": 323.5756301879883
+    },
+    "state_dwell_pct": {
+      "Focus": 9.8,
+      "Away": 36.3,
+      "Busy": 53.9
+    },
+    "state_transition_count": 4,
+    "log_counts_by_category": {
+      "MQTT": 3,
+      "STATE": 18,
+      "BEHAVIOUR": 4
+    },
+    "ai_requests": 1,
+    "ai_responses": 1,
+    "ai_avg_latency_s": 1.8,
+    "ai_error_lines": 0,
+    "mqtt_drops": 0,
+    "mqtt_uptime_s": 0.0,
+    "telemetry_last_error": null
+  },
+  "anomalies": [
+    "state flapping detected (3 rapid reversals)"
+  ],
+  "transitions": [
+    {
+      "from": "Focus",
+      "to": "Away",
+      "ts": 1785693610.016513
+    },
+    {
+      "from": "Away",
+      "to": "Busy",
+      "ts": 1785693815.4631412
+    },
+    {
+      "from": "Busy",
+      "to": "Away",
+      "ts": 1785693940.8816693
+    },
+    {
+      "from": "Away",
+      "to": "Busy",
+      "ts": 1785693953.4025805
+    }
+  ],
+  "events": [
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:00:17] Present->Away: prevState=Focus presDur=100 s focusDur=100 s stopByTrack=0",
+      "ts": 1785693608.8616776
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:00:17] Present->Away: Real session completed. lastAwayEpoch=15:00:17 reset stopByTracking",
+      "ts": 1785693608.909372
+    },
+    {
+      "type": "state",
+      "from": "Focus",
+      "to": "Away",
+      "ts": 1785693610.016513
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] Away->Present: sit=314835 epoch=15:03:42 session=2 state=Busy",
+      "ts": 1785693813.8135457
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] Away->Present: refAway=15:00:17 gross=205 s break=205 s stopBy=0 s",
+      "ts": 1785693813.869059
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] ResetCheck: cur=15:03:42 ref=15:00:17 curDay=0 refDay=0",
+      "ts": 1785693813.8691158
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] ResetCheck: abs=205 s (0 h 3 m) dep=15:00 depDay=0 depWork=0 th=25200 s (7 h)",
+      "ts": 1785693813.869139
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] ResetCheck: false (same-day, resume session)",
+      "ts": 1785693813.8691602
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0",
+      "ts": 1785693813.869177
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:03:42] Away->Present: Handled standard break return: breakCount=3 duration=205 s",
+      "ts": 1785693813.8691957
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Busy",
+      "ts": 1785693815.4631412
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[15:03:45] triggerBehaviour: event=1 detail=\"3m\" force=0",
+      "ts": 1785693816.892703
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[15:03:45] Starting AI query task (dailyCount=22)",
+      "ts": 1785693816.942504
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[15:03:45] AI Request: session=2 promptLen=1796",
+      "ts": 1785693816.9425566
+    },
+    {
+      "type": "log",
+      "category": "BEHAVIOUR",
+      "text": "[15:03:47] AI Response Success: len=30 resp=\"Back after 3m, let's catch up.\"",
+      "ts": 1785693819.071246
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:05:49] Present->Away: prevState=Busy presDur=126 s focusDur=0 s stopByTrack=1",
+      "ts": 1785693940.5708988
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:05:49] Present->Away: Real session completed. lastAwayEpoch=15:05:49 reset stopByTracking",
+      "ts": 1785693940.618413
+    },
+    {
+      "type": "state",
+      "from": "Busy",
+      "to": "Away",
+      "ts": 1785693940.8816693
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] Away->Present: sit=454070 epoch=15:06:01 session=3 state=Busy",
+      "ts": 1785693952.8768635
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] Away->Present: refAway=15:05:49 gross=12 s break=12 s stopBy=0 s",
+      "ts": 1785693952.933246
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] ResetCheck: cur=15:06:01 ref=15:05:49 curDay=0 refDay=0",
+      "ts": 1785693952.9334013
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] ResetCheck: abs=12 s (0 h 0 m) dep=15:00 depDay=0 depWork=0 th=25200 s (7 h)",
+      "ts": 1785693952.9334872
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] ResetCheck: false (same-day, resume session)",
+      "ts": 1785693952.9335535
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0",
+      "ts": 1785693952.933623
+    },
+    {
+      "type": "log",
+      "category": "STATE",
+      "text": "[15:06:01] Away->Present: Ignored brief return (breakMs=12000 < min=180000)",
+      "ts": 1785693952.9336932
+    },
+    {
+      "type": "state",
+      "from": "Away",
+      "to": "Busy",
+      "ts": 1785693953.4025805
+    }
+  ],
+  "serial_lines": [
+    {
+      "line": "[DIAGNOSTICS] setup() started",
+      "ts": 1785693551.3415797
+    },
+    {
+      "line": "[DIAGNOSTICS] mqttClient bound",
+      "ts": 1785693551.3422232
+    },
+    {
+      "line": "[DIAGNOSTICS] Mutex created",
+      "ts": 1785693551.3428023
+    },
+    {
+      "line": "[DIAGNOSTICS] AIQuery task created",
+      "ts": 1785693551.3434763
+    },
+    {
+      "line": "[SYSTEM] Mounting LittleFS...",
+      "ts": 1785693551.3440502
+    },
+    {
+      "line": "[SYSTEM] LittleFS mounted successfully.",
+      "ts": 1785693551.3447268
+    },
+    {
+      "line": "[STATS] loadDailyStats: Checking if stats.json exists..[MQTT] [14:59:20] CMD: \"GET system\"",
+      "ts": 1785693551.3460438
+    },
+    {
+      "line": "[HEAPS] Free Heap: 99604 B (97 KB) | Min Free Heap: 85680 B (83 KB) | Max Alloc: 69620 B (67 KB)",
+      "ts": 1785693558.9692905
+    },
+    {
+      "line": "[STATE] [15:00:17] Present->Away: prevState=Focus presDur=100 s focusDur=100 s stopByTrack=0",
+      "ts": 1785693608.6712115
+    },
+    {
+      "line": "[STATE] [15:00:17] Present->Away: Real session completed. lastAwayEpoch=15:00:17 reset stopByTracking",
+      "ts": 1785693608.6734128
+    },
+    {
+      "line": "[STATS] saveDailyStats: Opening stats.json.tmp for writing...",
+      "ts": 1785693608.6747248
+    },
+    {
+      "line": "[STATS] saveDailyStats: Serializing JSON payload...",
+      "ts": 1785693608.690079
+    },
+    {
+      "line": "[STATS] saveDailyStats: Removing old stats.json...",
+      "ts": 1785693608.8012574
+    },
+    {
+      "line": "[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...",
+      "ts": 1785693608.818172
+    },
+    {
+      "line": "[STATS] saveDailyStats SUCCESS! Total writes: 1740",
+      "ts": 1785693608.8558314
+    },
+    {
+      "line": "[HEAPS] Free Heap: 103768 B (101 KB) | Min Free Heap: 85680 B (83 KB) | Max Alloc: 69620 B (67 KB)",
+      "ts": 1785693619.0191965
+    },
+    {
+      "line": "[HEAPS] Free Heap: 102196 B (99 KB) | Min Free Heap: 85680 B (83 KB) | Max Alloc: 69620 B (67 KB)",
+      "ts": 1785693679.0739446
+    },
+    {
+      "line": "[HEAPS] Free Heap: 99576 B (97 KB) | Min Free Heap: 84400 B (82 KB) | Max Alloc: 69620 B (67 KB)",
+      "ts": 1785693739.0900352
+    },
+    {
+      "line": "[HEAPS] Free Heap: 97768 B (95 KB) | Min Free Heap: 80316 B (78 KB) | Max Alloc: 69620 B (67 KB)",
+      "ts": 1785693799.1939883
+    },
+    {
+      "line": "[STATE] [15:03:42] Away->Present: sit=314835 epoch=15:03:42 session=2 state=Busy",
+      "ts": 1785693813.638667
+    },
+    {
+      "line": "[STATE] [15:03:42] Away->Present: refAway=15:00:17 gross=205 s break=205 s stopBy=0 s",
+      "ts": 1785693813.640576
+    },
+    {
+      "line": "[STATE] [15:03:42] ResetCheck: cur=15:03:42 ref=15:00:17 curDay=0 refDay=0",
+      "ts": 1785693813.6420565
+    },
+    {
+      "line": "[STATE] [15:03:42] ResetCheck: abs=205 s (0 h 3 m) dep=15:00 depDay=0 depWork=0 th=25200 s (7 h)",
+      "ts": 1785693813.6438122
+    },
+    {
+      "line": "[STATE] [15:03:42] ResetCheck: false (same-day, resume session)",
+      "ts": 1785693813.644993
+    },
+    {
+      "line": "[STATE] [15:03:42] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0",
+      "ts": 1785693813.6462183
+    },
+    {
+      "line": "[STATE] [15:03:42] Away->Present: Handled standard break return: breakCount=3 duration=205 s",
+      "ts": 1785693813.6475468
+    },
+    {
+      "line": "[STATS] saveDailyStats: Opening stats.json.tmp for writing...",
+      "ts": 1785693813.6484346
+    },
+    {
+      "line": "[STATS] saveDailyStats: Serializing JSON payload...",
+      "ts": 1785693813.65826
+    },
+    {
+      "line": "[STATS] saveDailyStats: Removing old stats.json...",
+      "ts": 1785693813.7448108
+    },
+    {
+      "line": "[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...",
+      "ts": 1785693813.764794
+    },
+    {
+      "line": "[STATS] saveDailyStats SUCCESS! Total writes: 1741",
+      "ts": 1785693813.8074112
+    },
+    {
+      "line": "[315090][E][vfs_api.cpp:105] open(): /littlefs/buddy_who_eye_s.rle does not exist, no permits for creation",
+      "ts": 1785693813.8913822
+    },
+    {
+      "line": "[BUDDY] Visor background cache (130x98) decoded.",
+      "ts": 1785693814.9753175
+    },
+    {
+      "line": "[MQTT] [15:03:45] CMD: \"GET system\"",
+      "ts": 1785693816.2344065
+    },
+    {
+      "line": "[BEHAVIOUR] [15:03:45] triggerBehaviour: event=1 detail=\"3m\" force=0",
+      "ts": 1785693816.8192978
+    },
+    {
+      "line": "[BEHAVIOUR] [15:03:45] Starting AI query task (dailyCount=22)",
+      "ts": 1785693816.8857012
+    },
+    {
+      "line": "[BEHAVIOUR] [15:03:45] AI Request: session=2 promptLen=1796",
+      "ts": 1785693816.889108
+    },
+    {
+      "line": "---------- AI Request ----------",
+      "ts": 1785693816.9004853
+    },
+    {
+      "line": "URL: https://api.groq.com/openai/v1/chat/completions",
+      "ts": 1785693816.9011729
+    },
+    {
+      "line": "Body: {\"model\":\"llama-3.3-70b-versatile\",\"messages\":[{\"role\":\"user\",\"content\":\"[ROLE]\\nYou are DeskBuddy, a warm motherly companion \u2014 caring but quietly firm. Soft guilt when they slack, genuine warmt",
+      "ts": 1785693816.9162838
+    },
+    {
+      "line": "-------------------------------",
+      "ts": 1785693816.916535
+    },
+    {
+      "line": "---------- AI Response ----------",
+      "ts": 1785693818.982367
+    },
+    {
+      "line": "HTTP Code: 200",
+      "ts": 1785693818.9827046
+    },
+    {
+      "line": "Payload: {\"id\":\"chatcmpl-ba8a6327-7369-421e-bd53-927d117f9322\",\"object\":\"chat.completion\",\"created\":1785693828,\"model\":\"llama-3.3-70b-versatile\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"co",
+      "ts": 1785693818.987572
+    },
+    {
+      "line": "--------------------------------",
+      "ts": 1785693818.9878383
+    },
+    {
+      "line": "[BEHAVIOUR] [15:03:47] AI Response Success: len=30 resp=\"Back after 3m, let's catch up.\"",
+      "ts": 1785693818.988471
+    },
+    {
+      "line": "[328287][E][vfs_api.cpp:105] open(): /littlefs/buddy_who_eye_s.rle does not exist, no permits for creation",
+      "ts": 1785693827.0905554
+    },
+    {
+      "line": "[BUDDY] Visor background cache (130x98) decoded.",
+      "ts": 1785693828.1711018
+    },
+    {
+      "line": "[HEAPS] Free Heap: 98776 B (96 KB) | Min Free Heap: 7696 B (7 KB) | Max Alloc: 59380 B (57 KB)",
+      "ts": 1785693859.2432947
+    },
+    {
+      "line": "[HEAPS] Free Heap: 97228 B (94 KB) | Min Free Heap: 7696 B (7 KB) | Max Alloc: 59380 B (57 KB)",
+      "ts": 1785693919.2754707
+    },
+    {
+      "line": "[STATE] [15:05:49] Present->Away: prevState=Busy presDur=126 s focusDur=0 s stopByTrack=1",
+      "ts": 1785693940.378399
+    },
+    {
+      "line": "[STATE] [15:05:49] Present->Away: Real session completed. lastAwayEpoch=15:05:49 reset stopByTracking",
+      "ts": 1785693940.3805342
+    },
+    {
+      "line": "[STATS] saveDailyStats: Opening stats.json.tmp for writing...",
+      "ts": 1785693940.3818002
+    },
+    {
+      "line": "[STATS] saveDailyStats: Serializing JSON payload...",
+      "ts": 1785693940.4013922
+    },
+    {
+      "line": "[STATS] saveDailyStats: Removing old stats.json...",
+      "ts": 1785693940.497726
+    },
+    {
+      "line": "[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...",
+      "ts": 1785693940.517498
+    },
+    {
+      "line": "[STATS] saveDailyStats SUCCESS! Total writes: 1742",
+      "ts": 1785693940.5658216
+    },
+    {
+      "line": "[STATE] [15:06:01] Away->Present: sit=454070 epoch=15:06:01 session=3 state=Busy",
+      "ts": 1785693952.8750868
+    },
+    {
+      "line": "[STATE] [15:06:01] Away->Present: refAway=15:05:49 gross=12 s break=12 s stopBy=0 s",
+      "ts": 1785693952.8771803
+    },
+    {
+      "line": "[STATE] [15:06:01] ResetCheck: cur=15:06:01 ref=15:05:49 curDay=0 refDay=0",
+      "ts": 1785693952.87868
+    },
+    {
+      "line": "[STATE] [15:06:01] ResetCheck: abs=12 s (0 h 0 m) dep=15:00 depDay=0 depWork=0 th=25200 s (7 h)",
+      "ts": 1785693952.880484
+    },
+    {
+      "line": "[STATE] [15:06:01] ResetCheck: false (same-day, resume session)",
+      "ts": 1785693952.8814473
+    },
+    {
+      "line": "[STATE] [15:06:01] Away->Present: rollover=0 isFirstSit=0 wasFirstToday=0",
+      "ts": 1785693952.8823395
+    },
+    {
+      "line": "[STATE] [15:06:01] Away->Present: Ignored brief return (breakMs=12000 < min=180000)",
+      "ts": 1785693952.8832471
+    },
+    {
+      "line": "[MQTT] [15:06:02] CMD: \"GET system\"",
+      "ts": 1785693953.8654807
+    },
+    {
+      "line": "[HEAPS] Free Heap: 104724 B (102 KB) | Min Free Heap: 7696 B (7 KB) | Max Alloc: 59380 B (57 KB)",
+      "ts": 1785693979.3098216
+    },
+    {
+      "line": "[HEAPS] Free Heap: 99788 B (97 KB) | Min Free Heap: 7696 B (7 KB) | Max Alloc: 59380 B (57 KB)",
+      "ts": 1785694039.4021366
+    },
+    {
+      "line": "[STATS] saveDailyStats: Opening stats.json.tmp for writing...",
+      "ts": 1785694098.8710475
+    },
+    {
+      "line": "[STATS] saveDailyStats: Serializing JSON payload...",
+      "ts": 1785694098.891189
+    },
+    {
+      "line": "[STATS] saveDailyStats: Removing old stats.json...",
+      "ts": 1785694099.0030608
+    },
+    {
+      "line": "[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...",
+      "ts": 1785694099.0258076
+    },
+    {
+      "line": "[STATS] saveDailyStats SUCCESS! Total writes: 1743",
+      "ts": 1785694099.231047
+    },
+    {
+      "line": "[HEAPS] Free Heap: 100412 B (98 KB) | Min Free Heap: 7696 B (7 KB) | Max Alloc: 59380 B (57 KB)",
+      "ts": 1785694099.5679824
+    }
+  ],
+  "shadow_checks": [
+    {
+      "name": "stretch_reminder",
+      "status": "not-exercised",
+      "expected": "after 60 min of continuous sitting, a stretch prompt (eventType 2) appears within 5 min",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "break_return_welcome",
+      "status": "pass",
+      "expected": "returning from a break >= 3 min shows Welcome Back (eventType 1) or a late-hours message (eventType 14) within 90 s",
+      "received": "[welcome-back] Back after 3m, let's catch up.",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 1,
+      "fails": 0
+    },
+    {
+      "name": "first_sit_greeting",
+      "status": "not-exercised",
+      "expected": "the day's first sit shows the first-sit greeting (eventType 0) within 90 s",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    },
+    {
+      "name": "classifier_sane",
+      "status": "pass",
+      "expected": "reported state matches distance+motion thresholds; no sustained mismatches",
+      "received": "reported state matched distance/motion model across 652 samples",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 1011,
+      "fails": 0
+    },
+    {
+      "name": "motion_ratio_range",
+      "status": "not-exercised",
+      "expected": "recentMotionRatio always stays in [0,100]",
+      "received": "",
+      "trigger": "",
+      "triggered_ts": null,
+      "detail": "",
+      "passes": 0,
+      "fails": 0
+    }
+  ]
+}

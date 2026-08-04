@@ -47,7 +47,7 @@ diagrams = {
         UA10 -- Yes --> UA11[Update currentPresenceState]
 
         UA11 --> UA12{Continuous presence triggers?}
-        UA12 --> UA13[45min: Stretch reminder]
+        UA12 --> UA13[60min: Stretch reminder]
         UA12 --> UA14[1hr + score under 35: Slacker roast]
         UA12 --> UA15[New streak record alert]
 
@@ -86,7 +86,7 @@ diagrams = {
     subgraph AI["8. AI / BEHAVIOUR SYSTEM"]
         EV1[triggerBehaviour called] --> EV2{AI Mode ON<br/>under 15 req/day?}
         EV2 -- Yes --> EV3[Resolve persona prompt<br/>Create FreeRTOS task]
-        EV3 --> EV4[queryGeminiTask:<br/>HTTPS POST to Gemini 2.5 Flash]
+        EV3 --> EV4[aiQueryTask:<br/>HTTPS POST to Groq (llama-3.3-70b-versatile)]
         EV4 --> EV5{HTTP 200?}
         EV5 -- Yes --> EV6[Parse response,<br/>set hasNewAIResponse=true]
         EV5 -- No --> EV7[Pick local fallback quote<br/>20 per event type]
@@ -176,11 +176,11 @@ diagrams = {
     Trigger([triggerBehaviour called]) --> CheckAI{Is AI Mode active?}
     
     CheckAI -- Yes --> LimitCheck{Under daily 15-req cap?}
-    LimitCheck -- Yes --> StartThread[Launch queryGeminiTask in background]
+    LimitCheck -- Yes --> StartThread[Launch aiQueryTask in background]
     LimitCheck -- No --> Fallback[Load Local Fallback Quote]
     CheckAI -- No --> Fallback
     
-    StartThread --> HTTPSReq[Send secure HTTPS POST to Gemini 2.5 Flash]
+    StartThread --> HTTPSReq[Send secure HTTPS POST to Groq (llama-3.3-70b-versatile)]
     HTTPSReq --> RespCheck{HTTP 200 & Valid JSON?}
     
     RespCheck -- Yes --> SetNewResp[Store response, set hasNewAIResponse = true]

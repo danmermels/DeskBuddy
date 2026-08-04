@@ -12,6 +12,7 @@
 #include "State.h"
 #include "Logger.h"
 #include "Learning.h"
+#include "Timer.h"
 
 extern PubSubClient mqttClient;
 extern Preferences preferences;
@@ -26,10 +27,34 @@ static String presenceStateName(int s) {
   return String(n);
 }
 
-static void publishDebug(const String& json) {
-  if (mqttClient.connected()) {
-    mqttClient.publish(MQTT_DEBUG_RESP_TOPIC, json.c_str());
+// Last debug command echoed in every resp so clients can correlate responses
+// to the exact command (protects against delayed/misordered resp publishes).
+static String g_lastDebugCmd = "";
+
+static String jsonEscape(const String& in) {
+  String out;
+  out.reserve(in.length() + 8);
+  for (unsigned int i = 0; i < in.length(); i++) {
+    char c = in[i];
+    if (c == '"') {
+      out += "\\\"";
+    } else if (c == '\\') {
+      out += "\\\\";
+    } else {
+      out += c;
+    }
   }
+  return out;
+}
+
+static void publishDebug(const String& json) {
+  if (!mqttClient.connected()) return;
+  String out = json;
+  if (g_lastDebugCmd.length() > 0 && out.endsWith("}")) {
+    out = out.substring(0, out.length() - 1) +
+          ",\"cmd\":\"" + jsonEscape(g_lastDebugCmd) + "\"}";
+  }
+  mqttClient.publish(MQTT_DEBUG_RESP_TOPIC, out.c_str());
 }
 
 static String fmtMs(unsigned long ms) {
@@ -125,6 +150,7 @@ static void handleGetConfig() {
   doc["motionRatioLim"] = appConfig.motionRatioLimit;
   doc["distLimit"] = appConfig.deskDistanceLimit;
   doc["filterWindow"] = appConfig.filterWindow;
+  doc["motionWindow"] = appConfig.motionWindow;
   doc["hasMail"] = appConfig.hasMail;
   doc["time24h"] = appConfig.time24h;
   doc["g0mSens"] = appConfig.g0mSens;
@@ -282,6 +308,18 @@ static void handleGetGeneric(const String& key) {
     doc["ok"] = true;
     doc[key] = appConfig.filterWindow;
   }
+  else if (key == "motionWindow") {
+    doc["ok"] = true;
+    doc[key] = appConfig.motionWindow;
+  }
+  else if (key == "pointsPoorMax") {
+    doc["ok"] = true;
+    doc[key] = appConfig.pointsPoorMax;
+  }
+  else if (key == "pointsExcellentMin") {
+    doc["ok"] = true;
+    doc[key] = appConfig.pointsExcellentMin;
+  }
   else if (key == "freeHeap") {
     doc["ok"] = true;
     doc[key] = (int)ESP.getFreeHeap();
@@ -362,6 +400,13 @@ static void handleSet(const String& args) {
     appConfig.filterWindow = valStr.toFloat();
     preferences.putFloat("filterWindow", appConfig.filterWindow);
     ok = true;
+  } else if (cfgKey == "motionWindow" && isDigitStr(valStr)) {
+    int motionWindow = valStr.toInt();
+    if (motionWindow < 1) motionWindow = 1;
+    if (motionWindow > RECENT_MOTION_WINDOW_S) motionWindow = RECENT_MOTION_WINDOW_S;
+    appConfig.motionWindow = motionWindow;
+    preferences.putInt("motionWindow", appConfig.motionWindow);
+    ok = true;
   } else if (cfgKey == "hasMail") {
     appConfig.hasMail = (valStr == "1" || valStr == "true");
     preferences.putBool("hasMail", appConfig.hasMail);
@@ -425,6 +470,14 @@ static void handleSet(const String& args) {
   } else if (cfgKey == "g6sSens" && isDigitStr(valStr)) {
     appConfig.g6sSens = valStr.toInt();
     preferences.putInt("g6sSens", appConfig.g6sSens);
+    ok = true;
+  } else if (cfgKey == "pointsPoorMax" && isDigitStr(valStr)) {
+    appConfig.pointsPoorMax = valStr.toInt();
+    preferences.putInt("pointsPoorMax", appConfig.pointsPoorMax);
+    ok = true;
+  } else if (cfgKey == "pointsExcellentMin" && isDigitStr(valStr)) {
+    appConfig.pointsExcellentMin = valStr.toInt();
+    preferences.putInt("pointsExcellentMin", appConfig.pointsExcellentMin);
     ok = true;
   }
 
@@ -672,6 +725,7 @@ static int parseEventType(const String& s) {
   if (u == "TASK_DUE" || u == "TASKDUE")                  return EVENT_TASK_DUE;
   if (u == "PAGE")                                        return EVENT_PAGE;
   if (u == "LATEHOURS" || u == "LATEHOURS_SIT" || u == "LATEHOURSSIT") return EVENT_LATEHOURS_SIT;
+  if (u == "POINTS")                                      return EVENT_POINTS;
   return -1;
 }
 
@@ -682,8 +736,8 @@ static void handleTrigger(const String& args) {
 
   int eventType = parseEventType(typeStr);
   if (typeStr.length() == 0 || eventType < 0 || eventType > EVENT_LATEHOURS_SIT) {
-    Logger::log("MQTT", "Invalid TRIGGER event type '%s'. Use 0-%d or a name (FIRST_SIT, WELCOME_BACK, STRETCH, FOCUS_END, SLACKER, STREAK_BEATEN, LUNCH, EXCESSIVE_BREAKS, GOAL_COMPLETED, JOURNAL, NAGGING, TASK_DUE, PAGE, LATEHOURS).", typeStr.c_str(), EVENT_LATEHOURS_SIT);
-    publishDebug("{\"ok\":false,\"error\":\"Invalid event type. Use 0-" + String(EVENT_LATEHOURS_SIT) + " or an event name (e.g. LUNCH, JOURNAL, LATEHOURS)\"}");
+    Logger::log("MQTT", "Invalid TRIGGER event type '%s'. Use 0-%d or a name (FIRST_SIT, WELCOME_BACK, STRETCH, FOCUS_END, SLACKER, STREAK_BEATEN, LUNCH, EXCESSIVE_BREAKS, GOAL_COMPLETED, JOURNAL, NAGGING, TASK_DUE, PAGE, LATEHOURS, POINTS).", typeStr.c_str(), EVENT_LATEHOURS_SIT);
+    publishDebug("{\"ok\":false,\"error\":\"Invalid event type. Use 0-" + String(EVENT_LATEHOURS_SIT) + " or an event name (e.g. LUNCH, JOURNAL, LATEHOURS, POINTS)\"}");
     return;
   }
 
@@ -716,6 +770,43 @@ static void handleTrigger(const String& args) {
   publishDebug(resp);
 }
 
+// ---- TIMER handler ----
+// TIMER [SW|CD] START|PAUSE|RESUME|RESET [totalMs]
+static void handleTimerDebug(const String& args) {
+  String a = args;
+  a.trim();
+  String action = a;
+  String mode = "sw";
+  unsigned long totalMs = 0;
+
+  int sp = a.indexOf(' ');
+  if (sp >= 0) {
+    String first = a.substring(0, sp);
+    first.toUpperCase();
+    String rest = a.substring(sp + 1);
+    if (first == "SW" || first == "CD") {
+      mode = (first == "CD") ? "cd" : "sw";
+      action = rest;
+      int sp2 = rest.indexOf(' ');
+      if (sp2 >= 0) {
+        action = rest.substring(0, sp2);
+        String num = rest.substring(sp2 + 1);
+        num.trim();
+        totalMs = num.toInt();
+      }
+    }
+  }
+
+  String ac = action;
+  ac.toUpperCase();
+  if (ac == "START" || ac == "PAUSE" || ac == "RESUME" || ac == "RESET") {
+    timerCommand(ac, mode, totalMs, millis());
+    publishDebug("{\"ok\":true,\"timer\":\"" + ac + "\",\"mode\":\"" + mode + "\",\"totalMs\":" + String(totalMs) + "}");
+  } else {
+    publishDebug("{\"ok\":false,\"error\":\"Usage: TIMER [SW|CD] START|PAUSE|RESUME|RESET [totalMs]\"}");
+  }
+}
+
 // ---- Main debug command dispatcher ----
 // Parses and dispatches plain-text MQTT commands received from the web terminal or debug broker.
 // Protocol Format: [COMMAND] [arguments...] (e.g. "GET state", "SET config.userName \"alex\"", "SIM away")
@@ -738,6 +829,7 @@ static void handleTrigger(const String& args) {
 void handleDebugCommand(const String& payload) {
   String trimmed = payload;
   trimmed.trim();
+  g_lastDebugCmd = trimmed;
   Logger::log("MQTT", "CMD: \"%s\"", trimmed.c_str());
 
   int sp = trimmed.indexOf(' ');
@@ -771,8 +863,11 @@ void handleDebugCommand(const String& payload) {
   else if (cmd == "TRIGGER") {
     handleTrigger(args);
   }
+  else if (cmd == "TIMER") {
+    handleTimerDebug(args);
+  }
   else {
-    publishDebug("{\"ok\":false,\"error\":\"Unknown command '" + cmd + "'. Use GET/SET/SIM/SYS/TRIGGER\"}");
+    publishDebug("{\"ok\":false,\"error\":\"Unknown command '" + cmd + "'. Use GET/SET/SIM/SYS/TRIGGER/TIMER\"}");
   }
 }
 

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "test_classify_busy",
+    "suite": "modes",
+    "status": "fail",
+    "message": "AssertionError_ex: SIM radar 25 1 1: ok=false (no resp)",
+    "duration": 10.008
+  },
+  {
+    "name": "test_classify_distracted",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 200.208
+  },
+  {
+    "name": "test_classify_focus",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 120.002
+  },
+  {
+    "name": "test_classify_regular",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 200.125
+  },
+  {
+    "name": "test_recent_motion_ratio_tracks_sim_motion",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 296.653
+  },
+  {
+    "name": "test_telemetry_exposes_classifier_inputs",
+    "suite": "modes",
+    "status": "pass",
+    "message": "",
+    "duration": 0.0
+  }
+]

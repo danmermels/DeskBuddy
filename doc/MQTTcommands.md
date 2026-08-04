@@ -16,9 +16,8 @@ Complete reference for all MQTT topics, commands, and message formats.
 8. [AI Debug Trace](#8-ai-debug-trace)
 9. [Log Stream](#9-log-stream)
 10. [Message Queue & Throttling](#10-message-queue--throttling)
-11. [Message History Buffer](#11-message-history-buffer)
-12. [Home Assistant Integration](#12-home-assistant-integration)
-13. [Quick Reference Card](#quick-reference-card)
+11. [Home Assistant Integration](#11-home-assistant-integration)
+12. [Quick Reference Card](#quick-reference-card)
 
 ---
 
@@ -644,38 +643,10 @@ All outbound MQTT messages (except `deskbuddy/heap` and `deskbuddy/debug/resp`) 
 ### Inbound Throttling
 
 - **Reconnect interval:** 10 seconds between connection attempts
-- **History buffer:** Last 50 messages retained in circular buffer (thread-safe via mutex)
 
 ---
 
-## 11. Message History Buffer
-
-The last 50 received MQTT messages are stored in a circular buffer for diagnostic purposes.
-
-### Access via Web Dashboard
-
-The `/radar-data` JSON endpoint includes the full history:
-
-```json
-{
-  "mqttHistory": [
-    {
-      "topic": "deskbuddy/debug/resp",
-      "payload": "{\"ok\":true}",
-      "timestamp": 12345678
-    },
-    ...
-  ]
-}
-```
-
-### Access via MQTT Debug
-
-Use `GET state` to see current connection status. History is only accessible via the web dashboard `/radar-data` endpoint or the web UI's MQTT History section.
-
----
-
-## 12. Home Assistant Integration
+## 11. Home Assistant Integration
 
 ### Example `configuration.yaml`
 

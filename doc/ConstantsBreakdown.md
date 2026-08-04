@@ -201,7 +201,7 @@ Constants controlling when task journal prompts and nagging triggers fire.
 | `PRE_LUNCH_JOURNAL_MINS_BEFORE` | 15 | 15 minutes | Show the pre-lunch task review 15 minutes before the learned lunch hour. |
 | `END_OF_DAY_JOURNAL_HOURS_BEFORE` | 1 | 1 hour | Show the end-of-day task review 1 hour before the learned workday end. |
 | `MIDDAY_TASK_CHECK_HOUR` | 12 | 12:00 PM | At noon, the curation system checks if any daily tasks have been completed and injects that observation into AI prompts. |
-| `NAGGING_TRIGGER_DELAY_MS` | 2100000 | 35 minutes | Cadence of the overdue-task nag queue: the first nag fires 35 minutes into a sitting session, then every 35 minutes while seated. Each nag names the next overdue task (most-expired-first). The cursor persists across sessions and resets at midnight. |
+| `NAGGING_TRIGGER_DELAY_MS` | 600000 | 10 minutes | Cadence of the overdue-task nag queue: the first nag fires 10 minutes into a sitting session, then every 10 minutes while seated. Each nag names the next overdue task (most-expired-first). The cursor persists across sessions and resets at midnight. |
 | `TASK_OVERDUE_DAYS_LIMIT` | 3 | 3 days | Severity cutoff for the AI task synthesis: daily tasks more than 3 days past due are flagged as "highly overdue" in the AI prompt context. |
 | `TASK_OVERDUE_MONTHS_LIMIT` | 3 | 3 months | Severity cutoff for the AI task synthesis: monthly tasks more than 3 months past due are flagged as "highly overdue" in the AI prompt context. |
 | `TASK_SYNTHESIS_MAX_CHARS` | 500 | ~10 bullets | Max length of the compact `[TASK SYNTHESIS]` block injected into AI prompt observations (counts + task names). Longer lists are truncated with `...`. |

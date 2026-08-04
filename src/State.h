@@ -38,6 +38,7 @@ struct ConfigState {
   int motionRatioLimit = MOTION_RATIO_LIMIT_DEFAULT;
   int deskDistanceLimit = DISTANCE_LIMIT_DEFAULT;
   float filterWindow = 2.0;
+  int motionWindow = RECENT_MOTION_WINDOW_S;  // rolling motion window (seconds, 1..180)
   bool hasMail = false;
   bool time24h = true;
   int buddyFontIndex = 0; // 0 = GoodTiming20, 1 = GoodTiming15 (or other 2nd font)
@@ -57,6 +58,10 @@ struct ConfigState {
   int g5sSens = 40;
   int g6mSens = 50;
   int g6sSens = 40;
+
+  // Task points categories (current-month running total)
+  int pointsPoorMax = 30;
+  int pointsExcellentMin = 120;
 
   // WiFi credentials
   String wifiSsid = "";
@@ -151,7 +156,8 @@ struct RuntimeState {
   
   unsigned long sitDownTime = 0;
   uint32_t sitDownEpoch = 0;
-  unsigned long lastNagTime = 0; // per-session timer for the 35 min overdue-task nag cadence
+  unsigned long lastNagTime = 0; // per-session timer for the 10 min overdue-task nag cadence
+  unsigned long lastPointsTime = 0; // per-session timer for the 55 min seated points check-in
   bool rolloverPending = false;
   unsigned long requiredValidationBufferMs = 180000UL;
 
@@ -165,6 +171,8 @@ struct RuntimeState {
   unsigned long sessionDistanceSum = 0;
   unsigned long sessionDistanceCount = 0;
   float sessionDistanceAverage = 0.0;
+  int recentMotionRatio = 0; // 180s windowed motion % used by the mood classifier (main.cpp)
+  unsigned long farFromDeskSince = 0; // when the user entered the far zone while present (relaxed/Distracted mood timer)
 
   int lastTriggeredEventType = 0; // EVENT_FIRST_SIT
   
@@ -213,6 +221,16 @@ struct TodoState {
   String rawJson = "{\"daily\":[],\"monthly\":[]}";
 };
 
+struct TimerState {
+  int mode = 0;              // 0 = off, 1 = stopwatch, 2 = countdown
+  bool running = false;      // currently counting
+  unsigned long accumMs = 0; // stopwatch: elapsed when paused; countdown: remaining when paused
+  unsigned long targetMs = 0;// countdown total duration
+  unsigned long refMillis = 0; // millis() when the current run started
+  bool completionFired = false; // countdown zero already notified
+  unsigned long holdUntil = 0;  // keep the overlay (post-reset) until this millis
+};
+
 struct TftMessageRecord {
   uint32_t epoch;
   char text[96];
@@ -243,5 +261,6 @@ extern StatsState appStats;
 extern RuntimeState appState;
 extern TodoState appTodo;
 extern TftMessageHistory tftMsgHistory;
+extern TimerState timerState;
 
 #endif // STATE_H

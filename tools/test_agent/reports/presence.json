@@ -1,0 +1,58 @@
+[
+  {
+    "name": "test_sim_presets",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 13.984
+  },
+  {
+    "name": "test_sim_radar_sit",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 2.036
+  },
+  {
+    "name": "test_sim_state_away",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 11.617
+  },
+  {
+    "name": "test_sim_state_busy",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 3.719
+  },
+  {
+    "name": "test_sim_state_distracted",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.452
+  },
+  {
+    "name": "test_sim_state_focus",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.531
+  },
+  {
+    "name": "test_sim_state_regular",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 1.341
+  },
+  {
+    "name": "test_sim_stop_clears",
+    "suite": "presence",
+    "status": "pass",
+    "message": "",
+    "duration": 2.174
+  }
+]

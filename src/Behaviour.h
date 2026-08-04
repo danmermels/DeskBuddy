@@ -18,6 +18,7 @@
 #define EVENT_TASK_DUE         12
 #define EVENT_PAGE             13
 #define EVENT_LATEHOURS_SIT    14
+#define EVENT_POINTS           15
 
 // --- Local Fallback/Eco Quotes (20 per category) ---
 
@@ -389,7 +390,7 @@ inline String computeEarlyLateString(const struct tm& localTime) {
 }
 
 static const char* PROMPT_STRETCH_REMINDER =
-  "{name} has been seated for 45 minutes. "
+  "{name} has been seated for over an hour. "
   "State this duration as a matter-of-fact notice, then nudge them to move in your persona's voice. "
   "Vary the angle each time: body, eyes, posture, circulation — never the same twice. Under 90 characters.";
 
@@ -466,6 +467,44 @@ static const char* PROMPT_NAGGING =
 static const char* PROMPT_TASK_DUE =
   "Task '{detail}' is due now. Notify {name} with the time-based fact first, then your persona's reaction. "
   "Vary the emphasis: clock, consequence, or readiness — never the same framing twice. Under 90 characters.";
+
+static const char* localPoints[4][5] = {
+  { // Coach
+    "55 minutes in, {name}! You're at {detail}. Keep banking them.",
+    "Hour-long push underway, {name}. {detail}. Let's grow that total.",
+    "{name}, one solid hour. {detail} — a few more wins and you're flying.",
+    "You've earned the momentum, {name}. {detail}. Next task, let's go!",
+    "Great pace, {name}! {detail}. Keep stacking, the month is yours."
+  },
+  { // Critic
+    "An hour of sitting, {name}. {detail}. That number won't move itself.",
+    "{name}, {detail}. Impressive only if the tasks actually got done.",
+    "55 minutes, {name}. {detail}. Don't celebrate; bank some more.",
+    "{name}, your scoreboard reads {detail}. Make it embarrassing — for the backlog.",
+    "You're at {detail}, {name}. Good. Now stay good."
+  },
+  { // Sweet
+    "55 minutes of focus, {name} — well done. {detail}. Keep going gently.",
+    "You've done so well this hour, {name}. {detail}. Proud of you.",
+    "Here's your little check-in, {name}. {detail}. Every task adds a sparkle.",
+    "{name}, you're building something lovely. {detail}. One more small win?",
+    "Sweet progress, {name}. {detail}. Take a breath, then keep flowing."
+  },
+  { // Friend
+    "Hour's up, {name}! Score check: {detail}. Let's run it up.",
+    "{name}, {detail}. Not bad — not bad at all. Another round?",
+    "55 minutes, {name}. {detail}. C'mon, one more task for the bragging rights.",
+    "{name}, the points board says {detail}. Let's make it embarrassing-good.",
+    "Back from the hour mark, {name}: {detail}. Keep the streak alive!"
+  }
+};
+
+static const char* PROMPT_POINTS =
+  "Check-in: {name} has been seated for 55 minutes. Their task points tracker for this month: '{detail}' "
+  "(running total with category). Mention the points system explicitly — react to the total and where it "
+  "stands (poor/good/excellent), and connect it to the tasks in the observations. Praise good numbers, "
+  "rally for mid ones, warn about negative ones. Persona colors the tone; never read like an app dashboard. "
+  "Vary the framing each time. Under 90 characters.";
 
 #endif // BEHAVIOUR_H
 

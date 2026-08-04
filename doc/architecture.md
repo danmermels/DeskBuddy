@@ -48,7 +48,7 @@ src/
   main.cpp              Entry point: setup(), loop(), global state instances
   Constants.h           All timing, threshold, and system constants
   State.h               Four global state structs (Config, Stats, Runtime, Todo)
-  Behaviour.h           Event types (13), local fallback quotes (4 personas), AI prompt templates
+  Behaviour.h           Event types (14), local fallback quotes (4 personas), AI prompt templates
   AI.h                  FreeRTOS background task, prompt construction, AI/local fallback dispatch
   Display.h             TFT display update loop, RLE image decoder, message renderer
   Faceplates.h          6+ clock face rendering functions (Default, Minimalist, HiTech, Dev, Aviator, DeskBuddy)
@@ -58,7 +58,7 @@ src/
   Curation.h            AI prompt enrichment: behavioral observations, task overdue analysis
   Stats.h               Session and daily stats reset functions
   MessageManager.h/.cpp Priority-based message queue with scheduling and relevance windows
-  MqttService.h         MQTT connection, pub/sub, message queue, history buffer
+  MqttService.h         MQTT connection, pub/sub, message queue
   MqttDebug.h           MQTT debug command handler (GET/SET system parameters over MQTT)
   Web.h                 HTTP server: dashboard, TODO manager, settings, credentials, file manager
   Logger.h              Category-tagged logging to Serial + MQTT
@@ -78,7 +78,7 @@ tools/                 Helper scripts
 ### `setup()` Boot Sequence (`main.cpp:381`)
 
 1. Serial init (115200 baud)
-2. Create FreeRTOS mutexes (`aiMutex`, `mqttHistoryMutex`, `mqttPublishQueueMutex`)
+2. Create FreeRTOS mutexes (`aiMutex`, `mqttPublishQueueMutex`)
 3. Spawn persistent `aiQueryTask` FreeRTOS background task (12KB stack)
 4. Load all config from NVS Preferences (WiFi, MQTT, API keys, radar gate sensitivities)
 5. Mount LittleFS and load `stats.json` (daily statistics)
@@ -103,7 +103,7 @@ Runs every ~10ms (`LOOP_DELAY_MS`). In order:
 6. **Weather fetch** -- hourly OpenWeatherMap API call
 7. **Radar read** -- poll LD2410, apply rolling median filter at 10Hz, compute distance/motion
 8. **Presence state machine** -- debounce, session transitions (Away/Present), stop-by detection
-9. **Behaviour triggers** -- stretch (45m), slacker roast (1h), streak beaten, lunch, goal, journal, nagging, task-due
+9. **Behaviour triggers** -- stretch (60m), slacker roast (1h), streak beaten, lunch, goal, journal, nagging, task-due
 10. **MessageManager** -- process scheduled message queue, dispatch due messages
 11. **MQTT loop** -- reconnect, process publish queue
 12. **Display update** -- render active faceplate or alert screen
@@ -145,7 +145,7 @@ Key fields: `totalDeskTime`, `totalFocusTime`, `totalBreakTime`, `breakCount`, `
 ### `RuntimeState appState`
 Ephemeral runtime state. Not persisted.
 
-Key fields: `currentPresenceState`, `filteredDetectionDist`, `sensorPresenceDetected`, `sensorMovingTargetDetected`, `isAILoading`, `aiResponse`, `hasNewAIResponse`, `currentPrompt`, `mqttConnected`, `aiMutex`, `mqttHistory[50]`, `simulationMode`, `captivePortalMode`.
+Key fields: `currentPresenceState`, `filteredDetectionDist`, `sensorPresenceDetected`, `sensorMovingTargetDetected`, `isAILoading`, `aiResponse`, `hasNewAIResponse`, `currentPrompt`, `mqttConnected`, `aiMutex`, `simulationMode`, `captivePortalMode`.
 
 ### `TodoState appTodo`
 Raw JSON string for the task list (`{"daily":[],"monthly":[]}`). Read from `/todo.json` on LittleFS.
@@ -246,7 +246,7 @@ score = constrain(raw, 0, 100)
 | 8 | `EVENT_EXCESSIVE_BREAKS` | Break rate > 1/hour after 3 h worked |
 | 9 | `EVENT_GOAL_COMPLETED` | Desk time >= target hours |
 | 10 | `EVENT_JOURNAL` | Morning/pre-lunch/end-of-day task review |
-| 11 | `EVENT_NAGGING` | Overdue tasks: every 35 m seated, one task per ring, most-expired-first (cursor resets at midnight) |
+| 11 | `EVENT_NAGGING` | Overdue tasks: every 10 m seated, one task per ring, most-expired-first (cursor resets at midnight) |
 | 12 | `EVENT_TASK_DUE` | Scheduled daily task matches current time |
 | 13 | `EVENT_PAGE` | Follow-up screen for messages split at `MSG_PAGE_MAX_CHARS` (110) |
 | 14 | `EVENT_LATEHOURS_SIT` | Any sit-down during late hours (learned workday padded by 30 m on both sides); replaces FIRST_SIT/WELCOME_BACK |
@@ -330,7 +330,7 @@ Packet:
 
 The Aviator face (ID 4) uses `TFT_eSprite` for double-buffered watch hands:
 - `hourHandSprite`, `minuteHandSprite`, `secondHandSprite`, `centerBgSprite`
-- Loaded from RLE files (`buddy_eye_o.rle`, etc.)
+- Loaded from RLE files (`aviator_hour.rle`, `aviator_minute.rle`, `aviator_second.rle`)
 - Cleaned up on faceplate switch to free RAM
 
 ### Message Rendering (`Display.h:258`)
@@ -357,12 +357,8 @@ The Aviator face (ID 4) uses `TFT_eSprite` for double-buffered watch hands:
 | `deskbuddy/log/<category>` | Publish | System logs by category |
 | `deskbuddy/debug/cmd` | Subscribe | Debug commands (GET/SET/SIM/SYS/TRIGGER) |
 | `deskbuddy/debug/resp` | Publish | Debug command responses |
-| `deskbuddy/debug/ai/request` | Publish | Full AI request payload (debug) |
-| `deskbuddy/debug/ai/response` | Publish | Full AI response (debug) |
 
 **Publish Queue:** Thread-safe `std::queue<MqttQueueMessage>` protected by `mqttPublishQueueMutex`. Max 20 entries; oldest discarded on overflow.
-
-**History Buffer:** Circular buffer of 50 `MqttMessage` entries (topic + payload + timestamp), protected by `mqttHistoryMutex`.
 
 ### Web Server
 
@@ -554,8 +550,7 @@ The `getCurationObservations()` function generates behavioral observation string
 | Mutex | Protects | Created In |
 |-------|----------|------------|
 | `appState.aiMutex` | `appState.currentPrompt`, `appState.aiResponse`, `appState.hasNewAIResponse`, `appState.lastResponseIsAi`, `appState.lastTriggeredEventType`, `appState.lastTriggeredEventDetail`, `appState.currentUserName`, `aiQuerySessionId` | `main.cpp:391` |
-| `appState.mqttHistoryMutex` | `appState.mqttHistory[]` circular buffer | `main.cpp:395` |
-| `mqttPublishQueueMutex` | `mqttPublishQueue` (std::queue) | `main.cpp:398` |
+| `mqttPublishQueueMutex` | `mqttPublishQueue` (std::queue) | `main.cpp:395` |
 
 ### FreeRTOS Task
 

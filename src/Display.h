@@ -323,6 +323,14 @@ inline void drawFaceplateMessage(const char* bgImage, String text, uint16_t text
     startY = NaggingConfig::msgStartY;
   }
 
+  if (appState.lastTriggeredEventType == EVENT_POINTS) {
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(tft.color565(PointsConfig::titleColor.r, PointsConfig::titleColor.g, PointsConfig::titleColor.b), bgColor);
+    tft.setTextFont(PointsConfig::titleFont);
+    tft.drawString(PointsConfig::titleText, PointsConfig::titleX, PointsConfig::titleY);
+    startY = PointsConfig::msgStartY;
+  }
+
   tft.setTextDatum(MC_DATUM); // Middle-Center align text
   
   int y = startY;
@@ -527,10 +535,10 @@ inline void updateTFTDisplay(unsigned long now) {
   }
 
   static int lastDisplayedPage = -1; // -1 = Away, 0 = Clock, -2 = Alert
-  static int lastDisplayedState = -1;
   static int lastClockFace = -1;
   static String activeAlertMessage = "";
   static bool activeAlertIsAi = false;
+  static bool timerWasDrawn = false;
 
   static String welcomeAlertMessage = "";
   static bool welcomeAlertIsAi = false;
@@ -606,6 +614,23 @@ inline void updateTFTDisplay(unsigned long now) {
   if (appState.manualTriggerOverride && !isAlertActive && !appState.isAILoading && !appState.hasNewAIResponse) {
     appState.manualTriggerOverride = false;
   }
+
+  // Timer overlay page: owns the screen while a stopwatch/countdown runs (or during the
+  // post-reset 3s / paused 10s hold). Alerts temporarily take priority; the timer
+  // returns when they end, and a paused/done timer releases to the faceplate after its hold.
+  timerTick(now);
+  bool timerVisible = timerShouldDraw(now) && !isAlertActive;
+  if (timerVisible) {
+    bool wasDrawn = timerWasDrawn;
+    timerWasDrawn = true;
+    drawTimerOverlay(now, !wasDrawn);
+    return;
+  }
+  if (timerWasDrawn) {
+    timerWasDrawn = false;
+    lastDisplayedPage = -99; // force a full redraw of the normal page next iteration
+  }
+
   int targetPage = -1;
   if (appState.currentPresenceState == STATE_AWAY) {
     appState.pendingWelcomeAlert = false;
@@ -663,8 +688,6 @@ inline void updateTFTDisplay(unsigned long now) {
     tft.fillScreen(TFT_BLACK);
     lastDisplayedPage = targetPage;
   }
-
-  lastDisplayedState = appState.currentPresenceState;
 
   // 1. If user is AWAY (and grace period has expired)
   if (appState.currentPresenceState == STATE_AWAY && (now - appState.lastStateTransitionTime >= 60000UL)) {

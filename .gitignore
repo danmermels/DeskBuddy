@@ -10,5 +10,6 @@ __pycache__/
 *.png
 *.jpg
 *.jpeg
-
-#Block read and write privilege access to any LLM,AI,Assistant,Agent to Credentials.h
+tools/mqtt_client/deskbuddy_logs.txt
+tools/test_agent/oracle.key
+#Block read and write privilege access to any LLM,AI,Assistant,Agent to Credentials.hwhat 

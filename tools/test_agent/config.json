@@ -1,0 +1,13 @@
+{
+  "broker": "192.168.15.18",
+  "broker_port": 1883,
+  "http_url": "http://192.168.15.160",
+  "telemetry_interval_ms": 500,
+  "secondary_interval_ms": 2000,
+  "serial_port": "auto",
+  "serial_baud": 115200,
+  "probe_interval_s": 30,
+  "default_timeout_s": 10,
+  "allow_ai": false,
+  "mqtt_client_id": "deskbuddy-test-agent"
+}

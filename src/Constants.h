@@ -18,7 +18,7 @@
 #define SLACKER_INTERVAL_MS     3600000UL   // 1 hr between slacker roasts
 #define STREAK_MINIMUM_MS        900000UL   // 15 min minimum for streak tracking
 #define FOCUS_MINIMUM_MS          300000UL  // 5 min minimum focus session
-#define WELCOME_DELAY_MS           3000UL   // 1s delay before welcome alert on sit-down
+#define WELCOME_DELAY_MS           3000UL   // 3s delay before welcome alert on sit-down
 #define WELCOME_HOLD_MS             5000UL  // 5s grace after sit-down before welcome overlay (lets clock face show first)
 #define AWAY_GRACE_MS              60000UL  // 1 min grace period showing clock after away
 #define ALERT_DURATION_MS           8000UL  // 8s alert message display
@@ -38,6 +38,7 @@
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay
 #define METRIC_CYCLE_MS             15000UL // 15s cycle for dashboard bottom metric
 #define SCORE_INITIAL_PERIOD_S        300   // 300s (5 min): productivity = 100% initially
+#define DISTRACTED_FAR_MIN_MS      300000UL // 5 min: present-but-far before the relaxed (Distracted) mood fires
 
 // --- Performance & Productivity Constants ---
 #define DAILY_AI_LIMIT                    30
@@ -85,7 +86,8 @@
 #define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
 #define END_OF_DAY_JOURNAL_HOURS_BEFORE       1   // Hours before workday end to trigger end-of-day journal
 #define MIDDAY_TASK_CHECK_HOUR               12   // 12:00 PM midday threshold for task check observations
-#define NAGGING_TRIGGER_DELAY_MS        600000UL  // 10 min seated: overdue-task nag cadence (first nag 35m into a session, then every 35m)
+#define NAGGING_TRIGGER_DELAY_MS        600000UL  // 10 min cadence for the overdue-task nag queue (first nag 10m into a session, then every 10m while seated)
+#define POINTS_TRIGGER_DELAY_MS       3300000UL  // 55 min cadence for the seated points check-in (first ring 55m into a session, then every 55m while seated)
 #define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
 #define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
 #define TASK_SYNTHESIS_MAX_CHARS            500   // Max length of the compact task synthesis injected into AI observations
@@ -163,6 +165,18 @@ namespace NaggingConfig {
   constexpr int titleY = 24;                          // Y center of the title
   constexpr RGB titleColor = {239, 68, 68};         // Red
   constexpr int msgStartY = 55;                       // Y where the AI nag message begins
+}
+
+// ============================================================================
+// POINTS CHECK-IN ALERT TITLE CONFIGURATION (gold "POINTS" on top of the message)
+// ============================================================================
+namespace PointsConfig {
+  constexpr const char* titleText = "POINTS CHECK";   // Text of the title
+  constexpr uint8_t titleFont = 2;                    // TFT_eSPI built-in font index (0-7; 2=small, 4=medium)
+  constexpr int titleX = 120;                         // X center of the title
+  constexpr int titleY = 24;                          // Y center of the title
+  constexpr RGB titleColor = {245, 158, 11};        // Gold
+  constexpr int msgStartY = 55;                       // Y where the AI points message begins
 }
 
 #endif // CONSTANTS_H

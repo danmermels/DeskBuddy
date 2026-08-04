@@ -41,7 +41,7 @@ flowchart TD
 
     T["Loop polls"] --> E9["9 GOAL_COMPLETED<br/>desk time ≥ daily target"]
     T --> E10["10 JOURNAL<br/>morning · pre-lunch · end-of-day"]
-    T --> E11["11 NAGGING<br/>every 35 m seated, next overdue task<br/>most-expired-first, cursor resets at midnight"]
+    T --> E11["11 NAGGING<br/>every 10 m seated, next overdue task<br/>most-expired-first, cursor resets at midnight"]
     T --> E12["12 TASK_DUE<br/>catch-up (due ≤ now)"]
 
     DBG["MQTT or Web settings<br/>TRIGGER &lt;event&gt; [ai|fallback]"] --> Q
@@ -99,7 +99,7 @@ sequenceDiagram
 | `EXCESSIVE_BREAKS` | > 1 break/hour after 3 h worked, once/day |
 | `GOAL_COMPLETED` | desk time ≥ target, once/day |
 | `JOURNAL` | morning (5 m sit), pre-lunch (−15 m), end-of-day (−1 h), once each |
-| `NAGGING` | every 35 m seated — next overdue task, most-expired-first; cursor persists across sessions, resets at midnight |
+| `NAGGING` | every 10 m seated — next overdue task, most-expired-first; cursor persists across sessions, resets at midnight |
 | `TASK_DUE` | catch-up: any task with due time ≤ now |
 | `PAGE` | generated when a message exceeds 110 chars |
 | `TRIGGER` | manual, any time |
@@ -118,7 +118,7 @@ sequenceDiagram
 | 8 | `EVENT_EXCESSIVE_BREAKS` | > 1 break/hour after 3 h worked, once/day — always behind the greeting | `main.cpp:1157` | NORMAL |
 | 9 | `EVENT_GOAL_COMPLETED` | desk time ≥ daily target, once/day | `main.cpp:1489` | HIGH |
 | 10 | `EVENT_JOURNAL` | morning / pre-lunch / end-of-day, once each — local render | `main.cpp:1503` | HIGH |
-| 11 | `EVENT_NAGGING` | every 35 m seated — next overdue task, most-expired-first; cursor persists, resets at midnight | `main.cpp:1599` | NORMAL |
+| 11 | `EVENT_NAGGING` | every 10 m seated — next overdue task, most-expired-first; cursor persists, resets at midnight | `main.cpp:1599` | NORMAL |
 | 12 | `EVENT_TASK_DUE` | due-task catch-up (due ≤ now) — local render | `main.cpp:628` | HIGH |
 | 13 | `EVENT_PAGE` | follow-up screen for messages > 110 chars | `Display.h:554` | HIGH |
 | 14 | `EVENT_LATEHOURS_SIT` | any sit during late hours (learned workday ± 30 m) | `main.cpp:1136` | URGENT |
@@ -131,7 +131,7 @@ A first sit during late hours is **held**, not burned: no greeting, no day-start
 
 ### Overdue-task nag queue
 
-Each sit-down starts a 35 m clock (`NAGGING_TRIGGER_DELAY_MS`). When it rings, the nag names one overdue task — the next in most-expired-first order — and the clock restarts, so a long session is nudged about a different task every 35 m. The queue is built from **all** overdue tasks (daily, monthly past its due day, non-recurrent carried over, and recurrent monthly that missed an earlier month), so monthly overdues are nagged alongside daily ones. The AI nag prompt anchors on the queued task by name but explicitly allows citing the other overdue daily and monthly tasks from the observations. The cursor (`nagQueueIndex`, persisted in `stats.json`) advances per nag and is **not** reset on sit-down, so position carries across sessions; `resetDailyStats()` zeroes it at the day rollover so the whole list can be nagged again tomorrow. "Overdue" = any uncompleted daily task with a passed due date/time, a monthly task past its due day this month, or a recurrent monthly task that missed an earlier month. Known limitation: the cursor is positional, so a task completed before its turn shifts the list, and tasks that become overdue after the cursor passed them are not nagged until midnight.
+Each sit-down starts a 10 m clock (`NAGGING_TRIGGER_DELAY_MS`). When it rings, the nag names one overdue task — the next in most-expired-first order — and the clock restarts, so a long session is nudged about a different task every 10 m. The queue is built from **all** overdue tasks (daily, monthly past its due day, non-recurrent carried over, and recurrent monthly that missed an earlier month), so monthly overdues are nagged alongside daily ones. The AI nag prompt anchors on the queued task by name but explicitly allows citing the other overdue daily and monthly tasks from the observations. The cursor (`nagQueueIndex`, persisted in `stats.json`) advances per nag and is **not** reset on sit-down, so position carries across sessions; `resetDailyStats()` zeroes it at the day rollover so the whole list can be nagged again tomorrow. "Overdue" = any uncompleted daily task with a passed due date/time, a monthly task past its due day this month, or a recurrent monthly task that missed an earlier month. Known limitation: the cursor is positional, so a task completed before its turn shifts the list, and tasks that become overdue after the cursor passed them are not nagged until midnight.
 
 ### Task diligence in AI calls (F20)
 
@@ -169,7 +169,7 @@ Non-recurrent tasks carry forward until completed instead of vanishing at the pe
 | F13 | MQTT triggers visible on screen (named event parsing + manual-trigger override for the away state) |
 | F14 | compact `[TASK SYNTHESIS]` block (counts + names, ≤ 500 chars) injected into AI prompts; shuffled |
 | F15 | quiet-hours handling: `EVENT_LATEHOURS_SIT` (14), held first-sit flag, silent crossing burn; `FOCUS_MINIMUM_MS` 15 s → 5 m |
-| F16 | behaviour timing pass: STRETCH 45 → 60 m; EXCESSIVE_BREAKS needs 3 h worked (`EXCESSIVE_BREAKS_MIN_WORKED_HOURS`); late-hours padding moved to `LATEHOURS_PADDING_MS` and applied symmetrically; anti-repetition clauses dropped from the preambles; nagging rebuilt as an overdue-task queue (35 m cadence, one task per ring in most-expired-first order, persistent cursor reset at midnight, priority NORMAL) |
+| F16 | behaviour timing pass: STRETCH 45 → 60 m; EXCESSIVE_BREAKS needs 3 h worked (`EXCESSIVE_BREAKS_MIN_WORKED_HOURS`); late-hours padding moved to `LATEHOURS_PADDING_MS` and applied symmetrically; anti-repetition clauses dropped from the preambles; nagging rebuilt as an overdue-task queue (10 m cadence, one task per ring in most-expired-first order, persistent cursor reset at midnight, priority NORMAL) |
 | F17 | non-recurrent tasks carry into later days/months as overdue until completed; Web todo page shows `Overdue from` badges and a per-period `N / M completed` tally; AI synthesis counts carried tasks (`3d+`/`3mo+` buckets now recurrent-only) |
 | F18 | per-period **diligence score** `2·done − total`: Web todo tallies gain a signed `+N`/`0`/`-N` chip (green/grey/red); journal dashboard gains a DILIGENCE block (`Daily +N | Monthly -N`, green ahead/balanced, red behind) |
 | F19 | task tallies persisted into `StatsState`: current-period snapshot (`dailyTaskDone/Total`, `monthlyTaskDone/Total` + period keys) and rolling history rings (last 7 days / 12 months) in `stats.json`; refreshed on each journal generation (`updateTodoTally`) |

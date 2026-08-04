@@ -10,6 +10,8 @@
 #include "MqttService.h"
 
 #include "State.h"
+#include "Points.h"
+#include "Timer.h"
 
 // Extern references for global state in main.cpp
 extern PubSubClient mqttClient;
@@ -267,6 +269,10 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
       color: #38bdf8;
       text-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
     }
+    .timer-display { font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 2rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.02em; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 10px 14px; text-align: center; }
+    .timer-btn { background: #0f172a; border: 1px solid #334155; color: #38bdf8; border-radius: 6px; padding: 6px 14px; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: border-color 0.2s; }
+    .timer-btn:hover { border-color: #38bdf8; }
+    .timer-btn.ghost { background: #334155; color: #f8fafc; }
   </style>
 </head>
 <body>
@@ -429,9 +435,38 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     </div>
   </div>
 
-
-
-
+  <div class="card">
+    <h1 style="margin: 0 0 15px 0; text-align: left;">Timer</h1>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 240px;">
+        <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Stopwatch</div>
+        <div class="timer-display" id="swDisplay">00:00:00</div>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button class="timer-btn" onclick="swToggle()" id="swBtn">Start</button>
+          <button class="timer-btn ghost" onclick="swReset()">Reset</button>
+        </div>
+      </div>
+      <div style="flex: 1; min-width: 240px;">
+        <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px;">Countdown</div>
+        <div class="timer-display" id="cdDisplay">05:00</div>
+        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center;">
+          <input type="number" id="cdMinutes" min="0" max="120" value="5" style="width: 60px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #f8fafc; font-size: 0.95rem;" title="Minutes">
+          <span style="color: #94a3b8; font-size: 0.8rem;">m</span>
+          <input type="number" id="cdSeconds" min="0" max="59" value="0" style="width: 56px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; color: #f8fafc; font-size: 0.95rem;" title="Seconds">
+          <span style="color: #94a3b8; font-size: 0.8rem;">s</span>
+          <button class="timer-btn" onclick="cdStart()" id="cdBtn">Start</button>
+          <button class="timer-btn ghost" onclick="cdReset()">Reset</button>
+        </div>
+        <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+          <button class="timer-btn" onclick="cdPreset(5)">5m</button>
+          <button class="timer-btn" onclick="cdPreset(15)">15m</button>
+          <button class="timer-btn" onclick="cdPreset(25)">25m</button>
+          <button class="timer-btn" onclick="cdPreset(45)">45m</button>
+          <button class="timer-btn" onclick="cdPreset(60)">60m</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script>
     let selectedDay = -1;
@@ -633,6 +668,166 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
       }
     }
 
+    let audioCtx = null;
+    function ensureAudio() {
+      if (!audioCtx) {
+        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    let swRunning = false, swStartEpoch = 0, swAccum = 0, swTimer = null;
+    function swTick() {
+      if (!swRunning) return;
+      const el = Date.now() - swStartEpoch + swAccum;
+      const h = Math.floor(el / 3600000);
+      const m = Math.floor(el / 60000) % 60;
+      const s = Math.floor(el / 1000) % 60;
+      document.getElementById('swDisplay').textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      swTimer = setTimeout(swTick, 200);
+    }
+    function swToggle() {
+      ensureAudio();
+      const btn = document.getElementById('swBtn');
+      if (!swRunning) {
+        swRunning = true;
+        swStartEpoch = Date.now();
+        btn.textContent = 'Stop';
+        btn.style.background = '#f43f5e';
+        btn.style.borderColor = '#f43f5e';
+        swTick();
+        timerCmd({ action: 'start', mode: 'sw' });
+      } else {
+        swAccum += Date.now() - swStartEpoch;
+        swRunning = false;
+        clearTimeout(swTimer);
+        btn.textContent = 'Start';
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        timerCmd({ action: 'pause' });
+      }
+    }
+    function timerCmd(payload) {
+      try {
+        fetch('/api/timer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(() => console.log('Timer cmd skipped (device unreachable)'));
+      } catch (e) {}
+    }
+
+    function swReset() {
+      swRunning = false;
+      swAccum = 0;
+      clearTimeout(swTimer);
+      const btn = document.getElementById('swBtn');
+      btn.textContent = 'Start';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      document.getElementById('swDisplay').textContent = '00:00:00';
+      timerCmd({ action: 'reset' });
+    }
+
+    let cdRunning = false, cdWasRunning = false, cdLeftMs = 0, cdEndEpoch = 0, cdTimer = null;
+    function cdReadInputs() {
+      let mins = parseInt(document.getElementById('cdMinutes').value) || 0;
+      let secs = parseInt(document.getElementById('cdSeconds').value) || 0;
+      if (mins < 0) mins = 0;
+      if (mins > 120) mins = 120;
+      if (secs < 0) secs = 0;
+      if (secs > 59) secs = 59;
+      let ms = mins * 60000 + secs * 1000;
+      if (ms < 1000) { mins = 5; secs = 0; ms = 300000; }
+      document.getElementById('cdMinutes').value = mins;
+      document.getElementById('cdSeconds').value = secs;
+      return ms;
+    }
+    function cdSetDisplay(ms) {
+      const m = Math.floor(ms / 60000);
+      const s = Math.floor(ms / 1000) % 60;
+      document.getElementById('cdDisplay').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+    function cdTick() {
+      if (!cdRunning) return;
+      cdLeftMs = cdEndEpoch - Date.now();
+      if (cdLeftMs <= 0) { cdFinish(); return; }
+      cdSetDisplay(cdLeftMs);
+      cdTimer = setTimeout(cdTick, 200);
+    }
+    function cdStart() {
+      ensureAudio();
+      const btn = document.getElementById('cdBtn');
+      if (cdRunning) {
+        cdRunning = false;
+        clearTimeout(cdTimer);
+        btn.textContent = 'Resume';
+        timerCmd({ action: 'pause' });
+        return;
+      }
+      const isFresh = !cdWasRunning || cdLeftMs <= 0;
+      if (isFresh) {
+        cdLeftMs = cdReadInputs();
+      }
+      cdWasRunning = true;
+      cdRunning = true;
+      cdEndEpoch = Date.now() + cdLeftMs;
+      btn.textContent = 'Pause';
+      btn.style.background = '#f59e0b';
+      btn.style.borderColor = '#f59e0b';
+      cdTick();
+      timerCmd(isFresh ? { action: 'start', mode: 'cd', totalMs: cdLeftMs } : { action: 'resume' });
+    }
+    function cdReset() {
+      cdRunning = false;
+      cdWasRunning = false;
+      clearTimeout(cdTimer);
+      cdLeftMs = cdReadInputs();
+      const btn = document.getElementById('cdBtn');
+      btn.textContent = 'Start';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      const disp = document.getElementById('cdDisplay');
+      disp.style.color = '#38bdf8';
+      cdSetDisplay(cdLeftMs);
+      timerCmd({ action: 'reset' });
+    }
+    function cdPreset(m) {
+      document.getElementById('cdMinutes').value = m;
+      document.getElementById('cdSeconds').value = 0;
+      cdReset();
+    }
+    function cdFinish() {
+      cdRunning = false;
+      cdWasRunning = false;
+      clearTimeout(cdTimer);
+      const btn = document.getElementById('cdBtn');
+      btn.textContent = 'Start';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+      const disp = document.getElementById('cdDisplay');
+      disp.textContent = 'DONE';
+      disp.style.color = '#34d399';
+      setTimeout(() => { if (!cdRunning) disp.style.color = '#38bdf8'; }, 5000);
+      if (audioCtx) {
+        [0, 0.4, 0.8].forEach(t => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'sine';
+          o.frequency.value = 880;
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          g.gain.setValueAtTime(0.001, audioCtx.currentTime + t);
+          g.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + 0.3);
+          o.start(audioCtx.currentTime + t);
+          o.stop(audioCtx.currentTime + t + 0.32);
+        });
+      }
+    }
+
+    cdLeftMs = cdReadInputs();
+    cdSetDisplay(cdLeftMs);
   </script>
 </body>
 </html>
@@ -688,6 +883,30 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
     .delete-btn:hover { color: #6b7280; }
     .delete-btn svg { width: 18px; height: 18px; fill: currentColor; }
     .empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: #64748b; font-size: 0.9rem; }
+    .points-card { background: #1e293b; border-radius: 12px; padding: 20px; margin: 10px 0; width: 100%; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #334155; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .points-total { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; color: #e2e8f0; }
+    .points-badge { padding: 4px 12px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
+    .points-badge.poor { background: rgba(244,63,94,0.15); color: #fb7185; border: 1px solid #f43f5e; }
+    .points-badge.good { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid #f59e0b; }
+    .points-badge.excellent { background: rgba(52,211,153,0.15); color: #34d399; border: 1px solid #10b981; }
+    .points-months { display: flex; gap: 6px; flex-wrap: wrap; max-width: 320px; }
+    .points-chip { padding: 3px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; background: #0f172a; color: #94a3b8; border: 1px solid #334155; white-space: nowrap; }
+    .points-chip.current { color: #38bdf8; border-color: #38bdf8; }
+    .points-chip .pt { margin-left: 4px; font-weight: 800; }
+    .cal-btn { background: #0f172a; border: 1px solid #334155; color: #38bdf8; border-radius: 6px; padding: 4px 10px; font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: border-color 0.2s; }
+    .cal-btn:hover { border-color: #38bdf8; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-head { text-align: center; font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 600; padding: 2px 0; }
+    .cal-cell { background: #0f172a; border: 1px solid #334155; border-radius: 8px; min-height: 52px; padding: 4px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; cursor: pointer; transition: border-color 0.15s; }
+    .cal-cell:hover { border-color: #38bdf8; }
+    .cal-cell.today { border-color: #38bdf8; }
+    .cal-cell.out { opacity: 0.35; pointer-events: none; }
+    .cal-daynum { font-size: 0.75rem; font-weight: 700; color: #cbd5e1; }
+    .cal-cell.today .cal-daynum { color: #38bdf8; }
+    .cal-dots { display: flex; gap: 3px; flex-wrap: wrap; margin-top: auto; }
+    .cal-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .cal-count { font-size: 0.68rem; color: #94a3b8; font-weight: 600; }
+    .timer-display { font-family: 'SF Mono', Consolas, 'Courier New', monospace; font-size: 2rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.02em; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 10px 14px; text-align: center; }
   </style>
 </head>
 <body>
@@ -699,6 +918,36 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
       Dashboard
     </a>
     <h1>TODO Tasks</h1>
+  </div>
+
+  <div class="points-card">
+    <div>
+      <div style="font-size: 0.8rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Points · <span id="pointsMonth"></span></div>
+      <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 4px;">
+        <span class="points-total" id="pointsTotal">0</span>
+        <span class="points-badge good" id="pointsBadge">Good</span>
+      </div>
+    </div>
+    <div class="points-months" id="pointsMonths"></div>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+      <h2 style="margin: 0; border: none; padding: 0;">Month Calendar</h2>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button class="cal-btn" onclick="calMove(-1)" title="Previous month">&#9664;</button>
+        <span id="calLabel" style="color: #38bdf8; font-weight: 700; min-width: 110px; text-align: center;"></span>
+        <button class="cal-btn" onclick="calMove(1)" title="Next month">&#9654;</button>
+        <button class="cal-btn" onclick="calToday()">Today</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div style="display: flex; gap: 14px; margin-top: 10px; font-size: 0.75rem; color: #94a3b8; flex-wrap: wrap;">
+      <span><span class="cal-dot" style="background: #34d399;"></span> Done</span>
+      <span><span class="cal-dot" style="background: #fbbf24;"></span> Due</span>
+      <span><span class="cal-dot" style="background: #f43f5e;"></span> Missed</span>
+      <span><span class="cal-dot" style="background: #475569;"></span> No tasks</span>
+    </div>
   </div>
 
   <div class="card">
@@ -798,6 +1047,7 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
         if (response.ok) {
           tasks = await response.json();
           renderLists();
+          renderCal();
         }
       } catch (err) {
         console.error('Error loading tasks:', err);
@@ -811,9 +1061,191 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(tasks)
         });
+        loadPoints();
+        renderCal();
       } catch (err) {
         console.error('Error saving tasks:', err);
       }
+    }
+
+    async function loadPoints() {
+      try {
+        const res = await fetch('/api/points');
+        if (!res.ok) return;
+        const p = await res.json();
+        const monthEl = document.getElementById('pointsMonth');
+        const totalEl = document.getElementById('pointsTotal');
+        const badgeEl = document.getElementById('pointsBadge');
+        const monthsEl = document.getElementById('pointsMonths');
+        if (!monthEl || !totalEl || !badgeEl || !monthsEl) return;
+        const cur = p.currentMonth || '';
+        monthEl.textContent = fmtMonthLabel(cur);
+        const fmt = n => (n > 0 ? '+' + n : String(n));
+        totalEl.textContent = fmt(p.running !== undefined ? p.running : 0);
+        totalEl.style.color = p.running > 0 ? '#34d399' : p.running < 0 ? '#fb7185' : '#e2e8f0';
+        badgeEl.textContent = p.category || 'good';
+        badgeEl.className = 'points-badge ' + (p.category || 'good');
+        monthsEl.innerHTML = '';
+        const months = p.months || {};
+        Object.keys(months).sort().forEach(k => {
+          const chip = document.createElement('span');
+          chip.className = 'points-chip';
+          chip.innerHTML = fmtMonthLabel(k) + ' <span class="pt">' + fmt(months[k]) + '</span>';
+          chip.title = 'Baked total for ' + fmtMonthLabel(k);
+          monthsEl.appendChild(chip);
+        });
+        if (cur) {
+          const chip = document.createElement('span');
+          chip.className = 'points-chip current';
+          chip.innerHTML = 'Now <span class="pt">' + fmt(p.running || 0) + '</span>';
+          monthsEl.appendChild(chip);
+        }
+      } catch (err) {
+        console.error('Error loading points:', err);
+      }
+    }
+
+    let calMonth = null;
+
+    function calTodayStr() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+
+    function calDayInfo(dateStr, dayNum, monthKey) {
+      const todayStr = calTodayStr();
+      const todayMonth = todayStr.substring(0, 7);
+      const dots = [];
+      const daily = tasks.daily || [];
+      const monthly = tasks.monthly || [];
+
+      daily.forEach(t => {
+        if (t.recurrent) {
+          const s = t.startDate || '';
+          const e = t.endDate || '';
+          if ((!s || dateStr >= s) && (!e || dateStr < e)) {
+            const done = (t.completedDates || []).includes(dateStr);
+            dots.push(done ? 'done' : (dateStr < todayStr ? 'missed' : 'due'));
+          }
+        } else {
+          if ((t.targetDate || '') === dateStr) {
+            const done = !!t.completed;
+            dots.push(done ? 'done' : (dateStr < todayStr ? 'missed' : 'due'));
+          }
+        }
+      });
+
+      monthly.forEach(t => {
+        if ((t.day || 0) !== dayNum) return;
+        let due = false, done = false;
+        if (t.recurrent) {
+          const s = t.startMonth || '';
+          const e = t.endMonth || '';
+          if ((!s || monthKey >= s) && (!e || monthKey < e)) due = true;
+          done = (t.completedMonths || []).includes(monthKey);
+        } else {
+          if ((t.year || 0) === parseInt(monthKey.substring(0, 4), 10) &&
+              (t.month || 0) === parseInt(monthKey.substring(5, 7), 10)) due = true;
+          done = !!t.completed;
+        }
+        if (due) {
+          dots.push(done ? 'done' : ((monthKey < todayMonth || (monthKey === todayMonth && dateStr < todayStr)) ? 'missed' : 'due'));
+        }
+      });
+
+      return dots;
+    }
+
+    function renderCal() {
+      const now = new Date();
+      const curMonth = calMonth || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      calMonth = curMonth;
+      const cy = parseInt(curMonth.substring(0, 4), 10);
+      const cm0 = parseInt(curMonth.substring(5, 7), 10) - 1;
+
+      document.getElementById('calLabel').textContent = fmtMonthLabel(curMonth);
+
+      const grid = document.getElementById('calGrid');
+      grid.innerHTML = '';
+      ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(d => {
+        const h = document.createElement('div');
+        h.className = 'cal-head';
+        h.textContent = d;
+        grid.appendChild(h);
+      });
+
+      const todayStr = calTodayStr();
+      const daysInMonth = new Date(cy, cm0 + 1, 0).getDate();
+      const firstDow = new Date(cy, cm0, 1).getDay();
+
+      for (let i = 0; i < firstDow; i++) {
+        const b = document.createElement('div');
+        b.className = 'cal-cell out';
+        grid.appendChild(b);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = `${curMonth}-${String(d).padStart(2, '0')}`;
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell';
+        if (dateStr === todayStr) cell.classList.add('today');
+
+        const num = document.createElement('div');
+        num.className = 'cal-daynum';
+        num.textContent = d;
+        cell.appendChild(num);
+
+        const dots = calDayInfo(dateStr, d, curMonth);
+        if (dots.length > 0) {
+          const row = document.createElement('div');
+          row.className = 'cal-dots';
+          dots.slice(0, 3).forEach(k => {
+            const dot = document.createElement('span');
+            dot.className = 'cal-dot';
+            dot.style.background = k === 'done' ? '#34d399' : k === 'due' ? '#fbbf24' : '#f43f5e';
+            dot.title = k;
+            row.appendChild(dot);
+          });
+          if (dots.length > 3) {
+            const c = document.createElement('span');
+            c.className = 'cal-count';
+            c.textContent = '+' + (dots.length - 3);
+            row.appendChild(c);
+          }
+          cell.appendChild(row);
+        }
+
+        cell.onclick = () => calPick(dateStr);
+        grid.appendChild(cell);
+      }
+    }
+
+    function calPick(dateStr) {
+      const daySel = document.getElementById('dayHistorySelect');
+      if (Array.from(daySel.options).find(o => o.value === dateStr)) daySel.value = dateStr;
+      const mSel = document.getElementById('monthHistorySelect');
+      const mKey = dateStr.substring(0, 7);
+      if (Array.from(mSel.options).find(o => o.value === mKey)) mSel.value = mKey;
+      renderLists();
+    }
+
+    function calMove(delta) {
+      const [y, m] = calMonth.split('-').map(Number);
+      let ny = y, nm = m + delta;
+      while (nm < 1) { nm += 12; ny--; }
+      while (nm > 12) { nm -= 12; ny++; }
+      calMonth = `${ny}-${String(nm).padStart(2, '0')}`;
+      renderCal();
+    }
+
+    function calToday() {
+      const now = new Date();
+      calMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const todayStr = calTodayStr();
+      const daySel = document.getElementById('dayHistorySelect');
+      if (Array.from(daySel.options).find(o => o.value === todayStr)) daySel.value = todayStr;
+      renderCal();
+      renderLists();
     }
 
     function renderLists() {
@@ -1294,6 +1726,8 @@ static const char TODO_HTML[] PROGMEM = R"rawhtml(
     window.onload = function() {
       initUi();
       loadTasks();
+      loadPoints();
+      renderCal();
     };
   </script>
 </body>
@@ -1315,19 +1749,132 @@ inline void handleGetTasks() {
 }
 
 inline void handleSaveTasks() {
-  if (server.hasArg("plain")) {
-    String payload = server.arg("plain");
-    fs::File file = LittleFS.open("/todo.json", "w");
-    if (file) {
-      file.print(payload);
-      file.close();
-      server.send(200, "application/json", "{\"status\":\"success\"}");
-    } else {
-      server.send(500, "text/plain", "Failed to open todo.json for writing");
-    }
-  } else {
+  if (!server.hasArg("plain")) {
     server.send(400, "text/plain", "Bad Request: No payload");
+    return;
   }
+  String payload = server.arg("plain");
+
+  DynamicJsonDocument newDoc(8192);
+  DeserializationError err = deserializeJson(newDoc, payload);
+  if (err || !newDoc.containsKey("daily") || !newDoc.containsKey("monthly")) {
+    server.send(400, "text/plain", "Bad Request: Invalid JSON payload");
+    return;
+  }
+
+  DynamicJsonDocument oldDoc(8192);
+  if (LittleFS.exists("/todo.json")) {
+    fs::File f = LittleFS.open("/todo.json", "r");
+    if (f) {
+      deserializeJson(oldDoc, f);
+      f.close();
+    }
+  }
+
+  // Points diff+award only when the clock knows the current month.
+  String curMonth = "";
+  if (timeClient.isTimeSet()) {
+    time_t e = timeClient.getEpochTime();
+    struct tm* ptm = localtime(&e);
+    if (ptm != nullptr) {
+      char b[8];
+      snprintf(b, sizeof(b), "%04d-%02d", ptm->tm_year + 1900, ptm->tm_mon + 1);
+      curMonth = String(b);
+    }
+  }
+
+  if (curMonth.length() == 7) {
+    pointsEnsure(oldDoc.as<JsonObject>(), curMonth);
+    String ptsMonth = oldDoc["points"]["currentMonth"] | "";
+    if (ptsMonth.length() == 7 && ptsMonth != curMonth) {
+      pointsBake(oldDoc.as<JsonObject>(), curMonth);
+      ptsMonth = curMonth;
+    }
+    int delta = pointsApplyDeltas(oldDoc.as<JsonObject>(), newDoc.as<JsonObject>(), ptsMonth);
+    long running = pointsAdd(oldDoc["points"]["running"] | 0L, delta);
+    newDoc["points"] = oldDoc["points"].as<JsonVariant>();
+    newDoc["points"]["running"] = running;
+    newDoc["points"]["currentMonth"] = ptsMonth;
+  }
+
+  if (pointsSaveDoc(newDoc)) {
+    server.send(200, "application/json", "{\"status\":\"success\"}");
+  } else {
+    server.send(500, "text/plain", "Failed to open todo.json for writing");
+  }
+}
+
+inline void handleGetPoints() {
+  long running = 0;
+  String curMonth = "";
+  DynamicJsonDocument out(2048);
+  if (LittleFS.exists("/todo.json")) {
+    fs::File file = LittleFS.open("/todo.json", "r");
+    if (file) {
+      DynamicJsonDocument doc(8192);
+      if (deserializeJson(doc, file) == DeserializationError::Ok && doc.containsKey("points")) {
+        JsonObject p = doc["points"];
+        running = p["running"] | 0L;
+        curMonth = p["currentMonth"] | "";
+        out["currentMonth"] = curMonth;
+        out["running"] = running;
+        if (p.containsKey("months")) out["months"] = p["months"];
+      }
+      file.close();
+    }
+  }
+  if (curMonth.length() == 0) {
+    if (timeClient.isTimeSet()) {
+      time_t e = timeClient.getEpochTime();
+      struct tm* ptm = localtime(&e);
+      if (ptm != nullptr) {
+        char b[8];
+        snprintf(b, sizeof(b), "%04d-%02d", ptm->tm_year + 1900, ptm->tm_mon + 1);
+        curMonth = String(b);
+      }
+    }
+  }
+  out["currentMonth"] = curMonth;
+  out["running"] = running;
+  out["category"] = pointsCategory(running, appConfig.pointsPoorMax, appConfig.pointsExcellentMin);
+  out["poorMax"] = appConfig.pointsPoorMax;
+  out["excellentMin"] = appConfig.pointsExcellentMin;
+  String resp;
+  serializeJson(out, resp);
+  server.send(200, "application/json", resp);
+}
+
+inline void handleTimerApi() {
+  if (server.method() == HTTP_GET) {
+    unsigned long now = millis();
+    DynamicJsonDocument out(256);
+    out["mode"] = timerState.mode;
+    out["running"] = timerState.running;
+    out["ms"] = timerCurrentMs(now);
+    out["hold"] = (now < timerState.holdUntil);
+    String resp;
+    serializeJson(out, resp);
+    server.send(200, "application/json", resp);
+    return;
+  }
+
+  StaticJsonDocument<256> doc;
+  if (deserializeJson(doc, server.arg("plain")) != DeserializationError::Ok) {
+    server.send(400, "application/json", "{\"error\":\"bad json\"}");
+    return;
+  }
+  String action = doc["action"] | "";
+  action.toUpperCase();
+  String mode = doc["mode"] | "sw";
+  unsigned long totalMs = doc["totalMs"] | 0UL;
+
+  if (action != "START" && action != "PAUSE" && action != "RESUME" && action != "RESET") {
+    server.send(400, "application/json", "{\"error\":\"invalid action\"}");
+    return;
+  }
+  timerCommand(action, mode, totalMs, millis());
+  Logger::log("WEB", "Timer cmd: %s mode=%s totalMs=%lu", action.c_str(), mode.c_str(), totalMs);
+  server.send(200, "application/json", "{\"ok\":true}");
 }
 
 static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
@@ -1647,6 +2194,20 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           </div>
         </div>
       </details>
+      <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0; border-top: 1px solid #334155;">
+        <div style="display: flex; justify-content: space-between;">
+          <span class="label">Task Points: Poor Threshold (at or below)</span>
+          <span class="value" id="pointsPoorMaxVal">30</span>
+        </div>
+        <input type="range" name="pointsPoorMax" id="pointsPoorMaxSlider" min="-200" max="200" step="5" class="slider" oninput="document.getElementById('pointsPoorMaxVal').innerText = this.value">
+      </div>
+      <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
+        <div style="display: flex; justify-content: space-between;">
+          <span class="label">Task Points: Excellent Threshold (at or above)</span>
+          <span class="value" id="pointsExcellentMinVal">120</span>
+        </div>
+        <input type="range" name="pointsExcellentMin" id="pointsExcellentMinSlider" min="-200" max="500" step="5" class="slider" oninput="document.getElementById('pointsExcellentMinVal').innerText = this.value">
+      </div>
       <div style="text-align: center; margin-top: 15px;">
         <button type="submit" class="btn">Save Configuration</button>
       </div>
@@ -1759,6 +2320,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           <option value="12">Task Due Reminder (12)</option>
           <option value="13">Page Follow-up (13)</option>
           <option value="14">Late Hours Sit (14)</option>
+          <option value="15">Points Check-in (15)</option>
         </select>
         <select id="debugMsgMode" style="width: 110px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px; padding: 8px; font-size: 0.9rem;">
           <option value="ai">AI Msg</option>
@@ -1983,6 +2545,11 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
             setTxt('g6mSensVal', data.g6mSens);
             setVal('g6sSensSlider', data.g6sSens);
             setTxt('g6sSensVal', data.g6sSens);
+
+            setVal('pointsPoorMaxSlider', data.pointsPoorMax);
+            setTxt('pointsPoorMaxVal', data.pointsPoorMax);
+            setVal('pointsExcellentMinSlider', data.pointsExcellentMin);
+            setTxt('pointsExcellentMinVal', data.pointsExcellentMin);
             
             window.settingsPopulated = true;
           }
@@ -2557,10 +3124,14 @@ inline void handleRadarData() {
   doc["focusDistLim"] = appConfig.focusDistanceLimit;
   doc["motionRatioLim"] = appConfig.motionRatioLimit;
   doc["motionRatio"] = (appState.sessionDeskTime > 0) ? std::min((int)((appState.sessionMotionTime * 100) / appState.sessionDeskTime), 100) : 0;
+  doc["recentMotionRatio"] = appState.recentMotionRatio;
   doc["totalMotionTime"] = formatTime(appStats.totalMotionTime);
   doc["motionCount"] = appStats.motionCount;
   doc["distLimit"] = appConfig.deskDistanceLimit;
   doc["filterWindow"] = appConfig.filterWindow;
+  doc["motionWindow"] = appConfig.motionWindow;
+  doc["pointsPoorMax"] = appConfig.pointsPoorMax;
+  doc["pointsExcellentMin"] = appConfig.pointsExcellentMin;
   
   // Learned occupancy metrics
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
@@ -2724,6 +3295,12 @@ inline void handleSaveSettings() {
       float val = server.arg("filterWindow").toFloat();
       if (val != appConfig.filterWindow) { appConfig.filterWindow = val; preferences.putFloat("filterWindow", appConfig.filterWindow); }
     }
+    if (server.hasArg("motionWindow")) {
+      int val = server.arg("motionWindow").toInt();
+      if (val < 1) val = 1;
+      if (val > RECENT_MOTION_WINDOW_S) val = RECENT_MOTION_WINDOW_S;
+      if (val != appConfig.motionWindow) { appConfig.motionWindow = val; preferences.putInt("motionWindow", appConfig.motionWindow); }
+    }
 
     if (server.hasArg("g0mSens")) {
       int val = server.arg("g0mSens").toInt();
@@ -2780,6 +3357,14 @@ inline void handleSaveSettings() {
     if (server.hasArg("g6sSens")) {
       int val = server.arg("g6sSens").toInt();
       if (val != appConfig.g6sSens) { appConfig.g6sSens = val; preferences.putInt("g6sSens", appConfig.g6sSens); }
+    }
+    if (server.hasArg("pointsPoorMax")) {
+      int val = server.arg("pointsPoorMax").toInt();
+      if (val != appConfig.pointsPoorMax) { appConfig.pointsPoorMax = val; preferences.putInt("pointsPoorMax", appConfig.pointsPoorMax); }
+    }
+    if (server.hasArg("pointsExcellentMin")) {
+      int val = server.arg("pointsExcellentMin").toInt();
+      if (val != appConfig.pointsExcellentMin) { appConfig.pointsExcellentMin = val; preferences.putInt("pointsExcellentMin", appConfig.pointsExcellentMin); }
     }
 
     preferences.end();
@@ -3384,6 +3969,8 @@ inline void setupWebServer() {
   server.on("/todo", handleTodo);
   server.on("/api/tasks", HTTP_GET, handleGetTasks);
   server.on("/api/tasks/save", HTTP_POST, handleSaveTasks);
+  server.on("/api/points", HTTP_GET, handleGetPoints);
+  server.on("/api/timer", HTTP_ANY, handleTimerApi);
   server.on("/settings", handleSettings);
   server.on("/radar-data", handleRadarData);
   server.on("/api/tft-messages", handleTftMessages);
