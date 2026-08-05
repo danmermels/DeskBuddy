@@ -1,4 +1,4 @@
-#include <Arduino.h>
+﻿#include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
 #include <NTPClient.h>
@@ -240,6 +240,8 @@ void saveDailyStats() {
   doc["nagQueueIndex"] = appStats.nagQueueIndex;
   doc["dueFiredDay"] = appStats.dueFiredDay;
   doc["dueFiredKeys"] = appStats.dueFiredKeys;
+  doc["dueFiredMonth"] = appStats.dueFiredMonth;
+  doc["dueFiredMonthKeys"] = appStats.dueFiredMonthKeys;
   doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
   doc["fsReadCount"] = appStats.fsReadCount;
   doc["fsWritesToday"] = appStats.fsWritesToday;
@@ -352,6 +354,8 @@ void loadDailyStats() {
     appStats.nagQueueIndex = doc["nagQueueIndex"] | 0;
     appStats.dueFiredDay = doc["dueFiredDay"] | "";
     appStats.dueFiredKeys = doc["dueFiredKeys"] | "";
+    appStats.dueFiredMonth = doc["dueFiredMonth"] | "";
+    appStats.dueFiredMonthKeys = doc["dueFiredMonthKeys"] | "";
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
     appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
     appStats.fsWritesToday = doc["fsWritesToday"] | 0;
@@ -568,17 +572,17 @@ void setup(void) {
     delay(100);
   }
 
-  // WiFi failed — start captive portal AP mode
+  // WiFi failed â€” start captive portal AP mode
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WIFI] Connection failed — starting captive portal AP mode");
+    Serial.println("[WIFI] Connection failed â€” starting captive portal AP mode");
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID);
     dnsServer.start(53, "*", WiFi.softAPIP());
     appState.captivePortalMode = true;
-    Serial.printf("[AP] Started: %s — IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+    Serial.printf("[AP] Started: %s â€” IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
   } else {
-    Serial.printf("[WIFI] Connected — IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("[WIFI] Connected â€” IP: %s\n", WiFi.localIP().toString().c_str());
     if (MDNS.begin("deskbuddy")) {
       MDNS.addService("http", "tcp", 80);
       Serial.println("[MDNS] Started: http://deskbuddy.local");
@@ -647,7 +651,7 @@ void setup(void) {
 
 extern int dateToDays(String dateStr);
 
-inline void checkDueTasks(int currentHour, int currentMin, String currentDayString) {
+inline void checkDueTasksEveryMinute(int currentHour, int currentMin, String currentDayString) {
   if (!LittleFS.exists("/todo.json")) return;
   fs::File file = LittleFS.open("/todo.json", "r");
   if (!file) return;
@@ -655,16 +659,30 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   DeserializationError err = deserializeJson(doc, file);
   file.close();
   if (err) return;
-  
+
+  int nowMins = currentHour * 60 + currentMin;
+  String dueTasksDetail = "";
+  bool statsChanged = false;
+
   // F10 (T2): track which tasks already fired today so catch-up never re-announces them.
   // Persisted in stats.json so a reboot doesn't clear the day's already-announced tasks.
   if (appStats.dueFiredDay != currentDayString) {
     appStats.dueFiredDay = currentDayString;
     appStats.dueFiredKeys = "";
+    statsChanged = true;
   }
-  
-  int nowMins = currentHour * 60 + currentMin;
-  String dueTasksDetail = "";
+
+  int currentYear = currentDayString.substring(0, 4).toInt();
+  int currentMonth = currentDayString.substring(5, 7).toInt();
+  int currentDay = currentDayString.substring(8, 10).toInt();
+  String currentMonthString = currentDayString.substring(0, 7);
+
+  // Same dedup bookkeeping for monthly tasks, scoped to the month instead of the day.
+  if (appStats.dueFiredMonth != currentMonthString) {
+    appStats.dueFiredMonth = currentMonthString;
+    appStats.dueFiredMonthKeys = "";
+    statsChanged = true;
+  }
 
   if (doc.containsKey("daily")) {
     JsonArray daily = doc["daily"].as<JsonArray>();
@@ -676,7 +694,7 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
       int tMin = task["minute"] | 0;
       String taskText = task["text"] | "";
       String tDate = task["startDate"] | "";
-      
+
       if (isRecurrent) {
         String endDate = task["endDate"] | "";
         if ((tDate.length() == 0 || currentDayString >= tDate) &&
@@ -697,18 +715,58 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
         isActiveToday = (targetDate == currentDayString);
         isCompleted = task["completed"] | false;
       }
-      
+
       if (isActiveToday && !isCompleted) {
         int dueMins = tHour * 60 + tMin;
-        String dueKey = String(tHour) + ":" + String(tMin) + "|" + taskText;
         // F10 (T2): fire once the task time has arrived, even if a previous minute was missed
+        String dueKey = String(tHour) + ":" + String(tMin) + "|" + taskText;
         if (dueMins <= nowMins && appStats.dueFiredKeys.indexOf(dueKey) == -1) {
           if (dueTasksDetail.length() > 0) {
-            dueTasksDetail += "|";
+            dueTasksDetail += ";";
           }
           dueTasksDetail += taskText;
           appStats.dueFiredKeys += dueKey + ";";
+          statsChanged = true;
         }
+      }
+    }
+  }
+
+  // Monthly tasks: recurrent ones fire once the day-of-month has arrived in an
+  // uncompleted month; dated ones only in their target month/year. Both dedupe per month.
+  if (doc.containsKey("monthly")) {
+    JsonArray monthly = doc["monthly"].as<JsonArray>();
+    for (JsonObject task : monthly) {
+      bool isRecurrent = task["recurrent"] | false;
+      bool isCompleted = false;
+      int dueDay = task["day"] | 1;
+      String taskText = task["text"] | "";
+      String dueKey = "M|" + taskText;
+      if (isRecurrent) {
+        if (task.containsKey("completedMonths")) {
+          JsonArray compMonths = task["completedMonths"].as<JsonArray>();
+          for (JsonVariant m : compMonths) {
+            if (m.as<String>() == currentMonthString) {
+              isCompleted = true;
+              break;
+            }
+          }
+        }
+      } else {
+        int tMonth = task["month"] | 1;
+        int tYear = task["year"] | 2026;
+        isCompleted = task["completed"] | false;
+        if (isCompleted) continue;
+        int monthDiff = (currentYear - tYear) * 12 + (currentMonth - tMonth);
+        if (monthDiff != 0 || currentDay < dueDay) continue;
+      }
+      if (!isCompleted && currentDay >= dueDay && appStats.dueFiredMonthKeys.indexOf(dueKey) == -1) {
+        if (dueTasksDetail.length() > 0) {
+          dueTasksDetail += ";";
+        }
+        dueTasksDetail += taskText;
+        appStats.dueFiredMonthKeys += dueKey + ";";
+        statsChanged = true;
       }
     }
   }
@@ -722,28 +780,32 @@ inline void checkDueTasks(int currentHour, int currentMin, String currentDayStri
   }
 
   if (dueTasksDetail.length() > 0) {
+    // If user is away when the task becomes due, mark as overdue for the late display
+    if (appState.currentPresenceState == STATE_AWAY) {
+      dueTasksDetail = "OVERDUE|" + dueTasksDetail;
+    }
     // F10 (T2/T4): route through MessageManager so a task due while away lines up for display on return
     messageManager.scheduleMessageWithPriority(
       EVENT_TASK_DUE,
       dueTasksDetail,
       MessageManager::P_HIGH, 0, MessageManager::R_IMPORTANT
     );
+  }
+  if (statsChanged) {
     saveDailyStats();
   }
 }
 
-// Late hours = outside the learned workday window (start -30 min pad, end +2h grace),
-// or any time when the clock isn't set. The grace period keeps normal workday behaviour
-// (welcome-backs, breaks) running for a while after the learned workday ends.
+// Late hours = outside the learned workday window (start -30 min pad, end +30 min pad),
+// or any time when the clock isn't set.
 static bool isLateHoursNow() {
   if (!timeClient.isTimeSet()) return true;
   int learnedStart = getLearnedWorkdayStart(ts.tm_wday);
   int learnedEnd = getLearnedWorkdayEnd(ts.tm_wday);
   int currentLocalMinutes = ts.tm_hour * 60 + ts.tm_min;
-  int paddingMinutes = LATEHOURS_PADDING_MS / 60000;
-  int graceMinutes = LATEHOURS_POST_END_GRACE_MS / 60000;
+  int paddingMinutes = LATEHOURS_PADDING_MS / 60000; // 30 min padding on both sides
   int workdayStartMinutes = learnedStart * 60 - paddingMinutes;
-  int workdayEndMinutes = learnedEnd * 60 + graceMinutes;
+  int workdayEndMinutes = learnedEnd * 60 + paddingMinutes;
   if (currentLocalMinutes >= workdayStartMinutes && currentLocalMinutes < workdayEndMinutes) {
     return false;
   }
@@ -1064,6 +1126,7 @@ void loop(void) {
       appState.sitDownTime = now;
       appState.sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
       appState.lastNagTime = now;
+      appState.lastPointsCadenceTime = now;
       currentSitDownSessionId++;
       Logger::log("STATE", "Away->Present: sit=%lu epoch=%s session=%d state=%s", 
                   now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, presenceStateName(targetState).c_str());
@@ -1116,6 +1179,9 @@ void loop(void) {
           appStats.latestBreakDuration = 0;
           appStats.totalBreakTime = 0;
           appState.wasFirstSitThisSession = true;
+          if (appState.heldFirstSitEpoch == 0) {
+            appState.heldFirstSitEpoch = appState.sitDownEpoch;
+          }
           appState.isStopByTracking = true;
           appState.originalLastAwayEpoch = appStats.lastAwayEpoch;
           appState.totalStopByTimeMs = 0;
@@ -1124,7 +1190,8 @@ void loop(void) {
           Logger::log("STATE", "Away->Present: Late-hours sit: first-sit flag held");
         } else {
           appStats.firstSitToday = false;
-          appStats.firstSitEpoch = appState.sitDownEpoch;
+          appStats.firstSitEpoch = (appState.heldFirstSitEpoch > 0) ? appState.heldFirstSitEpoch : appState.sitDownEpoch;
+          appState.heldFirstSitEpoch = 0;
           if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
             appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
           } else {
@@ -1172,15 +1239,20 @@ void loop(void) {
       if (sitIsLateHours) {
         // Late hours: a real break (over the standard leeway) gets a late-hours message
         // instead of the standard greetings. Brief returns under the leeway stay silent.
-        if (appState.currentBreakDurationMs >= BREAK_MINIMUM_MS) {
-          messageManager.scheduleLateHoursSitMessage(computeEarlyLateString(ts));
+        // A 30 min cooldown prevents repeated evening sits from re-triggering constantly.
+        static unsigned long lastLateHoursSitTime = 0;
+        if (appConfig.aiMode >= 1 && appState.currentBreakDurationMs >= BREAK_MINIMUM_MS && now - lastLateHoursSitTime >= LATEHOURS_COOLDOWN_MS) {
+          lastLateHoursSitTime = now;
+          messageManager.scheduleGreetingMessage(EVENT_LATEHOURS_SIT, computeEarlyLateString(ts));
         }
       } else if (wasFirstSitToday || willRollover) {
-        unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
-        String breakStr = (overnightBreak >= OVERNIGHT_THRESHOLD_S) ? formatTime(overnightBreak * 1000) : "";
-        messageManager.scheduleFirstSitMessage(breakStr);
+        if (appConfig.aiMode >= 1) {
+          unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
+          String breakStr = (overnightBreak >= OVERNIGHT_THRESHOLD_S) ? formatTime(overnightBreak * 1000) : "";
+          messageManager.scheduleGreetingMessage(EVENT_FIRST_SIT, breakStr);
+        }
       } else {
-        if (lastAwaySliceMs >= BREAK_MINIMUM_MS) {
+        if (appConfig.aiMode >= 1 && lastAwaySliceMs >= BREAK_MINIMUM_MS) {
           String tempBreakDuration = formatTime(appState.currentBreakDurationMs);
           double hoursWorked = (double)appStats.totalDeskTime / 3600000.0;
           bool excessive = false;
@@ -1193,14 +1265,15 @@ void loop(void) {
           if (excessive && !appStats.excessiveBreaksTriggered) {
             appStats.excessiveBreaksTriggered = true;
             saveDailyStats();
-            // Roast is demoted below the welcome greeting: it fires after (never replaces) it.
+            // Lower priority than welcome (URGENT): MessageManager holds this until
+            // the greeting has been served (or expires).
             messageManager.scheduleMessageWithPriority(
               EVENT_EXCESSIVE_BREAKS,
               tempBreakDuration,
-              MessageManager::P_NORMAL, WELCOME_DELAY_MS, MessageManager::R_IMPORTANT
+              MessageManager::P_NORMAL, 0, MessageManager::R_IMPORTANT
             );
           }
-          messageManager.scheduleWelcomeBackMessage(tempBreakDuration);
+          messageManager.scheduleGreetingMessage(EVENT_WELCOME_BACK, tempBreakDuration);
         }
       }
     } else {
@@ -1227,13 +1300,15 @@ void loop(void) {
           candidateState = -1;
           // F11 (T5): celebrate a focus session that ends IN PLACE (FOCUS -> BUSY/REGULAR), never on leaving
           if (prevState == STATE_FOCUS && (confirmedState == STATE_BUSY || confirmedState == STATE_REGULAR)) {
-            unsigned long focusSessionDuration = now - appState.continuousStillStart;
-            if (focusSessionDuration > FOCUS_MINIMUM_MS) {
-              messageManager.scheduleMessageWithPriority(
-                EVENT_FOCUS_END,
-                formatTime(focusSessionDuration),
-                MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
-              );
+            if (appConfig.aiMode >= 1) {
+              unsigned long focusSessionDuration = now - appState.continuousStillStart;
+              if (focusSessionDuration > FOCUS_MINIMUM_MS) {
+                messageManager.scheduleMessageWithPriority(
+                  EVENT_FOCUS_END,
+                  formatTime(focusSessionDuration),
+                  MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+                );
+              }
             }
           }
         }
@@ -1242,8 +1317,8 @@ void loop(void) {
       }
     }
       
-    // Day-start: a held late-hours sit still active when work hours begin burns the flag silently
-    // (the day started with this sit). firstSitEpoch = sitDownEpoch so the late-hours time counts.
+    // Day-start: a held late-hours sit still active when work hours begin burns the flag
+    // and promotes to a proper FIRST_SIT greeting if the user has been continuously present.
     if (appStats.firstSitToday && appState.wasFirstSitThisSession && appState.currentPresenceState != STATE_AWAY && !isLateHoursNow()) {
       appStats.firstSitToday = false;
       appStats.firstSitEpoch = appState.sitDownEpoch;
@@ -1253,8 +1328,40 @@ void loop(void) {
         appStats.overnightBreakDuration = (now - appState.sitDownTime) / 1000UL;
       }
       appState.wasFirstSitThisSession = false;
+      appState.heldFirstSitEpoch = 0;
       saveDailyStats();
       Logger::log("STATE", "Late-hours sit crossed into work hours: day started firstSitEpoch=%u overnight=%lu", appStats.firstSitEpoch, appStats.overnightBreakDuration);
+
+      // Fire a proper FIRST_SIT greeting now that the workday has officially begun.
+      // The overnight break reflects the real gap since last away, not just the late-hours sit duration.
+      if (appConfig.aiMode >= 1) {
+        String breakStr = (appStats.overnightBreakDuration >= OVERNIGHT_THRESHOLD_S) ? formatTime(appStats.overnightBreakDuration * 1000) : "";
+        messageManager.scheduleGreetingMessage(EVENT_FIRST_SIT, breakStr);
+      }
+    }
+
+    // Early crossover: a stable late-hours sit lasting >= CROSSOVER_THRESHOLD_MS is a real
+    // workday start. Burn the held flag now instead of waiting for the learned boundary.
+    if (appStats.firstSitToday && appState.wasFirstSitThisSession &&
+        appState.currentPresenceState != STATE_AWAY && isLateHoursNow() &&
+        now - appState.continuousPresenceStart >= CROSSOVER_THRESHOLD_MS) {
+      appStats.firstSitToday = false;
+      appStats.firstSitEpoch = (appState.heldFirstSitEpoch > 0) ? appState.heldFirstSitEpoch : appState.sitDownEpoch;
+      if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
+        appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
+      } else {
+        appStats.overnightBreakDuration = appState.currentBreakDurationMs / 1000UL;
+      }
+      appState.wasFirstSitThisSession = false;
+      appState.heldFirstSitEpoch = 0;
+      saveDailyStats();
+      Logger::log("STATE", "Early crossover: late-hours sit stable for %lu s — day started firstSitEpoch=%u overnight=%lu",
+                  (now - appState.continuousPresenceStart) / 1000UL, appStats.firstSitEpoch, appStats.overnightBreakDuration);
+
+      if (appConfig.aiMode >= 1) {
+        String breakStr = (appStats.overnightBreakDuration >= OVERNIGHT_THRESHOLD_S) ? formatTime(appStats.overnightBreakDuration * 1000) : "";
+        messageManager.scheduleGreetingMessage(EVENT_FIRST_SIT, breakStr);
+      }
     }
 
     // Process MessageManager for proactive scheduling
@@ -1269,7 +1376,7 @@ void loop(void) {
     }
       
     // Trigger Stretch alert after 60 minutes of continuous presence
-    if (now - appState.lastStretchReminderTime > STRETCH_INTERVAL_MS) {
+    if (appConfig.aiMode >= 1 && now - appState.lastStretchReminderTime > STRETCH_INTERVAL_MS) {
       appState.lastStretchReminderTime = now;
       messageManager.scheduleMessageWithPriority(
         EVENT_STRETCH,
@@ -1278,23 +1385,25 @@ void loop(void) {
       );
     }
 
-    // Trigger Slacker Roast if sitting > 1 hour and score < 35%
-    static unsigned long lastSlackerRoastTime = 0;
-    unsigned long continuousSittingTime = now - appState.continuousPresenceStart;
-    if (continuousSittingTime > SLACKER_INTERVAL_MS && appStats.productivityScore < 35) {
-      if (now - lastSlackerRoastTime > SLACKER_INTERVAL_MS) {
-        lastSlackerRoastTime = now;
-        messageManager.scheduleMessageWithPriority(
-          EVENT_SLACKER,
-          "",
-          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
-        );
+    // Trigger Slacker Roast if sitting > 1h15m and score < 35%
+    if (appConfig.aiMode >= 1) {
+      static unsigned long lastSlackerRoastTime = 0;
+      unsigned long continuousSittingTime = now - appState.continuousPresenceStart;
+      if (continuousSittingTime > SLACKER_INTERVAL_MS && appStats.productivityScore < 35) {
+        if (now - lastSlackerRoastTime > SLACKER_INTERVAL_MS) {
+          lastSlackerRoastTime = now;
+          messageManager.scheduleMessageWithPriority(
+            EVENT_SLACKER,
+            "",
+            MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+          );
+        }
       }
     }
 
     // Evaluate and update longest sitting streak (minimum 15 minutes)
     unsigned long currentStreak = now - appState.continuousPresenceStart;
-    if (appStats.longestSittingStreak >= STREAK_MINIMUM_MS && currentStreak > appStats.longestSittingStreak && !appState.streakAlertTriggered) {
+    if (appConfig.aiMode >= 1 && appStats.longestSittingStreak >= STREAK_MINIMUM_MS && currentStreak > appStats.longestSittingStreak && !appState.streakAlertTriggered) {
       appState.streakAlertTriggered = true;
       messageManager.scheduleMessageWithPriority(
         EVENT_STREAK_BEATEN,
@@ -1332,6 +1441,7 @@ void loop(void) {
           appStats.lastAwayEpoch = appState.originalLastAwayEpoch;
           appState.isStopByTracking = false;
           appState.wasFirstSitThisSession = false;
+          appState.heldFirstSitEpoch = 0;
           appState.totalStopByTimeMs = 0;
           
           appState.currentPresenceState = STATE_AWAY;
@@ -1365,6 +1475,7 @@ void loop(void) {
         appState.totalStopByTimeMs = 0;
         appState.originalLastAwayEpoch = appStats.lastAwayEpoch; // Save start of this new break session
         appState.wasFirstSitThisSession = false; // Reset first sit session flag
+        appState.heldFirstSitEpoch = 0;
         Logger::log("STATE", "Present->Away: Real session completed. lastAwayEpoch=%s reset stopByTracking", Logger::formatEpoch(appStats.lastAwayEpoch).c_str());
         saveDailyStats();
       }
@@ -1505,15 +1616,19 @@ void loop(void) {
     }
   }
 
-  // Lunch Reminder check
+  // Lunch Reminder check: window runs from learned lunch +15 min up to +2 h,
+  // independent of the journal triggers.
   if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     int currentHour = ts.tm_hour;
     int currentMin = ts.tm_min;
     int currentDay = timeClient.getDay();
     int learnedLunch = getLearnedLunchHour(currentDay);
-    if (currentHour == learnedLunch && currentMin >= 15) {
+    int currentMinsFromMidnight = currentHour * 60 + currentMin;
+    int lunchWindowStartMins = learnedLunch * 60 + 15;
+    int lunchWindowEndMins = learnedLunch * 60 + 120;
+    if (currentMinsFromMidnight >= lunchWindowStartMins && currentMinsFromMidnight < lunchWindowEndMins) {
       // F10 (T4): schedule even while away -- MM lines it up for display once present
-      if (!appStats.lunchReminderTriggered && appStats.totalDeskTime > LUNCH_MIN_DESK_MS) {
+      if (appConfig.aiMode >= 1 && !appStats.lunchReminderTriggered && appStats.totalDeskTime > LUNCH_MIN_DESK_MS) {
         appStats.lunchReminderTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1528,19 +1643,19 @@ void loop(void) {
   // Goal Completion check
   if (appConfig.targetHours > 0.0f) {
     unsigned long targetMs = (unsigned long)(appConfig.targetHours * 3600.0f * 1000.0f);
-    if (appStats.totalDeskTime >= targetMs && !appStats.goalCompletedTriggered) {
+    if (appConfig.aiMode >= 1 && appStats.totalDeskTime >= targetMs && !appStats.goalCompletedTriggered) {
       appStats.goalCompletedTriggered = true;
       saveDailyStats();
       messageManager.scheduleMessageWithPriority(
         EVENT_GOAL_COMPLETED,
         "",
-        MessageManager::P_HIGH, 0, MessageManager::R_IMPORTANT
+        MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
       );
     }
   }
 
   // Morning Kickoff Journal check (5 mins sitting delay)
-  if (appState.currentPresenceState != STATE_AWAY && !appStats.morningJournalTriggered) {
+  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && !appStats.morningJournalTriggered) {
     unsigned long sitDuration = now - appState.sitDownTime;
     if (sitDuration >= MORNING_JOURNAL_DELAY_MS) {
       appStats.morningJournalTriggered = true;
@@ -1567,7 +1682,7 @@ void loop(void) {
     
     if (currentMinsFromMidnight >= lunchThresholdMins && currentMinsFromMidnight < refLunch * 60) {
       // F10 (T4): schedule even while away -- MM lines it up for display once present
-      if (!appStats.preLunchJournalTriggered) {
+      if (appConfig.aiMode >= 1 && !appStats.preLunchJournalTriggered) {
         appStats.preLunchJournalTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1593,7 +1708,7 @@ void loop(void) {
     
     if (currentMinsFromMidnight >= endThresholdMins && currentMinsFromMidnight < refEnd * 60) {
       // F10 (T4): schedule even while away -- MM lines it up for display once present
-      if (!appStats.endOfDayJournalTriggered) {
+      if (appConfig.aiMode >= 1 && !appStats.endOfDayJournalTriggered) {
         appStats.endOfDayJournalTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1619,14 +1734,16 @@ void loop(void) {
       char dStr[11];
       snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
       
-      checkDueTasks(currentHour, currentMin, String(dStr));
+      // Check if there are any due tasks before triggering
+      checkDueTasksEveryMinute(currentHour, currentMin, String(dStr));
     }
   }
 
-  // Nagging check (overdue-task queue): rings every 10 min seated, one task per ring,
+  // Nagging check (overdue-task queue): rings every 10 min seated (5 min in Chatty), one task per ring,
   // most-expired-first. The cursor persists across sessions and resets at midnight.
-  if (appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
-    if (now - appState.lastNagTime >= NAGGING_TRIGGER_DELAY_MS) {
+  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    unsigned long nagDelay = (appConfig.aiMode == 2) ? CHATTY_NAGGING_TRIGGER_DELAY_MS : NAGGING_TRIGGER_DELAY_MS;
+    if (now - appState.lastNagTime >= nagDelay) {
       int currentYear = ts.tm_year + 1900;
       int currentMonth = ts.tm_mon + 1;
       int currentDay = ts.tm_mday;
@@ -1637,30 +1754,59 @@ void loop(void) {
       int nowMinutes = ts.tm_hour * 60 + ts.tm_min;
 
       std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
-      if (appStats.nagQueueIndex < (int)queue.size()) {
-      appState.lastNagTime = now;
-      appState.lastPointsTime = now;
-        appStats.nagQueueIndex++;
-        saveDailyStats();
-        messageManager.scheduleMessageWithPriority(
-          EVENT_NAGGING,
-          queue[appStats.nagQueueIndex - 1].text,
-          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
-        );
+      if (queue.size() > 0) {
+        // Chatty mode wraps the cursor when it reaches the end, cycling back to most-overdue.
+        if (appConfig.aiMode == 2 && appStats.nagQueueIndex >= (int)queue.size()) {
+          appStats.nagQueueIndex = 0;
+        }
+        if (appStats.nagQueueIndex < (int)queue.size()) {
+          appState.lastNagTime = now;
+          appStats.nagQueueIndex++;
+          saveDailyStats();
+          messageManager.scheduleMessageWithPriority(
+            EVENT_NAGGING,
+            queue[appStats.nagQueueIndex - 1].text,
+            MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+          );
+        }
       }
     }
   }
 
-  // Points check-in: rings every 55 min seated with the live running total so
-  // the nudge references the actual points tracker state.
-  if (appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
-    if (now - appState.lastPointsTime >= POINTS_TRIGGER_DELAY_MS) {
+  // Points check-in: rings every 18 min seated (9 min in Chatty) with the live running total.
+  // Throttled to at most one ring per 3 h (1 h in Chatty) so a long session doesn't get spammed.
+  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+    unsigned long pointsThrottle = (appConfig.aiMode == 2) ? CHATTY_POINTS_THROTTLE_MS : POINTS_THROTTLE_MS;
+    unsigned long pointsCadence = (appConfig.aiMode == 2) ? CHATTY_POINTS_TRIGGER_DELAY_MS : POINTS_TRIGGER_DELAY_MS;
+    if (now - appState.lastPointsTime >= pointsThrottle &&
+        now - appState.lastPointsCadenceTime >= pointsCadence) {
       appState.lastPointsTime = now;
+      appState.lastPointsCadenceTime = now;
       messageManager.scheduleMessageWithPriority(
         EVENT_POINTS,
         buildPointsDetail(),
         MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
       );
+    }
+  }
+
+  // Curation nudge: observation-driven trigger that fires only when getCurationNudge()
+  // finds a noteworthy pattern in the live state. Normal and Chatty intervals differ.
+  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY) {
+    static unsigned long lastCurationNudgeTime = 0;
+    unsigned long curationInterval = (appConfig.aiMode == 2) ? CHATTY_CURATION_TRIGGER_INTERVAL_MS : CURATION_TRIGGER_INTERVAL_MS;
+    unsigned long curationThrottle = (appConfig.aiMode == 2) ? CHATTY_CURATION_THROTTLE_MS : CURATION_THROTTLE_MS;
+    unsigned long continuousSittingTime = now - appState.continuousPresenceStart;
+    if (continuousSittingTime > curationInterval &&
+        now - lastCurationNudgeTime >= curationThrottle) {
+      String nudge = getCurationNudge();
+      if (nudge.length() > 0) {
+        lastCurationNudgeTime = now;
+        messageManager.scheduleMessageWithPriority(
+          EVENT_CURATION, nudge,
+          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+        );
+      }
     }
   }
 

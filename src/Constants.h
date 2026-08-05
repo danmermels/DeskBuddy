@@ -15,10 +15,9 @@
 #define BREAK_MINIMUM_MS         180000UL   // 3 min minimum for break counting
 #define STOP_BY_THRESHOLD_MS     480000UL   // 8 min threshold for stop-by detection
 #define STRETCH_INTERVAL_MS     3600000UL   // 60 min between stretch reminders
-#define SLACKER_INTERVAL_MS     3600000UL   // 1 hr between slacker roasts
+#define SLACKER_INTERVAL_MS     4500000UL   // 1h15m between slacker roasts
 #define STREAK_MINIMUM_MS        900000UL   // 15 min minimum for streak tracking
 #define FOCUS_MINIMUM_MS          300000UL  // 5 min minimum focus session
-#define WELCOME_DELAY_MS           3000UL   // 3s delay before welcome alert on sit-down
 #define WELCOME_HOLD_MS             5000UL  // 5s grace after sit-down before welcome overlay (lets clock face show first)
 #define AWAY_GRACE_MS              60000UL  // 1 min grace period showing clock after away
 #define ALERT_DURATION_MS           8000UL  // 8s alert message display
@@ -31,8 +30,9 @@
 #define WIFI_TIMEOUT_MS              5000UL // 5s WiFi connect timeout in setup
 #define RING_TRANSITION_MS           1000UL // 1s ring color transition
 #define STICKY_CONFIRM_MS           30000UL // 0.5 min sticky state confirmation window
-#define LATEHOURS_PADDING_MS       1800000UL // 30 min early-day padding before the learned workday start for late-hours detection
-#define LATEHOURS_POST_END_GRACE_MS (2UL * 3600000UL) // keep normal workday behaviour for 2h after the learned workday end before switching to late-hours
+#define LATEHOURS_PADDING_MS       1800000UL // 30 min padding added to the learned workday times: late hours run from learned end +30 min until learned start -30 min
+#define LATEHOURS_COOLDOWN_MS     1800000UL // 30 min minimum gap between late-hours sit messages
+#define CROSSOVER_THRESHOLD_MS      900000UL // 15 min continuous sit during late hours = real session, burn flag early
 #define DISPLAY_THROTTLE_MS           500UL // 500ms minimum between display faceplate redraws
 #define DEV_REFRESH_MS                200UL // 200ms refresh for dev faceplate
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay
@@ -41,7 +41,6 @@
 #define DISTRACTED_FAR_MIN_MS      300000UL // 5 min: present-but-far before the relaxed (Distracted) mood fires
 
 // --- Performance & Productivity Constants ---
-#define DAILY_AI_LIMIT                    30
 #define MAX_TFT_MSGS                      10
 #define FILTER_MOTION_THRESHOLD          0.5f
 #define BREAK_PENALTY_TARGET              1.0f   // target: 1 break/hour = 25% penalty
@@ -69,14 +68,16 @@
 #define MOTION_FILTER_SIZE                 10
 
 // --- Message Queue Constants ---
+// Priority ranks (sort keys only — not durations).
 #define MSG_PRIORITY_URGENT               3000UL
 #define MSG_PRIORITY_HIGH                 2250UL
 #define MSG_PRIORITY_NORMAL               1500UL
 #define MSG_PRIORITY_LOW                   500UL
 
-#define MSG_RELEVANCE_URGENT            300000UL  // 5 min
-#define MSG_RELEVANCE_NORMAL           1800000UL  // 30 min
-#define MSG_RELEVANCE_LOW              3600000UL  // 1 hr
+// Relevance = TTL after scheduleTime (how long a queued msg stays valid).
+#define MSG_RELEVANCE_SHORT             300000UL  // 5 min  — brief / time-critical
+#define MSG_RELEVANCE_NORMAL           1800000UL  // 30 min — default
+#define MSG_RELEVANCE_LONG             3600000UL  // 1 hr   — important, keep until return
 
 // Max chars a standard message screen holds before it spills to a 2nd screen (F12)
 #define MSG_PAGE_MAX_CHARS                 110
@@ -86,8 +87,20 @@
 #define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
 #define END_OF_DAY_JOURNAL_HOURS_BEFORE       1   // Hours before workday end to trigger end-of-day journal
 #define MIDDAY_TASK_CHECK_HOUR               12   // 12:00 PM midday threshold for task check observations
-#define NAGGING_TRIGGER_DELAY_MS        600000UL  // 10 min cadence for the overdue-task nag queue (first nag 10m into a session, then every 10m while seated)
-#define POINTS_TRIGGER_DELAY_MS       3300000UL  // 55 min cadence for the seated points check-in (first ring 55m into a session, then every 55m while seated)
+#define NAGGING_TRIGGER_DELAY_MS       3600000UL  // 60 min cadence for the overdue-task nag queue (first nag 60m into a session, then every 60m while seated)
+#define POINTS_TRIGGER_DELAY_MS       1080000UL  // 18 min cadence for the seated points check-in (first ring 18m into a session, then every 18m while seated)
+#define POINTS_THROTTLE_MS           13260000UL  // 221 min cooldown between points check-ins (~3 per 10h day)
+
+// Chatty mode (aiMode == 2): increased interval cadences
+#define CHATTY_NAGGING_TRIGGER_DELAY_MS 2220000UL  // 37 min (down from 60 min)
+#define CHATTY_POINTS_TRIGGER_DELAY_MS    540000UL  // 9 min (down from 18 min)
+#define CHATTY_POINTS_THROTTLE_MS       5400000UL  // 90 min (down from 221 min)
+
+// Curation nudge (aiMode >= 1): observation-driven trigger
+#define CURATION_TRIGGER_INTERVAL_MS    3000000UL  // 50 min continuous sitting (Normal)
+#define CURATION_THROTTLE_MS           7200000UL  // 120 min cooldown (Normal)
+#define CHATTY_CURATION_TRIGGER_INTERVAL_MS 2400000UL  // 40 min (Chatty)
+#define CHATTY_CURATION_THROTTLE_MS         3600000UL  // 60 min cooldown (Chatty)
 #define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
 #define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
 #define TASK_SYNTHESIS_MAX_CHARS            500   // Max length of the compact task synthesis injected into AI observations
@@ -101,8 +114,6 @@
 #define MQTT_STATUS_PAYLOAD              "online"
 #define MQTT_SUBSCRIBE_TOPIC         "deskbuddy/#"
 #define MQTT_ECHO_TOPIC        "deskbuddy/echo"
-
-#define SYSTEM_LOG_SIZE                     15
 
 // --- MQTT Debug Platform Topics ---
 #define MQTT_DEBUG_CMD_TOPIC      "deskbuddy/debug/cmd"

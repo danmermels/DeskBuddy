@@ -13,7 +13,8 @@ radar → presence state machine → trigger → MessageManager queue → AI or 
 ```
 
 - **Every trigger becomes a queued message.** The queue pops one per loop (busy-gated) in priority order, and a message that waits too long past its window expires.
-- **AI-first with a local fallback.** Unless forced local, triggers go through Groq (daily cap 30); on failure or "AI busy" it falls back to a random persona quote instead of dropping the event. `JOURNAL`, `TASK_DUE` and `PAGE` always render locally (no AI).
+- **AI-first with a local fallback.** AI is always attempted when WiFi is connected; local persona quotes serve as backup on failure. `JOURNAL`, `TASK_DUE` and `PAGE` render locally (no AI). `EVENT_POINTS` resolves the current-month snapshot and sends it to AI.
+- **Alert frequency controlled by `aiMode`:** 0=Off (only TASK_DUE/PAGE fire), 1=Normal (all triggers at standard intervals), 2=Chatty (NAGGING 37 min with cursor wrap, POINTS 9 min / 90 min, CURATION 40 min / 60 min).
 - **Priorities** (higher pops first): `URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500`.
 - **Relevance windows**: a queued message lives `URGENT 5m / NORMAL 30m / LOW 1h`, then is dropped.
 
@@ -41,17 +42,20 @@ flowchart TD
 
     T["Loop polls"] --> E9["9 GOAL_COMPLETED<br/>desk time ≥ daily target"]
     T --> E10["10 JOURNAL<br/>morning · pre-lunch · end-of-day"]
-    T --> E11["11 NAGGING<br/>every 10 m seated, next overdue task<br/>most-expired-first, cursor resets at midnight"]
+    T --> E11["11 NAGGING<br/>every 60 m seated, next overdue task<br/>most-expired-first, cursor resets at midnight"]
     T --> E12["12 TASK_DUE<br/>catch-up (due ≤ now)"]
+    T --> E15["15 POINTS<br/>every 18 m seated, ~221 m throttle<br/>task points check-in"]
+    T --> E16["16 CURATION<br/>every 50 m seated, 120 m cooldown<br/>observation-driven nudge"]
+    T -->|"Chatty: 37 m NAG w/wrap, 40 m CURATION"| E11
 
     DBG["MQTT or Web settings<br/>TRIGGER &lt;event&gt; [ai|fallback]"] --> Q
 
     E14 & E0 & E1 & E8 & E2 & E4 & E5 & E6 & E3 --> Q["MessageManager queue<br/>priority + relevance window<br/>one pop per loop, busy-gated"]
-    E9 & E10 & E11 & E12 --> Q
+    E9 & E10 & E11 & E12 & E15 & E16 --> Q
 
     Q --> TB{triggerBehaviour}
     TB -->|"JOURNAL / TASK_DUE / PAGE"| R["Render locally<br/>task pages, no AI"]
-    TB -->|"AI mode, WiFi, cap left"| AI["Prompt → Groq llama-3.3-70b"]
+    TB -->|"WiFi connected"| AI["Prompt → Groq llama-3.3-70b"]
     AI -->|"fail or busy"| LQ["Random persona quote"]
     AI -->|"ok"| DISP["Display"]
     LQ --> DISP
@@ -92,17 +96,27 @@ sequenceDiagram
 | `LATEHOURS_SIT` | every sit during quiet hours |
 | `WELCOME_BACK` | every return after ≥ 3 m away |
 | `STRETCH` | every 60 m of continuous sitting |
-| `SLACKER` | 1 h sitting, score < 35, throttled to 1 h |
+| `SLACKER` | 1h15m sitting, score < 35, throttled to 1h15m |
 | `STREAK_BEATEN` | once per session — new record ≥ 15 m |
 | `FOCUS_END` | focus session ≥ 5 m ends |
 | `LUNCH_REMINDER` | learned lunch + 15 m, desk > 30 m, once/day |
 | `EXCESSIVE_BREAKS` | > 1 break/hour after 3 h worked, once/day |
 | `GOAL_COMPLETED` | desk time ≥ target, once/day |
 | `JOURNAL` | morning (5 m sit), pre-lunch (−15 m), end-of-day (−1 h), once each |
-| `NAGGING` | every 10 m seated — next overdue task, most-expired-first; cursor persists across sessions, resets at midnight |
+| `NAGGING` | every 60 m seated (37 m in Chatty) — next overdue task, most-expired-first; cursor persists across sessions, resets at midnight. Chatty wraps cursor when exhausted. |
+| `POINTS` | every 18 m seated (9 m in Chatty), throttled to ~221 min (90 min in Chatty) — task points check-in |
+| `CURATION` | every 50 m seated / 120 m cooldown (40 m / 60 m in Chatty) — observation-driven nudge when `getCurationNudge()` finds a noteworthy pattern. Lazy fire: skips if nothing interesting. |
 | `TASK_DUE` | catch-up: any task with due time ≤ now |
 | `PAGE` | generated when a message exceeds 110 chars |
 | `TRIGGER` | manual, any time |
+
+### Mode: Off (aiMode=0)
+
+Only `TASK_DUE` and `PAGE` fire. All greetings, nags, reminders, journals, and points are suppressed.
+
+### Mode: Chatty (aiMode=2)
+
+NAGGING interval reduced (60→37 min) with cursor wrap. POINTS cadence reduced (18→9 min) and throttle (221→90 min). CURATION interval reduced (50→40 min) and throttle (120→60 min).
 
 ## 4. Trigger registry
 
@@ -112,16 +126,18 @@ sequenceDiagram
 | 1 | `EVENT_WELCOME_BACK` | return after ≥ 3 m away | `main.cpp:1162` | URGENT |
 | 2 | `EVENT_STRETCH` | 60 m continuous sitting | `main.cpp:1229` | NORMAL |
 | 3 | `EVENT_FOCUS_END` | focus ≥ 5 m ends (in place, or on leave) | `main.cpp:1187` | NORMAL |
-| 4 | `EVENT_SLACKER` | 1 h sitting, score < 35, throttled 1 h | `main.cpp:1242` | NORMAL |
+| 4 | `EVENT_SLACKER` | 1h15m sitting, score < 35, throttled 1h15m | `main.cpp:1242` | NORMAL |
 | 5 | `EVENT_STREAK_BEATEN` | new sitting-streak record ≥ 15 m | `main.cpp:1254` | NORMAL |
 | 6 | `EVENT_LUNCH_REMINDER` | learned lunch + 15 m, desk > 30 m, once/day | `main.cpp:1474` | NORMAL |
 | 8 | `EVENT_EXCESSIVE_BREAKS` | > 1 break/hour after 3 h worked, once/day — always behind the greeting | `main.cpp:1157` | NORMAL |
 | 9 | `EVENT_GOAL_COMPLETED` | desk time ≥ daily target, once/day | `main.cpp:1489` | HIGH |
 | 10 | `EVENT_JOURNAL` | morning / pre-lunch / end-of-day, once each — local render | `main.cpp:1503` | HIGH |
-| 11 | `EVENT_NAGGING` | every 10 m seated — next overdue task, most-expired-first; cursor persists, resets at midnight | `main.cpp:1599` | NORMAL |
+| 11 | `EVENT_NAGGING` | one overdue task per ring, most-expired-first; cursor persists, resets at midnight, Chatty wraps | `main.cpp:1720` | NORMAL |
 | 12 | `EVENT_TASK_DUE` | due-task catch-up (due ≤ now) — local render | `main.cpp:628` | HIGH |
 | 13 | `EVENT_PAGE` | follow-up screen for messages > 110 chars | `Display.h:554` | HIGH |
 | 14 | `EVENT_LATEHOURS_SIT` | any sit during late hours (learned workday ± 30 m) | `main.cpp:1136` | URGENT |
+| 15 | `EVENT_POINTS` | every 18 m seated (3 h cooldown), gamified task points check-in (daily=1-2 pts, monthly=5-10 pts) | `main.cpp:1740` | NORMAL |
+| 16 | `EVENT_CURATION` | every 50 m / 120 m (Chatty: 40 m / 60 m), observation-driven nudge via `getCurationNudge()` — shift progress, break patterns, unusual presence, task milestones, weather | `main.cpp:1764` | NORMAL |
 
 Slot **7** was `EVENT_MQTT_MESSAGE` — removed (F7). Debug triggering now uses `TRIGGER` over MQTT (`deskbuddy/debug/cmd`) or the settings-page panel.
 
@@ -131,7 +147,7 @@ A first sit during late hours is **held**, not burned: no greeting, no day-start
 
 ### Overdue-task nag queue
 
-Each sit-down starts a 10 m clock (`NAGGING_TRIGGER_DELAY_MS`). When it rings, the nag names one overdue task — the next in most-expired-first order — and the clock restarts, so a long session is nudged about a different task every 10 m. The queue is built from **all** overdue tasks (daily, monthly past its due day, non-recurrent carried over, and recurrent monthly that missed an earlier month), so monthly overdues are nagged alongside daily ones. The AI nag prompt anchors on the queued task by name but explicitly allows citing the other overdue daily and monthly tasks from the observations. The cursor (`nagQueueIndex`, persisted in `stats.json`) advances per nag and is **not** reset on sit-down, so position carries across sessions; `resetDailyStats()` zeroes it at the day rollover so the whole list can be nagged again tomorrow. "Overdue" = any uncompleted daily task with a passed due date/time, a monthly task past its due day this month, or a recurrent monthly task that missed an earlier month. Known limitation: the cursor is positional, so a task completed before its turn shifts the list, and tasks that become overdue after the cursor passed them are not nagged until midnight.
+Each sit-down starts a 60 m clock (`NAGGING_TRIGGER_DELAY_MS`, 37 m in Chatty). When it rings, the nag names one overdue task — the next in most-expired-first order — and the clock restarts. Any task with a passed due time triggers nagging (no minimum threshold). The cursor (`nagQueueIndex`, persisted in `stats.json`) advances per nag and is **not** reset on sit-down, so position carries across sessions. `resetDailyStats()` zeroes it at midnight. In Normal mode, the cursor exhausts when all overdue tasks have been shown. In Chatty mode (`aiMode==2`), the cursor wraps back to the most-overdue task when exhausted, cycling the list. "Overdue" = any uncompleted daily task with a passed due date/time, a monthly task past its due day this month, or a recurrent monthly task that missed an earlier month.
 
 ### Task diligence in AI calls (F20)
 
@@ -175,18 +191,6 @@ Non-recurrent tasks carry forward until completed instead of vanishing at the pe
 | F19 | task tallies persisted into `StatsState`: current-period snapshot (`dailyTaskDone/Total`, `monthlyTaskDone/Total` + period keys) and rolling history rings (last 7 days / 12 months) in `stats.json`; refreshed on each journal generation (`updateTodoTally`) |
 | F20 | diligence available to AI calls: every prompt's `[TASK SYNTHESIS]` gains a `Diligence: daily N/M (±X), monthly N/M (±Y)` line; `getTodoObservations` also refreshes the persisted `appStats` tally on every AI call |
 
-## 7. Proposed (not built): elective scheduler & annoyance budget
-
-Today every elective message gets the same 30 m window (`NORMAL`), and `R_IMPORTANT` equals `R_NORMAL` — so a STRETCH can linger 30 m and burst behind the next nudge. Proposal: split into three windows, where the window *is* the anti-burst mechanism.
-
-- **Critical — 12 h (`R_IMPORTANT`):** TASK_DUE.
-- **Paced — 1 h (`R_NORMAL`):** FIRST_SIT, GOAL_COMPLETED, JOURNAL.
-- **Slot — 2 m (`R_BRIEF`, new):** WELCOME_BACK, STRETCH, FOCUS_END, SLACKER, STREAK_BEATEN, LUNCH_REMINDER, EXCESSIVE_BREAKS, NAGGING, PAGE. Fire-now: dropped if the display can't show it within 2 m, never re-queued.
-
-Call-site flags are set at schedule time, so a dropped message never refires that day. Tradeoffs: WELCOME_BACK at 2 m is safe (the greeting pops at sit + 3 s and holds the window itself); LUNCH/NAGGING/EXCESSIVE_BREAKS can be skipped if busy — intentional per anti-burst.
-
-**Open questions:** keep three separate journal slots or one per day? Confirm `EVENT_PAGE` folds into the 2 m group.
-
-## 8. Deferred / out of scope
+## 7. Deferred / out of scope
 
 Adaptive learning, persona memory, localization implementation, micro-break scoring (D7), focus-time lag (D8), bounded nagging list, FOCUS_END on BUSY exit (now mostly covered by F11). Localization prep notes (PROGMEM `LangStrings` struct, `.rodata` baseline 19.4 KB) live in the git history of this file.

@@ -30,7 +30,7 @@ struct LogEntry {
 
 struct ConfigState {
   float targetHours = 8.0;
-  int aiMode = 1; // 0 = Eco, 1 = Balanced, 2 = Frequent
+  int aiMode = 1; // 0 = Off, 1 = Normal, 2 = Chatty
   int aiPersona = 0; // 0 = Coach, 1 = Critic, 2 = Sweet, 3 = Friend
   int clockFace = 0;
   String userName = "human";
@@ -115,13 +115,15 @@ struct StatsState {
   int nagQueueIndex = 0; // cursor into the sorted overdue-task list; advances per nag, resets at midnight
   String dueFiredDay = "";
   String dueFiredKeys = "";
+  String dueFiredMonth = "";
+  String dueFiredMonthKeys = "";
   int lastNtpDay = -1;
   int lastMidnightCheckDay = -1;
   unsigned long previousLatestBreakDuration = 0;
   uint32_t fsWriteCount = 0;
   uint32_t fsReadCount = 0;
   uint32_t fsWritesToday = 0;
-
+  
   // Task diligence tally (persisted in stats.json)
   int dailyTaskTotal = 0;        // active daily tasks today
   int dailyTaskDone = 0;         // completed today
@@ -145,6 +147,7 @@ struct RuntimeState {
   bool isStopByTracking = false;
   bool wasFirstSitThisSession = false;
   uint32_t originalLastAwayEpoch = 0;
+  uint32_t heldFirstSitEpoch = 0; // preserved original sit-down epoch across late-hours boundary breaks
   unsigned long totalStopByTimeMs = 0;
   unsigned long lastStateTransitionTime = 0;
   unsigned long lastLoopTime = 0;
@@ -157,7 +160,8 @@ struct RuntimeState {
   unsigned long sitDownTime = 0;
   uint32_t sitDownEpoch = 0;
   unsigned long lastNagTime = 0; // per-session timer for the 10 min overdue-task nag cadence
-  unsigned long lastPointsTime = 0; // per-session timer for the 55 min seated points check-in
+  unsigned long lastPointsTime = 0; // per-session 3 h throttle marker for the points check-in
+  unsigned long lastPointsCadenceTime = 0; // per-session 18 min cadence timer for the points check-in
   bool rolloverPending = false;
   unsigned long requiredValidationBufferMs = 180000UL;
 

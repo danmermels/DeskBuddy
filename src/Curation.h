@@ -857,4 +857,154 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
   }
 }
 
+// Observation-driven curation nudge used by EVENT_CURATION (16).
+// Scans live state for noteworthy patterns not covered by other triggers.
+// Returns a human-readable detail string for the AI prompt, or empty if nothing found.
+// Uses variety tracking: avoids repeating the same topic key two fires in a row.
+inline String getCurationNudge() {
+  static String lastKey = "";
+  if (!timeClient.isTimeSet()) return "";
+
+  time_t epoch = timeClient.getEpochTime();
+  struct tm* ptm = localtime(&epoch);
+  if (!ptm) return "";
+
+  int currentHour = ptm->tm_hour;
+  int currentDay = ptm->tm_wday;
+  char dStr[11], mStr[8];
+  snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", ptm->tm_year + 1900, ptm->tm_mon + 1, ptm->tm_mday);
+  snprintf(mStr, sizeof(mStr), "%04d-%02d", ptm->tm_year + 1900, ptm->tm_mon + 1);
+  String todayStr = String(dStr);
+  String curMonth = String(mStr);
+
+  struct { String key; String detail; } cands[12];
+  int cnt = 0;
+  auto add = [&](const String& k, const String& d) { if (cnt < 12) { cands[cnt].key = k; cands[cnt].detail = d; cnt++; } };
+
+  // --- Parse tasks for D1/D2/D3 ---
+  int dailyCompleted = 0, dailyUncompleted = 0, dailyTotal = 0;
+  bool monthlyDueToday = false;
+  String monthlyTaskName = "";
+
+  if (LittleFS.exists("/todo.json")) {
+    fs::File file = LittleFS.open("/todo.json", "r");
+    if (file) {
+      DynamicJsonDocument doc(4096);
+      if (deserializeJson(doc, file) == DeserializationError::Ok) {
+        if (doc.containsKey("daily")) {
+          for (JsonObject t : doc["daily"].as<JsonArray>()) {
+            bool rec = t["recurrent"] | false;
+            if (rec) {
+              String sd = t["startDate"] | "";
+              String ed = t["endDate"] | "";
+              if (!(sd.length() == 0 || todayStr >= sd)) continue;
+              if (ed.length() > 0 && todayStr >= ed) continue;
+            }
+            dailyTotal++;
+            if (rec) {
+              if (t.containsKey("completedDates")) {
+                for (JsonVariant d : t["completedDates"].as<JsonArray>()) {
+                  if (d.as<String>() == todayStr) { dailyCompleted++; break; }
+                }
+              }
+            } else {
+              if ((t["completed"] | false)) dailyCompleted++;
+            }
+          }
+        }
+        dailyUncompleted = dailyTotal - dailyCompleted;
+
+        if (doc.containsKey("monthly")) {
+          for (JsonObject t : doc["monthly"].as<JsonArray>()) {
+            bool rec = t["recurrent"] | false;
+            int dueDay = t["day"] | 1;
+            if (ptm->tm_mday != dueDay) continue;
+            if (!rec) {
+              if ((t["year"] | 0) != ptm->tm_year + 1900 || (t["month"] | 0) != ptm->tm_mon + 1) continue;
+            } else {
+              String sm = t["startMonth"] | "";
+              String em = t["endMonth"] | "";
+              if (sm.length() > 0 && curMonth < sm) continue;
+              if (em.length() > 0 && curMonth >= em) continue;
+            }
+            bool done = false;
+            if (rec && t.containsKey("completedMonths")) {
+              for (JsonVariant m : t["completedMonths"].as<JsonArray>()) {
+                if (m.as<String>() == curMonth) { done = true; break; }
+              }
+            } else if (!rec) { done = t["completed"] | false; }
+            if (!done) { monthlyDueToday = true; monthlyTaskName = t["text"] | ""; }
+          }
+        }
+      }
+      file.close();
+    }
+  }
+
+  // --- A3: Shift progress ---
+  if (appConfig.targetHours > 0.0f) {
+    unsigned long targetMs = (unsigned long)(appConfig.targetHours * 3600000.0f * 1000.0f);
+    if (appStats.totalDeskTime > targetMs / 4) {
+      if (appStats.totalDeskTime < targetMs) {
+        unsigned long leftMs = targetMs - appStats.totalDeskTime;
+        add("shift_progress", formatTime(appStats.totalDeskTime) + " in, " + formatTime(leftMs) + " left");
+      }
+    }
+  }
+
+  // --- B1: Marathon no-break ---
+  if (appStats.breakCount == 0 && appStats.totalDeskTime > 7200000UL)
+    add("marathon_nobreak", "over " + formatTime(appStats.totalDeskTime) + " without a single break");
+
+  // --- B2: Micro-break pattern ---
+  if (appStats.breakCount >= 3 && appStats.totalDeskTime > 7200000UL) {
+    unsigned long avgBreak = appStats.totalBreakTime / (unsigned long)appStats.breakCount;
+    if (avgBreak < 300000UL)
+      add("microbreaks", String(appStats.breakCount) + " micro-breaks under 5 min each");
+  }
+
+  // --- B3: Unusual hour presence ---
+  int hourPresence = getEffectivePresence(currentDay, currentHour);
+  if (hourPresence > 0 && hourPresence < 15) {
+    char hBuf[6]; int h12 = (currentHour % 12 == 0) ? 12 : currentHour % 12;
+    snprintf(hBuf, sizeof(hBuf), "%d%sm", h12, currentHour >= 12 ? "p" : "a");
+    add("unusual_hour", "usually away at " + String(hBuf) + " but at the desk today");
+  }
+
+  // --- D1: Rapid task clearance ---
+  if (dailyCompleted >= 3 && currentHour < 12)
+    add("rapid_tasks", "already cleared " + String(dailyCompleted) + " tasks before noon");
+
+  // --- D2: All daily tasks done ---
+  if (dailyTotal > 0 && dailyUncompleted == 0 && currentHour < getLearnedWorkdayEnd(currentDay))
+    add("all_tasks_done", "all daily tasks cleared — nothing left on the list");
+
+  // --- D3: Monthly goal due ---
+  if (monthlyDueToday && dailyUncompleted == 0 && dailyTotal > 0)
+    add("monthly_due", "monthly goal \"" + monthlyTaskName + "\" due today and dailies are done");
+
+  // --- E1: Weather hot ---
+  if (appState.temp > 30)
+    add("weather_hot", "it's " + String(appState.temp) + "C outside — good call staying in");
+
+  // --- E2: Weather nice ---
+  if (appState.temp >= 20 && appState.temp <= 26 && appState.weatherDesc == "Clear")
+    add("weather_nice", "beautiful " + String(appState.temp) + "C outside — step out for a walk?");
+
+  // --- Variety: avoid repeating last key ---
+  if (cnt == 0) return "";
+  int usable = 0;
+  for (int i = 0; i < cnt; i++) if (cands[i].key != lastKey) usable++;
+  int pool = (usable > 0) ? usable : cnt;
+  int pick = random(pool);
+  int chosen = 0;
+  if (usable > 0) {
+    for (int i = 0; i < cnt; i++) {
+      if (cands[i].key != lastKey) { if (chosen == pick) { chosen = i; break; } chosen++; }
+    }
+  } else { chosen = pick; }
+  lastKey = cands[chosen].key;
+  return cands[chosen].detail;
+}
+
 #endif // CURATION_H

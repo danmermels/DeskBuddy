@@ -55,6 +55,28 @@ inline String resolveLocalPlaceholders(String templateStr, String detail) {
   return templateStr;
 }
 
+inline const char* getLocalFallbackQuote(int eventType) {
+  int persona = appConfig.aiPersona;
+  if (persona < 0 || persona > 3) persona = 0;
+  int randIdx = random(5);
+  switch (eventType) {
+    case EVENT_FIRST_SIT:     return localFirstSit[persona][randIdx];
+    case EVENT_WELCOME_BACK:  return localWelcomeBack[persona][randIdx];
+    case EVENT_LATEHOURS_SIT: return localLateHours[persona][randIdx];
+    case EVENT_STRETCH:       return localStretch[persona][randIdx];
+    case EVENT_FOCUS_END:     return localFocus[persona][randIdx];
+    case EVENT_SLACKER:       return localSlacker[persona][randIdx];
+    case EVENT_STREAK_BEATEN: return localStreakBeaten[persona][randIdx];
+    case EVENT_LUNCH_REMINDER: return localLunchReminder[persona][randIdx];
+    case EVENT_EXCESSIVE_BREAKS: return localExcessiveBreaks[persona][randIdx];
+    case EVENT_GOAL_COMPLETED:   return localGoalCompleted[persona][randIdx];
+    case EVENT_NAGGING:          return localNagging[persona][randIdx];
+    case EVENT_POINTS:           return localPoints[persona][randIdx];
+    case EVENT_CURATION:         return localCuration[persona][randIdx];
+  }
+  return localWelcomeBack[persona][randIdx];
+}
+
 inline String resolvePromptPlaceholders(int eventType, String templateStr, String detail) {
   extern const char* PROMPT_PREAMBLE_COACH;
   extern const char* PROMPT_PREAMBLE_CRITIC;
@@ -265,27 +287,8 @@ void aiQueryTask(void * parameter) {
                   httpCode, HTTPClient::errorToString(httpCode).c_str(),
                   wifiStatusStr.c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
       
-      const char* quote = "";
-      int randIdx = random(5);
-      int persona = appConfig.aiPersona;
-      if (persona < 0 || persona > 3) persona = 0;
+      const char* quote = getLocalFallbackQuote(appState.lastTriggeredEventType);
 
-      switch (appState.lastTriggeredEventType) {
-        case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
-        case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
-        case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
-        case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
-        case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
-        case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
-        case EVENT_STREAK_BEATEN: quote = localStreakBeaten[persona][randIdx]; break;
-        case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
-        case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
-        case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
-        case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
-        case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
-        default:                  quote = localWelcomeBack[persona][randIdx]; break;
-      }
-      
       xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
       appState.lastResponseIsAi = false;
       String nameCopy = appState.currentUserName;
@@ -349,6 +352,17 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   if (eventType == EVENT_POINTS && detail.length() == 0) {
     detail = buildPointsDetail();
     Logger::log("BEHAVIOUR", "Points detail resolved to \"%s\"", detail.c_str());
+  }
+
+  // Curation without explicit detail (e.g. debug TRIGGER CURATION) resolves
+  // the live observation so the nudge always references actual state.
+  if (eventType == EVENT_CURATION && detail.length() == 0) {
+    detail = getCurationNudge();
+    if (detail.length() == 0) {
+      Logger::log("BEHAVIOUR", "Curation: nothing noteworthy found, dropping event");
+      return;
+    }
+    Logger::log("BEHAVIOUR", "Curation detail resolved to \"%s\"", detail.c_str());
   }
 
   if (eventType == EVENT_PAGE) {
@@ -491,26 +505,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   } else if (forceMode == 2) {
     useAI = false;
   } else {
-    if (appConfig.aiMode == 2) {
-      // Frequent mode: all events can trigger AI
-      useAI = true;
-    } else if (appConfig.aiMode == 1) {
-      // Balanced mode: AI triggers for tasks, focus, and notifications
-      if (eventType == EVENT_FIRST_SIT || eventType == EVENT_STRETCH || eventType == EVENT_WELCOME_BACK || eventType == EVENT_LATEHOURS_SIT || eventType == EVENT_LUNCH_REMINDER || eventType == EVENT_EXCESSIVE_BREAKS || eventType == EVENT_GOAL_COMPLETED || eventType == EVENT_NAGGING || eventType == EVENT_POINTS) {
-        useAI = true;
-      }
-    }
-    // Enforce daily cap (max 15 requests per day) for normal triggers
-    if (useAI && appStats.dailyAiRequestCount >= DAILY_AI_LIMIT) {
-      useAI = false;
-    }
-  }
-
-  // Check if WiFi is connected before attempting AI
-  if (useAI) {
-    if (WiFi.status() != WL_CONNECTED) {
-      useAI = false;
-      Logger::log("BEHAVIOUR", "WiFi not connected, bypassing AI to use local fallback.");
+    useAI = (WiFi.status() == WL_CONNECTED);
+    if (!useAI) {
+      Logger::log("BEHAVIOUR", "WiFi not connected, using local fallback.");
     }
   }
 
@@ -529,6 +526,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       case EVENT_GOAL_COMPLETED:   basePrompt = resolvePromptPlaceholders(eventType, PROMPT_GOAL_COMPLETED, detail); break;
       case EVENT_NAGGING:          basePrompt = resolvePromptPlaceholders(eventType, PROMPT_NAGGING, detail); break;
       case EVENT_POINTS:           basePrompt = resolvePromptPlaceholders(eventType, PROMPT_POINTS, detail); break;
+      case EVENT_CURATION:        basePrompt = resolvePromptPlaceholders(eventType, PROMPT_CURATION, detail); break;
     }
 
     if (!appState.isAILoading) {
@@ -551,25 +549,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         appState.isAILoading = false;
         
         // Immediately load fallback
-        const char* quote = "";
-        int randIdx = random(5);
-        int persona = appConfig.aiPersona;
-        if (persona < 0 || persona > 3) persona = 0;
-
-        switch (eventType) {
-        case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
-        case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
-        case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
-          case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
-          case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
-          case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
-          case EVENT_STREAK_BEATEN: quote = localStreakBeaten[persona][randIdx]; break;
-          case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
-          case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
-          case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
-          case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
-          case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
-        }
+        const char* quote = getLocalFallbackQuote(eventType);
 
         String personalQuote = resolveLocalPlaceholders(String(quote), detail);
         xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
@@ -580,25 +560,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       }
     } else {
       Logger::log("BEHAVIOUR", "AI query already loading; using local fallback instead of dropping event %d", eventType);
-      const char* quote = "";
-      int randIdx = random(5);
-      int persona = appConfig.aiPersona;
-      if (persona < 0 || persona > 3) persona = 0;
-
-      switch (eventType) {
-        case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
-        case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
-        case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
-        case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
-        case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
-        case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
-        case EVENT_STREAK_BEATEN: quote = localStreakBeaten[persona][randIdx]; break;
-        case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
-        case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
-        case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
-        case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
-        case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
-      }
+      const char* quote = getLocalFallbackQuote(eventType);
 
       String personalQuote = resolveLocalPlaceholders(String(quote), detail);
       Logger::log("BEHAVIOUR", "Picked local fallback (AI busy): \"%s\"", personalQuote.c_str());
@@ -609,26 +571,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       xSemaphoreGive(appState.aiMutex);
     }
   } else {
-    // Local Fallback selection (picks from available per event type and persona)
-    const char* quote = "";
-    int randIdx = random(5);
-    int persona = appConfig.aiPersona;
-    if (persona < 0 || persona > 3) persona = 0;
-
-    switch (eventType) {
-      case EVENT_FIRST_SIT:     quote = localFirstSit[persona][randIdx]; break;
-      case EVENT_WELCOME_BACK:  quote = localWelcomeBack[persona][randIdx]; break;
-      case EVENT_LATEHOURS_SIT: quote = localLateHours[persona][randIdx]; break;
-      case EVENT_STRETCH:       quote = localStretch[persona][randIdx]; break;
-      case EVENT_FOCUS_END:     quote = localFocus[persona][randIdx]; break;
-      case EVENT_SLACKER:       quote = localSlacker[persona][randIdx]; break;
-      case EVENT_STREAK_BEATEN: quote = localStreakBeaten[persona][randIdx]; break;
-      case EVENT_LUNCH_REMINDER: quote = localLunchReminder[persona][randIdx]; break;
-      case EVENT_EXCESSIVE_BREAKS: quote = localExcessiveBreaks[persona][randIdx]; break;
-      case EVENT_GOAL_COMPLETED:   quote = localGoalCompleted[persona][randIdx]; break;
-      case EVENT_NAGGING:          quote = localNagging[persona][randIdx]; break;
-      case EVENT_POINTS:           quote = localPoints[persona][randIdx]; break;
-    }
+    const char* quote = getLocalFallbackQuote(eventType);
 
     String personalQuote = resolveLocalPlaceholders(String(quote), detail);
     Logger::log("BEHAVIOUR", "Picked local fallback: \"%s\"", personalQuote.c_str());

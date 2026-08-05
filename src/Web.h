@@ -1990,11 +1990,11 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
     <h1>General Settings</h1>
     <form action="/save-settings" method="POST">
       <div class="metric">
-        <span class="label">AI Mode</span>
+        <span class="label">Alert Frequency</span>
         <select name="aiMode" id="aiModeSelect" class="settings-select" onchange="this.form.submit()">
-          <option value="0">Eco (Off)</option>
-          <option value="1">Balanced</option>
-          <option value="2">Frequent</option>
+          <option value="0">Off</option>
+          <option value="1">Normal</option>
+          <option value="2">Chatty</option>
         </select>
       </div>
       <div class="metric">
@@ -2321,6 +2321,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           <option value="13">Page Follow-up (13)</option>
           <option value="14">Late Hours Sit (14)</option>
           <option value="15">Points Check-in (15)</option>
+          <option value="16">Curation Nudge (16)</option>
         </select>
         <select id="debugMsgMode" style="width: 110px; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px; padding: 8px; font-size: 0.9rem;">
           <option value="ai">AI Msg</option>

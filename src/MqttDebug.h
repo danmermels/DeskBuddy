@@ -726,6 +726,7 @@ static int parseEventType(const String& s) {
   if (u == "PAGE")                                        return EVENT_PAGE;
   if (u == "LATEHOURS" || u == "LATEHOURS_SIT" || u == "LATEHOURSSIT") return EVENT_LATEHOURS_SIT;
   if (u == "POINTS")                                      return EVENT_POINTS;
+  if (u == "CURATION")                                    return EVENT_CURATION;
   return -1;
 }
 

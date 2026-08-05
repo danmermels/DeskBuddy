@@ -65,7 +65,7 @@ All values in milliseconds unless noted. Controls debounce windows, trigger inte
 | Constant | Value | Real-World | What It Does |
 |----------|-------|------------|--------------|
 | `STRETCH_INTERVAL_MS` | 3600000 | 60 minutes | Minimum continuous sitting time before a "stretch reminder" event fires. Only triggers if user has been sitting without a break for 60+ minutes. |
-| `SLACKER_INTERVAL_MS` | 3600000 | 1 hour | Minimum interval between "slacker roasts" when productivity score is low. Prevents nagging every minute when the user is having a bad day. |
+| `SLACKER_INTERVAL_MS` | 4500000 | 1h15m | Minimum interval between "slacker roasts" when productivity score is low. Raised from 1h to de-conflict with STRETCH at the 60-minute mark. |
 | `EXCESSIVE_BREAKS_MIN_WORKED_HOURS` | 3.0 | 3 hours | Minimum hours worked (desk time) before the excessive-breaks roast can fire. |
 
 ### Display & UI Timing
@@ -96,13 +96,17 @@ All values in milliseconds unless noted. Controls debounce windows, trigger inte
 
 ## 3. Performance & Productivity
 
-Constants that control AI limits, sensor thresholds, and the productivity score formula.
+Constants that control alert frequency mode, sensor thresholds, and the productivity score formula.
 
-### AI Limits
+### Alert Frequency (aiMode)
 
-| Constant | Value | What It Does |
-|----------|-------|--------------|
-| `DAILY_AI_LIMIT` | 30 | Maximum Groq API requests per day. Prevents runaway costs. Counter resets on day rollover. Once hit, AI falls back to local quotes. |
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | Off | Only `EVENT_TASK_DUE` and `EVENT_PAGE` fire. All other triggers are suppressed. |
+| 1 | Normal | All triggers fire at standard intervals. Default. |
+| 2 | Chatty | All triggers fire; NAGGING, POINTS, and CURATION use shorter intervals (see Chatty Mode Constants below). |
+
+AI is always attempted when WiFi is connected, regardless of frequency mode. Local fallback quotes serve as backup on connectivity failure.
 
 ### Sensor Thresholds (Defaults)
 
@@ -201,10 +205,33 @@ Constants controlling when task journal prompts and nagging triggers fire.
 | `PRE_LUNCH_JOURNAL_MINS_BEFORE` | 15 | 15 minutes | Show the pre-lunch task review 15 minutes before the learned lunch hour. |
 | `END_OF_DAY_JOURNAL_HOURS_BEFORE` | 1 | 1 hour | Show the end-of-day task review 1 hour before the learned workday end. |
 | `MIDDAY_TASK_CHECK_HOUR` | 12 | 12:00 PM | At noon, the curation system checks if any daily tasks have been completed and injects that observation into AI prompts. |
-| `NAGGING_TRIGGER_DELAY_MS` | 600000 | 10 minutes | Cadence of the overdue-task nag queue: the first nag fires 10 minutes into a sitting session, then every 10 minutes while seated. Each nag names the next overdue task (most-expired-first). The cursor persists across sessions and resets at midnight. |
+| `NAGGING_TRIGGER_DELAY_MS` | 3600000 | 60 minutes | Cadence of the overdue-task nag queue: the first nag fires 60 minutes into a sitting session, then every 60 minutes while seated. Nags one task per ring, cursor exhausts when all overdue tasks have been shown. |
 | `TASK_OVERDUE_DAYS_LIMIT` | 3 | 3 days | Severity cutoff for the AI task synthesis: daily tasks more than 3 days past due are flagged as "highly overdue" in the AI prompt context. |
 | `TASK_OVERDUE_MONTHS_LIMIT` | 3 | 3 months | Severity cutoff for the AI task synthesis: monthly tasks more than 3 months past due are flagged as "highly overdue" in the AI prompt context. |
 | `TASK_SYNTHESIS_MAX_CHARS` | 500 | ~10 bullets | Max length of the compact `[TASK SYNTHESIS]` block injected into AI prompt observations (counts + task names). Longer lists are truncated with `...`. |
+| `POINTS_TRIGGER_DELAY_MS` | 1080000 | 18 minutes | Cadence of the seated points check-in trigger: the first ring fires 18 minutes into a session, then every 18 minutes while seated. |
+| `POINTS_THROTTLE_MS` | 13260000 | ~221 minutes | Minimum cooldown between points check-ins. At 18 min cadence, produces ~3 fires per 10h day. |
+
+### CURATION Constants
+
+Constants controlling the observation-driven curation nudge (`EVENT_CURATION`, 16).
+
+| Constant | Value | Real-World | What It Does |
+|----------|-------|------------|--------------|
+| `CURATION_TRIGGER_INTERVAL_MS` | 3000000 | 50 minutes | Normal-mode continuous sitting before first curation eligibility check. |
+| `CURATION_THROTTLE_MS` | 7200000 | 120 minutes | Normal-mode cooldown between curation nudges. |
+
+### Chatty Mode Constants (aiMode=2)
+
+Used instead of the standard constants when Alert Frequency is set to Chatty.
+
+| Constant | Value | Real-World | What It Does |
+|----------|-------|------------|--------------|
+| `CHATTY_NAGGING_TRIGGER_DELAY_MS` | 2220000 | 37 minutes | Reduced NAGGING cadence for Chatty mode (60 min → 37 min). Chatty wraps the cursor when exhausted, cycling back to most-overdue. |
+| `CHATTY_POINTS_TRIGGER_DELAY_MS` | 540000 | 9 minutes | Reduced POINTS cadence for Chatty mode (18 min → 9 min). |
+| `CHATTY_POINTS_THROTTLE_MS` | 5400000 | 90 minutes | Reduced POINTS throttle for Chatty mode (221 min → 90 min). |
+| `CHATTY_CURATION_TRIGGER_INTERVAL_MS` | 2400000 | 40 minutes | Reduced CURATION interval for Chatty mode (50 min → 40 min). |
+| `CHATTY_CURATION_THROTTLE_MS` | 3600000 | 60 minutes | Reduced CURATION throttle for Chatty mode (120 min → 60 min). |
 
 ---
 
@@ -242,7 +269,6 @@ All MQTT connection, topic, and buffer configuration.
 | Constant | Value | What It Does |
 |----------|-------|--------------|
 | `MQTT_HISTORY_SIZE` | 50 | Circular buffer size for received MQTT messages. Last 50 messages retained for diagnostics. |
-| `SYSTEM_LOG_SIZE` | 15 | Reserved but unused in current code. Originally intended for a local log buffer. |
 
 ---
 

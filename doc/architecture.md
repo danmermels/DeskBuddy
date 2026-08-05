@@ -122,7 +122,7 @@ User preferences and system configuration. Loaded from NVS Preferences at boot.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `targetHours` | float | 8.0 | Daily desk time goal (hours) |
-| `aiMode` | int | 1 | 0=Eco(off), 1=Balanced, 2=Frequent |
+| `aiMode` | int | 1 | 0=Off (only TASK_DUE), 1=Normal, 2=Chatty (increased NAGGING/POINTS frequency) |
 | `aiPersona` | int | 0 | 0=Coach, 1=Critic, 2=Sweet, 3=Friend |
 | `clockFace` | int | 0 | Active faceplate variant (0-9) |
 | `userName` | String | "human" | Name used in messages and prompts |
@@ -240,23 +240,26 @@ score = constrain(raw, 0, 100)
 | 1 | `EVENT_WELCOME_BACK` | User returns after a break (>= 3 min) |
 | 2 | `EVENT_STRETCH` | 60 minutes of continuous sitting |
 | 3 | `EVENT_FOCUS_END` | User leaves after a focus session (>= 5 min) |
-| 4 | `EVENT_SLACKER` | Sitting > 1 hour with productivity score < 35% |
+| 4 | `EVENT_SLACKER` | Sitting > 1h15m with productivity score < 35% |
 | 5 | `EVENT_STREAK_BEATEN` | Longest sitting streak record broken |
 | 6 | `EVENT_LUNCH_REMINDER` | At learned lunch hour + 15 min, if desk time > 30 min |
 | 8 | `EVENT_EXCESSIVE_BREAKS` | Break rate > 1/hour after 3 h worked |
 | 9 | `EVENT_GOAL_COMPLETED` | Desk time >= target hours |
 | 10 | `EVENT_JOURNAL` | Morning/pre-lunch/end-of-day task review |
-| 11 | `EVENT_NAGGING` | Overdue tasks: every 10 m seated, one task per ring, most-expired-first (cursor resets at midnight) |
+| 11 | `EVENT_NAGGING` | Overdue tasks: one task per ring, most-expired-first, cursor exhausts then resets at midnight (Chatty wraps) |
 | 12 | `EVENT_TASK_DUE` | Scheduled daily task matches current time |
 | 13 | `EVENT_PAGE` | Follow-up screen for messages split at `MSG_PAGE_MAX_CHARS` (110) |
 | 14 | `EVENT_LATEHOURS_SIT` | Any sit-down during late hours (learned workday padded by 30 m on both sides); replaces FIRST_SIT/WELCOME_BACK |
+| 15 | `EVENT_POINTS` | Every 18 min seated (3 h cooldown), gamified task points check-in (daily=1-2 pts, monthly=5-10 pts; monthly running total with poor/good/excellent category) |
+| 16 | `EVENT_CURATION` | Every 50 min seated / 120 min cooldown (Chatty: 40 min / 60 min), observation-driven nudge |
 
 ### AI Decision Flow (`AI.h:277`)
 
 ```
 triggerBehaviour(eventType, detail)
-  --> Is event a Journal or Task Due? --> handle locally (no AI)
-  --> Should use AI? (aiMode, dailyCap=30, WiFi available)
+  --> Is event a Journal, Task Due, or Page? --> handle locally (no AI)
+  --> Is event Points? --> resolve current-month points snapshot
+  --> WiFi connected? 
       YES --> Build structured prompt:
                 [ROLE] persona preamble + shared banned-phrase block
                 [LIVE TELEMETRY] name, time, weather, desk/focus/break stats
@@ -268,9 +271,10 @@ triggerBehaviour(eventType, detail)
       NO --> Pick random local quote from persona array
 ```
 
-**Routing:** Every event path now goes through `MessageManager` before `triggerBehaviour()` (see `main.cpp` loop). FIRST_SIT/WELCOME_BACK/LATEHOURS_SIT use P_URGENT (3000), GOAL/JOURNAL use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS/NAGGING use P_NORMAL (1500, delay 0, R_NORMAL) — a true 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500, F9). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it so the greeting is never replaced by the roast (F8). If an AI query is already in flight when a trigger arrives, `triggerBehaviour` falls back to a local quote instead of dropping the event.
+**Routing:** Every event path goes through `MessageManager` before `triggerBehaviour()`. FIRST_SIT/WELCOME_BACK/LATEHOURS_SIT use P_URGENT (3000), GOAL/JOURNAL use P_HIGH (2250), and STRETCH/SLACKER/STREAK_BEATEN/FOCUS_END/LUNCH/EXCESSIVE_BREAKS/NAGGING/POINTS/CURATION use P_NORMAL (1500, delay 0, R_NORMAL) — a 4-tier numeric ladder (URGENT 3000 > HIGH 2250 > NORMAL 1500 > LOW 500). WELCOME_BACK always fires on return-to-desk; EXCESSIVE_BREAKS (P_NORMAL) is queued behind it. In OFF mode (`aiMode=0`), only TASK_DUE (P_HIGH) and PAGE fire; all other triggers are suppressed. In Chatty mode (`aiMode=2`), NAGGING fires every 37 min (with cursor wrap), POINTS every 9 min / 90 min throttle, and CURATION every 50 min / 120 min in Normal, 40 min / 60 min in Chatty. AI is always attempted when WiFi is connected; local fallback quotes serve as backup on failure.
 
-**aiMode whitelist (mode 1 = Balanced):** `EVENT_FIRST_SIT`, `EVENT_WELCOME_BACK`, `EVENT_LATEHOURS_SIT`, `EVENT_STRETCH`, `EVENT_LUNCH_REMINDER`, `EVENT_EXCESSIVE_BREAKS`, `EVENT_GOAL_COMPLETED`, `EVENT_NAGGING`. Mode 2 = all events use AI; mode 0 = local quotes only.
+
+**aiMode (Alert Frequency) tiers:** 0=Off (TASK_DUE only), 1=Normal (all triggers, standard intervals), 2=Chatty (NAGGING 37 min with wrap, POINTS 9 min / 90 min, CURATION 40 min / 60 min). AI is always attempted when WiFi is connected, regardless of mode.
 
 ### 4 Personas
 

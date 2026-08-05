@@ -19,6 +19,7 @@
 #define EVENT_PAGE             13
 #define EVENT_LATEHOURS_SIT    14
 #define EVENT_POINTS           15
+#define EVENT_CURATION         16
 
 // --- Local Fallback/Eco Quotes (20 per category) ---
 
@@ -505,6 +506,42 @@ static const char* PROMPT_POINTS =
   "stands (poor/good/excellent), and connect it to the tasks in the observations. Praise good numbers, "
   "rally for mid ones, warn about negative ones. Persona colors the tone; never read like an app dashboard. "
   "Vary the framing each time. Under 90 characters.";
+
+static const char* localCuration[4][5] = {
+  { // Coach
+    "Spotted something, {name}: {detail}. Use it. That's a pattern worth acting on.",
+    "{name}, {detail}. Awareness is the first tool — now decide what to do with it.",
+    "Here's what I'm seeing, {name}: {detail}. Small data point, big signal.",
+    "Observation for you, {name}: {detail}. Patterns become habits. Choose wisely.",
+    "Noticing this, {name}: {detail}. The best performers track the little things."
+  },
+  { // Critic
+    "Look at this, {name}: {detail}. The evidence doesn't lie.",
+    "{name}, {detail}. I'd say 'interesting' but you know what it really means.",
+    "Pattern alert: {detail}. {name}, you're not subtle.",
+    "Well well, {name}: {detail}. The data has opinions about you today.",
+    "{name}, {detail}. I'm just the messenger — and the messenger is judging."
+  },
+  { // Sweet
+    "Hi {name}! Just noticing: {detail}. Hope you're doing okay.",
+    "{name}, I noticed something today: {detail}. Take care of yourself.",
+    "A little observation, {name}: {detail}. No pressure, just awareness.",
+    "Sweet friend {name}, {detail}. Just wanted you to know I'm paying attention.",
+    "{name}! {detail}. Small thing, but worth a gentle mention."
+  },
+  { // Friend
+    "Hey {name}, fun fact: {detail}. The desk sees all.",
+    "{name}, check it: {detail}. Not good, not bad — just data with a mustache.",
+    "Your desk just whispered: {detail}. {name}, it's getting philosophical.",
+    "{name}! {detail}. This is your desk talking. It has opinions now.",
+    "Dude, {detail}. {name}, I'm not saying anything, I'm just SAYING."
+  }
+};
+
+static const char* PROMPT_CURATION =
+  "You've noticed: '{detail}'. Turn this observation into one sharp, persona-colored remark. "
+  "No bullet points, no dashboard formatting. Make it feel like someone paying attention, "
+  "not reading a report. One insight, one reaction. Under 90 characters.";
 
 #endif // BEHAVIOUR_H
 

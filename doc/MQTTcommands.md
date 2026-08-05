@@ -212,7 +212,7 @@ Query system state. Response format: `{"ok":true, ...}` or `{"ok":false,"error":
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `aiMode` | int | 0=Eco(off), 1=Balanced, 2=Frequent |
+| `aiMode` | int | 0=Off, 1=Normal, 2=Chatty | Alert frequency: 0=only TASK_DUE, 1=all triggers, 2=increased NAGGING/POINTS/CURATION |
 | `aiPersona` | int | 0=Coach, 1=Critic, 2=Sweet, 3=Friend |
 | `clockFace` | int | Active faceplate ID (0-9) |
 | `buddyFontIdx` | int | Font variant for DeskBuddy faces |
@@ -340,7 +340,7 @@ Keys must be prefixed with `config.` or `stats.`.
 
 | Key | Type | Range | Description |
 |-----|------|-------|-------------|
-| `config.aiMode` | int | 0-2 | AI mode (0=Eco, 1=Balanced, 2=Frequent) |
+| `config.aiMode` | int | 0-2 | Alert frequency (0=Off, 1=Normal, 2=Chatty) |
 | `config.aiPersona` | int | 0-3 | Persona (0=Coach, 1=Critic, 2=Sweet, 3=Friend) |
 | `config.clockFace` | int | 0-9 | Active faceplate |
 | `config.buddyFontIdx` | int | varies | Font variant |
@@ -496,13 +496,13 @@ TRIGGER <eventType> [ai|fallback|0|1|2] [detail]
 
 | Argument | Description |
 |----------|-------------|
-| `eventType` | Numeric event type **or** a case-insensitive name (see table below): `0`=FirstSit, `1`=WelcomeBack, `2`=Stretch, `3`=FocusEnd, `4`=Slacker, `5`=StreakBeaten, `6`=Lunch, `8`=ExcessiveBreaks, `9`=GoalCompleted, `10`=Journal, `11`=Nagging, `12`=TaskDue, `13`=Page, `14`=LateHours |
+| `eventType` | Numeric event type **or** a case-insensitive name (see table below): `0`=FirstSit, `1`=WelcomeBack, `2`=Stretch, `3`=FocusEnd, `4`=Slacker, `5`=StreakBeaten, `6`=Lunch, `8`=ExcessiveBreaks, `9`=GoalCompleted, `10`=Journal, `11`=Nagging, `12`=TaskDue, `13`=Page, `14`=LateHours, `15`=Points, `16`=Curation |
 | `mode` | `ai` → force AI generation, `fallback` → force local quote, `0`/`1`/`2` → numeric equivalent (`0`=auto, `1`=ai, `2`=fallback). Default `0`. |
 | `detail` | Optional detail string passed to the event (e.g. break duration). |
 
 **Accepted names** (numeric and named forms are interchangeable):
 
-`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`, `LATEHOURS` (also `LATEHOURS_SIT`/`LATEHOURSSIT`).
+`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`, `LATEHOURS` (also `LATEHOURS_SIT`/`LATEHOURSSIT`), `POINTS`, `CURATION`.
 
 **Examples:**
 ```
@@ -768,7 +768,7 @@ States: `AWAY|FOCUS|BUSY|DISTRACTED|REGULAR`.
 | `TRIGGER 3 fallback 25m` | `{"ok":true,"triggered":"3","mode":2}` |
 | `TRIGGER 10 0` | `{"ok":true,"triggered":"10","mode":0}` |
 
-`<eventType>`: numeric (0=FirstSit, 1=WelcomeBack, 2=Stretch, 3=FocusEnd, 4=Slacker, 5=StreakBeaten, 6=Lunch, 8=ExcessiveBreaks, 9=GoalCompleted, 10=Journal, 11=Nagging, 12=TaskDue, 13=Page, 14=LateHours) or a case-insensitive name (`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`, `LATEHOURS`/`LATEHOURS_SIT`/`LATEHOURSSIT`). Mode: `ai`/`1`=force AI, `fallback`/`2`=force local quote, `0`=auto. Manual triggers bypass the welcome-hold and away-screen suppression so they always render.
+`<eventType>`: numeric (0=FirstSit, 1=WelcomeBack, 2=Stretch, 3=FocusEnd, 4=Slacker, 5=StreakBeaten, 6=Lunch, 8=ExcessiveBreaks, 9=GoalCompleted, 10=Journal, 11=Nagging, 12=TaskDue, 13=Page, 14=LateHours, 15=Points, 16=Curation) or a case-insensitive name (`FIRST_SIT`, `WELCOME_BACK`, `STRETCH`, `FOCUS_END`, `SLACKER`, `STREAK_BEATEN`, `LUNCH`, `LUNCH_REMINDER`, `EXCESSIVE_BREAKS`, `GOAL_COMPLETED`, `JOURNAL`, `NAGGING`, `TASK_DUE`, `PAGE`, `LATEHOURS`/`LATEHOURS_SIT`/`LATEHOURSSIT`, `POINTS`, `CURATION`). Mode: `ai`/`1`=force AI, `fallback`/`2`=force local quote, `0`=auto. Manual triggers bypass the welcome-hold and away-screen suppression so they always render.
 
 ### Examples (mosquitto_pub)
 

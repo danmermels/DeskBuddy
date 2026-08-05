@@ -4,37 +4,41 @@
 void MessageManager::update(unsigned long currentTimeMs) {
   lastUpdateTime = currentTimeMs;
   clearExpiredMessages();
-  sortMessagesByPriority();
+  sortQueue();
 }
 
 void MessageManager::clearExpiredMessages() {
+  unsigned long now = millis();
   messageQueue.erase(
     std::remove_if(messageQueue.begin(), messageQueue.end(),
-      [](const QueuedMessage& msg) {
-        return msg.displayed || millis() > msg.scheduleTime + msg.relevanceWindow;
+      [now](const QueuedMessage& msg) {
+        return msg.displayed || now > msg.scheduleTime + msg.relevanceWindow;
       }),
     messageQueue.end()
   );
 }
 
-void MessageManager::sortMessagesByPriority() {
+void MessageManager::sortQueue() {
+  // Highest priority first; same priority keeps insertion order (FIFO).
   std::sort(messageQueue.begin(), messageQueue.end(),
     [](const QueuedMessage& a, const QueuedMessage& b) {
       if (a.priority != b.priority) return a.priority > b.priority;
-      return a.scheduleTime < b.scheduleTime;
+      return a.seq < b.seq;
     });
 }
 
 MessageManager::DueMessage MessageManager::getNextDueMessage() {
+  unsigned long now = millis();
+  // Queue is sorted priority-desc, FIFO within tier. The head is the only
+  // candidate: if it is not due yet, every lower-priority message waits.
   for (auto& msg : messageQueue) {
-    if (!msg.displayed) {
-      if (millis() >= msg.scheduleTime) {
-        if (millis() <= msg.scheduleTime + msg.relevanceWindow) {
-          msg.displayed = true;
-          return DueMessage(msg.eventType, msg.content);
-        }
-      }
+    if (msg.displayed) continue;
+    if (now > msg.scheduleTime + msg.relevanceWindow) continue;
+    if (now < msg.scheduleTime) {
+      return DueMessage(-1, "");
     }
+    msg.displayed = true;
+    return DueMessage(msg.eventType, msg.content);
   }
   return DueMessage(-1, "");
 }
@@ -46,9 +50,9 @@ void MessageManager::scheduleMessage(int eventType, const String& content,
   QueuedMessage msg(content, priority,
                    millis() + delayMs,
                    relevanceWindow > 0 ? relevanceWindow : RELEVANCE_NORMAL,
-                   eventType);
+                   eventType, nextSeq++);
   messageQueue.push_back(msg);
-  sortMessagesByPriority();
+  sortQueue();
 }
 
 void MessageManager::scheduleMessageWithPriority(int eventType, const String& content,
@@ -62,49 +66,19 @@ void MessageManager::scheduleMessageWithPriority(int eventType, const String& co
     case P_NORMAL:  p = PRIORITY_NORMAL; break;
     default:        p = PRIORITY_LOW; break;
   }
+  // TTL: critical = short; normal = medium; important = long.
   unsigned long r;
   switch (relevance) {
-    case R_CRITICAL:  r = RELEVANCE_URGENT; break;
-    case R_IMPORTANT: r = RELEVANCE_NORMAL; break;
-    case R_NORMAL:    r = RELEVANCE_NORMAL; break;
-    default:          r = RELEVANCE_LOW; break;
+    case R_CRITICAL:    r = RELEVANCE_SHORT; break;
+    case R_IMPORTANT:   r = RELEVANCE_LONG; break;
+    case R_NORMAL:
+    default:            r = RELEVANCE_NORMAL; break;
   }
   scheduleMessage(eventType, content, p, delayMs, r);
 }
 
-void MessageManager::scheduleWelcomeBackMessage(const String& breakDuration) {
-  messageQueue.erase(
-    std::remove_if(messageQueue.begin(), messageQueue.end(),
-      [](const QueuedMessage& msg) {
-        return msg.eventType == EVENT_WELCOME_BACK || msg.eventType == EVENT_FIRST_SIT;
-      }),
-    messageQueue.end()
-  );
-
-  scheduleMessageWithPriority(
-    EVENT_WELCOME_BACK,
-    breakDuration,
-    P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
-  );
-}
-
-void MessageManager::scheduleFirstSitMessage(const String& overnightBreak) {
-  messageQueue.erase(
-    std::remove_if(messageQueue.begin(), messageQueue.end(),
-      [](const QueuedMessage& msg) {
-        return msg.eventType == EVENT_WELCOME_BACK || msg.eventType == EVENT_FIRST_SIT;
-      }),
-    messageQueue.end()
-  );
-
-  scheduleMessageWithPriority(
-    EVENT_FIRST_SIT,
-    overnightBreak,
-    P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
-  );
-}
-
-void MessageManager::scheduleLateHoursSitMessage(const String& earlyLateDetail) {
+void MessageManager::scheduleGreetingMessage(int eventType, const String& detail) {
+  // Erase any competing greeting (only one greeting per sit-down).
   messageQueue.erase(
     std::remove_if(messageQueue.begin(), messageQueue.end(),
       [](const QueuedMessage& msg) {
@@ -113,9 +87,6 @@ void MessageManager::scheduleLateHoursSitMessage(const String& earlyLateDetail) 
     messageQueue.end()
   );
 
-  scheduleMessageWithPriority(
-    EVENT_LATEHOURS_SIT,
-    earlyLateDetail,
-    P_URGENT, WELCOME_DELAY_MS, R_IMPORTANT
-  );
+  // Immediate queue entry at URGENT. Display grace is WELCOME_HOLD_MS in Display.h.
+  scheduleMessageWithPriority(eventType, detail, P_URGENT, 0, R_IMPORTANT);
 }
