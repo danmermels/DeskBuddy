@@ -890,7 +890,7 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 
   // Line 12: Heap & AI Requests Count
     uint32_t freeHeapK = ESP.getFreeHeap() / 1024;
-  snprintf(line, sizeof(line), "HEAP:%uK AI:%d/15", freeHeapK, appStats.dailyAiRequestCount);
+  snprintf(line, sizeof(line), "HEAP:%uK AI:%d", freeHeapK, appStats.dailyAiRequestCount);
   drawDevLine(11, line, 198);
 }
 

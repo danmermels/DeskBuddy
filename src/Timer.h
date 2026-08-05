@@ -10,7 +10,7 @@
 // "GoodTiming20"). Swap the name here to change the TFT readout - the .vlw must
 // exist on LittleFS, otherwise the built-in 7-segment font is used as a fallback.
 #ifndef TIMER_FONT
-#define TIMER_FONT "GoodTiming46"
+#define TIMER_FONT "Unicode.impact20"
 #endif
 #define TIMER_RESET_HOLD_MS 3000UL
 #define TIMER_PAUSE_HOLD_MS 10000UL
@@ -109,7 +109,7 @@ inline bool timerShouldDraw(unsigned long now) {
 }
 
 // Full-screen metered overlay: centered readout with no title. Stopwatch (mode 1)
-// shows M:SS.hh (hundredths), countdown (mode 2) and reset-hold show M:SS. The
+// shows M:SS:hh (hundredths), countdown (mode 2) and reset-hold show M:SS. The
 // number is rendered into an off-screen sprite and pushed in atomic window writes:
 // the whole number once per second, plus just the hundredths strip at 20 Hz while
 // the stopwatch runs (the previous per-second direct region-clear + font reload
@@ -129,8 +129,8 @@ inline void drawTimerOverlay(unsigned long now, bool force = false) {
   char buf[16];
   String main = "";
   if (sw) {
-    snprintf(buf, sizeof(buf), "%lu:%02lu.%02lu", ms / 60000UL, (ms / 1000UL) % 60UL, (ms / 10UL) % 100UL);
-    main = String(buf).substring(0, String(buf).indexOf('.'));
+    snprintf(buf, sizeof(buf), "%lu:%02lu:%02lu", ms / 60000UL, (ms / 1000UL) % 60UL, (ms / 10UL) % 100UL);
+    main = String(buf).substring(0, String(buf).lastIndexOf(':'));
   } else {
     snprintf(buf, sizeof(buf), "%lu:%02lu", ms / 60000UL, (ms / 1000UL) % 60UL);
     main = String(buf);
@@ -153,7 +153,7 @@ inline void drawTimerOverlay(unsigned long now, bool force = false) {
 
   if (force) tft.fillScreen(TFT_BLACK); // blank the round screen once on entry
 
-  // Sprite is full-screen wide so the widest stopwatch string "999:59.99" fits.
+  // Sprite is full-screen wide so the widest stopwatch string "999:59:99" fits.
   TFT_eSprite ov(&tft);
   if (ov.createSprite(240, 100)) {
     ov.fillSprite(TFT_BLACK);
@@ -165,7 +165,7 @@ inline void drawTimerOverlay(unsigned long now, bool force = false) {
     if (fullRedraw || hhRedraw) {
       if (sw) {
         int fullW = ov.textWidth(sig);
-        String hh = sig.substring(sig.indexOf('.'));
+        String hh = sig.substring(sig.lastIndexOf(':'));
         int hhW = ov.textWidth(hh);
         int hhX = 120 + fullW / 2 - hhW;
         if (fullRedraw) {
