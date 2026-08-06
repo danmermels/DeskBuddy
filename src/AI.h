@@ -420,6 +420,8 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
             MessageManager::R_NORMAL
           );
           Logger::log("BEHAVIOUR", "Journal trigger: scheduled next pages in %lu ms", currentDurationMs);
+        } else {
+          appState.journalSequenceActive = false;
         }
       }
       return;
@@ -456,6 +458,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
           );
           Logger::log("BEHAVIOUR", "Journal trigger: scheduled remaining pages in %lu ms", page1DurationMs);
         }
+      }
+      if (pages.size() <= 1) {
+        appState.journalSequenceActive = false;
       }
       return;
     }

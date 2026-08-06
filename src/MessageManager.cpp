@@ -27,15 +27,17 @@ void MessageManager::sortQueue() {
     });
 }
 
-MessageManager::DueMessage MessageManager::getNextDueMessage() {
+MessageManager::DueMessage MessageManager::getNextDueMessage(bool journalSequenceActive) {
   unsigned long now = millis();
-  // Queue is sorted priority-desc, FIFO within tier. The head is the only
-  // candidate: if it is not due yet, every lower-priority message waits.
   for (auto& msg : messageQueue) {
     if (msg.displayed) continue;
     if (now > msg.scheduleTime + msg.relevanceWindow) continue;
     if (now < msg.scheduleTime) {
       return DueMessage(-1, "");
+    }
+    // During journal sequence, only allow journal pages and follow-ups through
+    if (journalSequenceActive && msg.eventType != EVENT_JOURNAL && msg.eventType != EVENT_PAGE) {
+      continue;
     }
     msg.displayed = true;
     return DueMessage(msg.eventType, msg.content);

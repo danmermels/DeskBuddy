@@ -60,7 +60,7 @@ public:
   MessageManager() : lastUpdateTime(0), nextSeq(0) {}
 
   void update(unsigned long currentTimeMs);
-  DueMessage getNextDueMessage();
+  DueMessage getNextDueMessage(bool journalSequenceActive = false);
 
   void scheduleMessage(int eventType, const String& content,
                        unsigned long priority,

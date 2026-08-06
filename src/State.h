@@ -185,6 +185,7 @@ struct RuntimeState {
   volatile bool mqttConnected = false;
   volatile bool pendingWelcomeAlert = false;
   volatile bool manualTriggerOverride = false;
+  bool journalSequenceActive = false; // suppresses non-journal messages until all pages shown
   String aiResponse = "";
   volatile bool hasNewAIResponse = false;
   volatile bool lastResponseIsAi = false;

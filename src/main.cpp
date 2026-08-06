@@ -1423,8 +1423,11 @@ void loop(void) {
     messageManager.update(millis());
     bool systemBusy = appState.isAILoading || appState.hasNewAIResponse || (millis() < appState.aiScreenEndTime) || appState.pendingWelcomeAlert;
     if (!systemBusy) {
-      MessageManager::DueMessage msg = messageManager.getNextDueMessage();
+      MessageManager::DueMessage msg = messageManager.getNextDueMessage(appState.journalSequenceActive);
       if (msg.eventType != -1) {
+        if (msg.eventType == EVENT_JOURNAL) {
+          appState.journalSequenceActive = true;
+        }
         triggerBehaviour(msg.eventType, msg.content);
       }
     }
