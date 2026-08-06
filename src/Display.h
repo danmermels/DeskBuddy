@@ -524,8 +524,10 @@ inline void updateTFTDisplay(unsigned long now) {
     uint32_t freeHeap = ESP.getFreeHeap();
     uint32_t minFreeHeap = ESP.getMinFreeHeap();
     uint32_t maxAlloc = ESP.getMaxAllocHeap();
+#if DESKBUDDY_DEBUG
     Serial.printf("[HEAPS] Free Heap: %u B (%u KB) | Min Free Heap: %u B (%u KB) | Max Alloc: %u B (%u KB)\n", 
                   freeHeap, freeHeap / 1024, minFreeHeap, minFreeHeap / 1024, maxAlloc, maxAlloc / 1024);
+#endif
     
     if (mqttClient.connected()) {
       char payload[64];
@@ -662,20 +664,26 @@ inline void updateTFTDisplay(unsigned long now) {
 
   if (appConfig.clockFace != lastClockFace) {
     tft.fillScreen(TFT_BLACK);
+#if DESKBUDDY_DEBUG
     Serial.printf("[TRANSITION] Changing faceplate: %d -> %d\n", lastClockFace, appConfig.clockFace);
     Serial.printf("[TRANSITION] Before Dealloc - Free Heap: %u B | Max Alloc: %u B\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+#endif
 
     if (lastClockFace == 4) {
       hourHandSprite.deleteSprite();
       minuteHandSprite.deleteSprite();
       secondHandSprite.deleteSprite();
       centerBgSprite.deleteSprite();
+#if DESKBUDDY_DEBUG
       Serial.println("[SPRITES] Aviator watch hands and center canvas deallocated from RAM.");
+#endif
     } else if (lastClockFace >= 5 && lastClockFace <= 9) {
       cleanupDeskbuddySprites();
     }
 
+#if DESKBUDDY_DEBUG
     Serial.printf("[TRANSITION] After Dealloc - Free Heap: %u B | Max Alloc: %u B\n", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+#endif
     lastClockFace = appConfig.clockFace;
   }
 

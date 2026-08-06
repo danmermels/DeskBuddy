@@ -44,7 +44,9 @@ public:
     uint32_t localTimeSec = timeClient.isTimeSet() ? timeClient.getEpochTime() : (millis() / 1000UL);
     String timeStr = formatEpoch(localTimeSec);
 
+#if DESKBUDDY_DEBUG
     Serial.printf("[%s] [%s] %s\n", category, timeStr.c_str(), msgBuffer);
+#endif
 
     extern void enqueueMqttPublish(const String& topic, const String& payload);
     char topicBuffer[64];

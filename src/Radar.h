@@ -128,9 +128,13 @@ inline void setupRadar() {
       preferences.putInt("g6sSens", appConfig.g6sSens);
       preferences.end();
       
+#if DESKBUDDY_DEBUG
       Serial.println("LD2410 configurations retrieved and synced successfully from the module.");
+#endif
     } else {
+#if DESKBUDDY_DEBUG
       Serial.println("Failed to retrieve configuration from LD2410 on startup. Keeping local config.");
+#endif
     }
   }
 }

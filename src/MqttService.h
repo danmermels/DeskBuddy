@@ -58,7 +58,9 @@ inline void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String t = String(topic);
   
   if (t == MQTT_DEBUG_CMD_TOPIC) {
+#if DESKBUDDY_DEBUG
     handleDebugCommand(p);
+#endif
   }
 }
 

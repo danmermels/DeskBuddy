@@ -707,7 +707,11 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.loadFont(FONT_HITECH_DAY, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
+#if DESKBUDDY_LANG_PTBR
+    const char* daysOfWeek[] = {"DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB"};
+#else
     const char* daysOfWeek[] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
+#endif
     int wday = ts.tm_wday;
     if (wday < 0 || wday > 6) wday = 0;
     tft.drawString(daysOfWeek[wday], 84, 106);
@@ -910,7 +914,9 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 #define MSG_FONT_AVIATOR        "GoodTiming15"
 
 void initWatchHandSprites() {
+#if DESKBUDDY_DEBUG
   Serial.println("[SPRITES] Allocating Aviator watch hands and center canvas sprite...");
+#endif
 
   // 1. Hour Hand Sprite (27x100)
   if (hourHandSprite.created()) hourHandSprite.deleteSprite();
@@ -1021,7 +1027,11 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
 
     // Draw Top Month/Day (TFT Y=74 -> relative Y=64)
     char monthDayStr[12];
+#if DESKBUDDY_LANG_PTBR
+    const char* months[] = {"JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"};
+#else
     const char* months[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+#endif
     snprintf(monthDayStr, sizeof(monthDayStr), "%02d %s", ts.tm_mday, months[ts.tm_mon]);
     centerBgSprite.setTextColor(COLOR_AVIATOR_DATE_FG, COLOR_AVIATOR_DATE_BG);
     centerBgSprite.drawString(monthDayStr, 86, 61, 2);
@@ -1358,7 +1368,9 @@ static const DeskbuddyThemeConfig deskbuddyThemes[5] = {
 static bool ensureEyeSprite(TFT_eSprite &spr) {
   if (!spr.created()) {
     if (spr.createSprite(BUDDY_EYE_SPR_W, BUDDY_EYE_SPR_H) == nullptr) {
+#if DESKBUDDY_DEBUG
       Serial.printf("[BUDDY] ERROR: Out of heap memory for eye sprite %dx%d!\n", BUDDY_EYE_SPR_W, BUDDY_EYE_SPR_H);
+#endif
       return false;
     }
   }
@@ -1378,7 +1390,9 @@ static bool loadEyeSprite100(TFT_eSprite &spr, const char *rleFile) {
   if (!f) {
     static char lastWarnedFile[64] = "";
     if (strcmp(lastWarnedFile, rleFile) != 0) {
+#if DESKBUDDY_DEBUG
       Serial.printf("[BUDDY] Missing RLE: %s (falling back to default/black)\n", rleFile);
+#endif
       strncpy(lastWarnedFile, rleFile, sizeof(lastWarnedFile) - 1);
       lastWarnedFile[sizeof(lastWarnedFile) - 1] = '\0';
     }
@@ -1652,7 +1666,9 @@ void initDeskbuddySprite(const DeskbuddyThemeConfig &cfg) {
   }
   if (!centerBgSprite.created()) {
     centerBgSprite.setColorDepth(16);
+#if DESKBUDDY_DEBUG
     Serial.printf("[BUDDY] Allocating visor canvas %dx%d @ 16bpp...\n", BUDDY_SPR_W, BUDDY_SPR_H);
+#endif
     if (centerBgSprite.createSprite(BUDDY_SPR_W, BUDDY_SPR_H) == nullptr)
       Serial.println("[BUDDY] ERROR: centerBgSprite alloc failed!");
     else centerBgSprite.fillSprite(TFT_BLACK);
@@ -1663,7 +1679,9 @@ void initDeskbuddySprite(const DeskbuddyThemeConfig &cfg) {
   }
   if (!buddyEyeSpr.created()) {
     buddyEyeSpr.setColorDepth(16);
+#if DESKBUDDY_DEBUG
     Serial.printf("[BUDDY] Allocating eye sprite %dx%d @ 16bpp...\n", BUDDY_EYE_SPR_W, BUDDY_EYE_SPR_H);
+#endif
     if (buddyEyeSpr.createSprite(BUDDY_EYE_SPR_W, BUDDY_EYE_SPR_H) == nullptr)
       Serial.println("[BUDDY] ERROR: buddyEyeSpr alloc failed!");
     else buddyEyeSpr.fillSprite(TFT_BLACK);
@@ -1674,7 +1692,9 @@ void initDeskbuddySprite(const DeskbuddyThemeConfig &cfg) {
   }
   if (!visorBgCache.created()) {
     visorBgCache.setColorDepth(16);
+#if DESKBUDDY_DEBUG
     Serial.printf("[BUDDY] Allocating visorBgCache (%dx%d @ 16bpp)...\n", BUDDY_SPR_W, BUDDY_SPR_H);
+#endif
     if (visorBgCache.createSprite(BUDDY_SPR_W, BUDDY_SPR_H) == nullptr)
       Serial.println("[BUDDY] ERROR: visorBgCache alloc failed!");
     else visorBgCache.fillSprite(TFT_BLACK);
@@ -1686,9 +1706,11 @@ void initDeskbuddySprite(const DeskbuddyThemeConfig &cfg) {
       browSprite.fillSprite(TFT_BLACK);
       const char* browPath = getRlePathOrFallback(cfg.browRle, "/buddy_brow.rle");
       browSpriteLoaded = drawFullRLEToSprite(browSprite, browPath);
+#if DESKBUDDY_DEBUG
       Serial.printf(browSpriteLoaded
         ? "[BUDDY] %s loaded into browSprite.\n"
         : "[BUDDY] %s missing — brow rendering disabled until file is added.\n", browPath);
+#endif
     } else {
       Serial.println("[BUDDY] ERROR: browSprite alloc failed!");
     }
@@ -1819,7 +1841,9 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
       if (visorBgCache.created()) {
         drawRLEImageToSprite(visorBgCache, bgPath, BUDDY_SPR_X, BUDDY_SPR_Y, BUDDY_SPR_W, BUDDY_SPR_H);
       }
+#if DESKBUDDY_DEBUG
       Serial.printf("[BUDDY] Visor background cache (%dx%d) decoded.\n", BUDDY_SPR_W, BUDDY_SPR_H);
+#endif
     }
     loadedEyeMode = -1;
   }
@@ -2222,4 +2246,5 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
 }
 
 #endif // FACEPLATES_H
+
 

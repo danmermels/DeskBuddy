@@ -1,0 +1,113 @@
+#######################################
+# Syntax Coloring Map For ESP32_AI_Connect
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+ESP32_AI_Connect	KEYWORD1
+AI_API_Platform_Handler	KEYWORD1
+AI_API_OpenAI_Handler	KEYWORD1
+AI_API_Gemini_Handler	KEYWORD1
+AI_API_DeepSeek_Handler	KEYWORD1
+AI_API_Claude_Handler	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+// Core methods
+begin	KEYWORD2
+chat	KEYWORD2
+chatReset	KEYWORD2
+getLastError	KEYWORD2
+getTotalTokens	KEYWORD2
+getFinishReason	KEYWORD2
+setChatSystemRole	KEYWORD2
+setChatTemperature	KEYWORD2
+setChatMaxTokens	KEYWORD2
+setChatParameters	KEYWORD2
+getChatSystemRole	KEYWORD2
+getChatTemperature	KEYWORD2
+getChatMaxTokens	KEYWORD2
+getChatParameters	KEYWORD2
+getChatRawResponse	KEYWORD2
+getChatResponseCode	KEYWORD2
+
+// Tool Calls methods
+tcChat	KEYWORD2
+tcReply	KEYWORD2
+tcChatReset	KEYWORD2
+setTCTools	KEYWORD2
+getTCRawResponse	KEYWORD2
+getTCChatResponseCode	KEYWORD2
+getTCReplyResponseCode	KEYWORD2
+setTCChatSystemRole	KEYWORD2
+setTCChatMaxTokens	KEYWORD2
+setTCChatToolChoice	KEYWORD2
+getTCChatSystemRole	KEYWORD2
+getTCChatMaxTokens	KEYWORD2
+getTCChatToolChoice	KEYWORD2
+setTCReplyMaxTokens	KEYWORD2
+setTCReplyToolChoice	KEYWORD2
+getTCReplyMaxTokens	KEYWORD2
+getTCReplyToolChoice	KEYWORD2
+
+// Streaming Chat methods
+streamChat	KEYWORD2
+isStreaming	KEYWORD2
+stopStreaming	KEYWORD2
+getStreamState	KEYWORD2
+getStreamChatRawResponse	KEYWORD2
+getStreamChatResponseCode	KEYWORD2
+getStreamChunkCount	KEYWORD2
+getStreamTotalBytes	KEYWORD2
+getStreamElapsedTime	KEYWORD2
+streamChatReset	KEYWORD2
+setStreamChatSystemRole	KEYWORD2
+setStreamChatTemperature	KEYWORD2
+setStreamChatMaxTokens	KEYWORD2
+setStreamChatParameters	KEYWORD2
+getStreamChatSystemRole	KEYWORD2
+getStreamChatTemperature	KEYWORD2
+getStreamChatMaxTokens	KEYWORD2
+getStreamChatParameters	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+// Platform selection constants
+PLATFORM_OPENAI	LITERAL1
+PLATFORM_GEMINI	LITERAL1
+PLATFORM_DEEPSEEK	LITERAL1
+PLATFORM_CLAUDE	LITERAL1
+
+// Configuration flags
+ENABLE_DEBUG_OUTPUT	LITERAL1
+ENABLE_TOOL_CALLS	LITERAL1
+ENABLE_STREAM_CHAT	LITERAL1
+USE_AI_API_OPENAI	LITERAL1
+USE_AI_API_GEMINI	LITERAL1
+USE_AI_API_DEEPSEEK	LITERAL1
+USE_AI_API_CLAUDE	LITERAL1
+
+// HTTP and JSON configuration
+AI_API_HTTP_TIMEOUT_MS	LITERAL1
+AI_API_REQ_JSON_DOC_SIZE	LITERAL1
+AI_API_RESP_JSON_DOC_SIZE	LITERAL1
+
+// Streaming configuration
+STREAM_CHAT_CHUNK_SIZE	LITERAL1
+STREAM_CHAT_CHUNK_TIMEOUT_MS	LITERAL1
+
+// Stream states (enum values)
+IDLE	LITERAL1
+STARTING	LITERAL1
+STREAMING	LITERAL1
+STOPPING	LITERAL1
+COMPLETED	LITERAL1
+ERROR	LITERAL1
+
+// Type definitions
+StreamState	KEYWORD1
+StreamCallback	KEYWORD1
+StreamChunkInfo	KEYWORD1
