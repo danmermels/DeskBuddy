@@ -176,7 +176,7 @@ inline String resolvePromptPlaceholders(int eventType, String templateStr, Strin
   String fullPrompt = "[ROLE]\n";
   fullPrompt += String(activePreamble) + "\n";
   if (includeBanned) fullPrompt += String(PROMPT_BANNED) + "\n";
-  fullPrompt += "CRITICAL CONSTRAINT: Respond with exactly ONE short sentence in English. Keep it between 75-85 characters total (maximum 90, including spaces/punctuation). Output ONLY the raw response. Do not wrap in quotes.\n\n";
+  fullPrompt += String(CRITICAL_CONSTRAINT) + "\n\n";
   
   fullPrompt += "[LIVE TELEMETRY]\n";
   fullPrompt += "User: " + appConfig.userName + "\n";
@@ -340,8 +340,13 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       int nowMinutes = ptm->tm_hour * 60 + ptm->tm_min;
       std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), y, mon, d, nowMinutes);
       if (!queue.empty()) {
-        detail = queue[0].text;
-        Logger::log("BEHAVIOUR", "Nagging detail resolved to most-overdue \"%s\" (queue size=%d)", detail.c_str(), (int)queue.size());
+        if (appStats.nagQueueIndex >= (int)queue.size()) {
+          appStats.nagQueueIndex = 0;
+        }
+        detail = queue[appStats.nagQueueIndex].text;
+        appStats.nagQueueIndex++;
+        saveDailyStats();
+        Logger::log("BEHAVIOUR", "Nagging detail resolved to \"%s\" (cursor=%d queue=%d)", detail.c_str(), appStats.nagQueueIndex, (int)queue.size());
       }
     }
   }

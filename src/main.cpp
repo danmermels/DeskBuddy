@@ -34,7 +34,9 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 #include "MessageManager.h"
 #include "../Credentials.h"
 #include "MqttService.h"
+#if DESKBUDDY_DEBUG
 #include "MqttDebug.h"
+#endif
 #include "Timer.h"
 #include "Display.h"
 #include "Radar.h"
@@ -194,10 +196,14 @@ String personalizeQuote(String quote, String name) {
 
 // Save daily statistics to LittleFS using an atomic rename pattern
 void saveDailyStats() {
+#if DESKBUDDY_DEBUG
   Serial.println("[STATS] saveDailyStats: Opening stats.json.tmp for writing...");
+#endif
   fs::File file = LittleFS.open("/stats.json.tmp", "w");
   if (!file) {
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] ERROR: saveDailyStats failed to open /stats.json.tmp!");
+#endif
     return;
   }
   DynamicJsonDocument doc(8192);
@@ -277,35 +283,51 @@ void saveDailyStats() {
     msArray.add(appStats.presenceMsCurrentDay[h]);
   }
 
+#if DESKBUDDY_DEBUG
   Serial.println("[STATS] saveDailyStats: Serializing JSON payload...");
+#endif
   if (serializeJson(doc, file) == 0) {
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] ERROR: saveDailyStats failed to serialize JSON!");
+#endif
     file.close();
     return;
   }
   file.close();
 
   if (LittleFS.exists("/stats.json")) {
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] saveDailyStats: Removing old stats.json...");
+#endif
     LittleFS.remove("/stats.json");
   }
   
+#if DESKBUDDY_DEBUG
   Serial.println("[STATS] saveDailyStats: Renaming stats.json.tmp to stats.json...");
+#endif
   if (LittleFS.rename("/stats.json.tmp", "/stats.json")) {
     appStats.fsWriteCount++;
     appStats.fsWritesToday++;
+#if DESKBUDDY_DEBUG
     Serial.printf("[STATS] saveDailyStats SUCCESS! Total writes: %d\n", appStats.fsWriteCount);
+#endif
   } else {
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] ERROR: saveDailyStats rename failed!");
+#endif
   }
 }
 
 // Load daily statistics from LittleFS
 void loadDailyStats() {
   appStats.fsReadCount++;
+#if DESKBUDDY_DEBUG
   Serial.println("[STATS] loadDailyStats: Checking if stats.json exists...");
+#endif
   if (!LittleFS.exists("/stats.json")) {
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] loadDailyStats: No stats.json found, initializing with empty history.");
+#endif
     for (int d = 0; d < 7; d++) {
       for (int h = 0; h < 24; h++) {
         appStats.hourlyPresenceHistoryWeekly[d][h] = 0;
@@ -315,14 +337,20 @@ void loadDailyStats() {
     return;
   }
   
+#if DESKBUDDY_DEBUG
   Serial.println("[STATS] loadDailyStats: Opening stats.json...");
+#endif
   fs::File file = LittleFS.open("/stats.json", "r");
   if (!file) {
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] ERROR: loadDailyStats failed to open /stats.json!");
+#endif
     return;
   }
   DynamicJsonDocument doc(8192);
+#if DESKBUDDY_DEBUG
   Serial.println("[STATS] loadDailyStats: Deserializing JSON payload...");
+#endif
   DeserializationError error = deserializeJson(doc, file);
   if (!error) {
     appStats.firstSitToday = doc["firstSitToday"] | true;
@@ -428,9 +456,13 @@ void loadDailyStats() {
         appStats.presenceMsCurrentDay[h] = msArray[h];
       }
     }
+#if DESKBUDDY_DEBUG
     Serial.println("[STATS] loadDailyStats SUCCESS!");
+#endif
   } else {
+#if DESKBUDDY_DEBUG
     Serial.printf("[STATS] ERROR: loadDailyStats deserializeJson failed: %s\n", error.c_str());
+#endif
   }
   file.close();
 }
@@ -455,15 +487,21 @@ void checkWiFiConnection() {
 void setup(void) {
   Serial.begin(115200);
   delay(1000); // Give serial monitor time to connect
+#if DESKBUDDY_DEBUG
   Serial.println("\n[DIAGNOSTICS] setup() started");
+#endif
 
   // Bind WiFiClient to PubSubClient dynamically
   mqttClient.setClient(wifiClient);
+#if DESKBUDDY_DEBUG
   Serial.println("[DIAGNOSTICS] mqttClient bound");
+#endif
 
   // Setup Mutex for AI Thread Safety
   appState.aiMutex = xSemaphoreCreateMutex();
+#if DESKBUDDY_DEBUG
   Serial.println("[DIAGNOSTICS] Mutex created");
+#endif
 
   // Setup Mutex for MQTT Publish Queue Thread Safety
   mqttPublishQueueMutex = xSemaphoreCreateMutex();
@@ -477,7 +515,9 @@ void setup(void) {
     1,
     &aiQueryTaskHandle
   );
+#if DESKBUDDY_DEBUG
   Serial.println("[DIAGNOSTICS] AIQuery task created");
+#endif
 
 
   // Load persistent configurations
@@ -539,12 +579,18 @@ void setup(void) {
   preferences.end();
 
   // Initialize LittleFS & load daily stats
+#if DESKBUDDY_DEBUG
   Serial.println("[SYSTEM] Mounting LittleFS...");
+#endif
   if (LittleFS.begin(true)) {
+#if DESKBUDDY_DEBUG
     Serial.println("[SYSTEM] LittleFS mounted successfully.");
+#endif
     loadDailyStats();
   } else {
+#if DESKBUDDY_DEBUG
     Serial.println("[SYSTEM] ERROR: LittleFS mount failed!");
+#endif
   }
 
   // Initialize TFT Display & show splash screen
@@ -574,18 +620,26 @@ void setup(void) {
 
   // WiFi failed â€” start captive portal AP mode
   if (WiFi.status() != WL_CONNECTED) {
+#if DESKBUDDY_DEBUG
     Serial.println("[WIFI] Connection failed â€” starting captive portal AP mode");
+#endif
     WiFi.disconnect();
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID);
     dnsServer.start(53, "*", WiFi.softAPIP());
     appState.captivePortalMode = true;
+#if DESKBUDDY_DEBUG
     Serial.printf("[AP] Started: %s â€” IP: %s\n", AP_SSID, WiFi.softAPIP().toString().c_str());
+#endif
   } else {
+#if DESKBUDDY_DEBUG
     Serial.printf("[WIFI] Connected â€” IP: %s\n", WiFi.localIP().toString().c_str());
+#endif
     if (MDNS.begin("deskbuddy")) {
       MDNS.addService("http", "tcp", 80);
+#if DESKBUDDY_DEBUG
       Serial.println("[MDNS] Started: http://deskbuddy.local");
+#endif
     }
   }
 
@@ -1129,7 +1183,7 @@ void loop(void) {
       appState.lastPointsCadenceTime = now;
       currentSitDownSessionId++;
       Logger::log("STATE", "Away->Present: sit=%lu epoch=%s session=%d state=%s", 
-                  now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, presenceStateName(targetState).c_str());
+                  now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, String(getPresenceStateName(targetState)).c_str());
       
       // Calculate currentBreakDurationMs immediately at the transition using transition timestamps
       appState.currentBreakDurationMs = 0;
@@ -1428,7 +1482,7 @@ void loop(void) {
       
       unsigned long presenceDurationMs = now - appState.sitDownTime;
       Logger::log("STATE", "Present->Away: prevState=%s presDur=%lu s focusDur=%lu s stopByTrack=%d", 
-                  presenceStateName(appState.currentPresenceState).c_str(), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
+                  String(getPresenceStateName(appState.currentPresenceState)).c_str(), presenceDurationMs / 1000UL, focusSessionDuration / 1000UL, appState.isStopByTracking);
       
       bool isLateHours = isLateHoursNow();
 
@@ -1755,8 +1809,7 @@ void loop(void) {
 
       std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
       if (queue.size() > 0) {
-        // Chatty mode wraps the cursor when it reaches the end, cycling back to most-overdue.
-        if (appConfig.aiMode == 2 && appStats.nagQueueIndex >= (int)queue.size()) {
+        if (appStats.nagQueueIndex >= (int)queue.size()) {
           appStats.nagQueueIndex = 0;
         }
         if (appStats.nagQueueIndex < (int)queue.size()) {
