@@ -1,4 +1,4 @@
-#ifndef WEB_PTBR_H
+﻿#ifndef WEB_PTBR_H
 #define WEB_PTBR_H
 
 #include <Arduino.h>
@@ -2033,6 +2033,9 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
 
   <div class="card" style="text-align: center;">
     <h1>Ações do Sistema</h1>
+  )rawhtml"
+#if DESKBUDDY_DEBUG
+  R"rawhtml(
     <div style="margin-bottom: 15px;">
       <a href="/file-manager" class="btn" style="background: #10b981; color: white; display: inline-flex; width: 100%; box-sizing: border-box; justify-content: center; align-items: center; gap: 6px; padding: 10px 12px; text-decoration: none;">
         <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;">
@@ -2040,6 +2043,25 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
         </svg>
         Abrir Gerenciador de Arquivos
       </a>
+    </div>
+  )rawhtml"
+#endif
+  R"rawhtml(
+    <div style="margin-bottom: 15px;">
+      <div style="display: flex; gap: 10px;">
+        <a href="/download?path=/stats.json" class="btn" style="background: #334155; color: #e2e8f0; display: inline-flex; flex: 1; box-sizing: border-box; justify-content: center; align-items: center; gap: 6px; padding: 10px 12px; text-decoration: none;">
+          <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          Estatísticas
+        </a>
+        <a href="/download?path=/todo.json" class="btn" style="background: #334155; color: #e2e8f0; display: inline-flex; flex: 1; box-sizing: border-box; justify-content: center; align-items: center; gap: 6px; padding: 10px 12px; text-decoration: none;">
+          <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          Tarefas
+        </a>
+      </div>
     </div>
     <div style="margin-bottom: 15px;">
       <a href="/credentials" class="btn" style="background: #6366f1; color: white; display: inline-flex; width: 100%; box-sizing: border-box; justify-content: center; align-items: center; gap: 6px; padding: 10px 12px; text-decoration: none;">
