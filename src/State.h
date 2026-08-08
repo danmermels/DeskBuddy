@@ -41,6 +41,7 @@ struct ConfigState {
   int motionWindow = RECENT_MOTION_WINDOW_S;  // rolling motion window (seconds, 1..180)
   bool hasMail = false;
   bool time24h = true;
+  bool tempUnitF = false; // false = Celsius (°C), true = Fahrenheit (°F)
   int buddyFontIndex = 0; // 0 = GoodTiming20, 1 = GoodTiming15 (or other 2nd font)
 
   // Radar Gate Sensitivities
@@ -76,6 +77,10 @@ struct ConfigState {
   // MQTT broker
   String mqttBroker = "192.168.15.18";
   int mqttPort = 1883;
+
+  // Telemetry
+  bool telemetryEnabled = false;
+  String telemetryEndpoint = "";
 
   // API keys
   String groqApiKey = "";
@@ -123,6 +128,7 @@ struct StatsState {
   uint32_t fsWriteCount = 0;
   uint32_t fsReadCount = 0;
   uint32_t fsWritesToday = 0;
+  int bootCount = 0;
   
   // Task diligence tally (persisted in stats.json)
   int dailyTaskTotal = 0;        // active daily tasks today

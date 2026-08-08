@@ -479,6 +479,17 @@ static void handleSet(const String& args) {
     appConfig.pointsExcellentMin = valStr.toInt();
     preferences.putInt("pointsExcellentMin", appConfig.pointsExcellentMin);
     ok = true;
+  } else if (cfgKey == "telemetryEnabled") {
+    appConfig.telemetryEnabled = (valStr == "1" || valStr == "true");
+    preferences.putBool("telemEn", appConfig.telemetryEnabled);
+    ok = true;
+  } else if (cfgKey == "telemetryEndpoint") {
+    if (valStr.startsWith("\"") && valStr.endsWith("\"")) {
+      valStr = valStr.substring(1, valStr.length() - 1);
+    }
+    appConfig.telemetryEndpoint = valStr;
+    preferences.putString("telemUrl", appConfig.telemetryEndpoint.c_str());
+    ok = true;
   }
 
   // Stats overrides

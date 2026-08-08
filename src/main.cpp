@@ -1,4 +1,4 @@
-﻿#include <Arduino.h>
+#include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
 #include <NTPClient.h>
@@ -51,6 +51,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 #include "State.h"
 #include "Points.h"
 #include "Logger.h"
+#include "Telemetry.h"
 
 ConfigState appConfig;
 StatsState appStats;
@@ -251,6 +252,7 @@ void saveDailyStats() {
   doc["fsWriteCount"] = appStats.fsWriteCount + 1; // Anticipate this successful save
   doc["fsReadCount"] = appStats.fsReadCount;
   doc["fsWritesToday"] = appStats.fsWritesToday;
+  doc["bootCount"] = appStats.bootCount;
 
   doc["dailyTaskTotal"] = appStats.dailyTaskTotal;
   doc["dailyTaskDone"] = appStats.dailyTaskDone;
@@ -387,6 +389,7 @@ void loadDailyStats() {
     appStats.fsWriteCount = doc["fsWriteCount"] | 0;
     appStats.fsReadCount = doc["fsReadCount"] | appStats.fsReadCount;
     appStats.fsWritesToday = doc["fsWritesToday"] | 0;
+    appStats.bootCount = doc["bootCount"] | 0;
     appStats.dailyTaskTotal = doc["dailyTaskTotal"] | 0;
     appStats.dailyTaskDone = doc["dailyTaskDone"] | 0;
     appStats.dailyTallyDate = doc["dailyTallyDate"] | "";
@@ -537,6 +540,7 @@ void setup(void) {
   appConfig.motionWindow = motionWindow;
   appConfig.hasMail = preferences.getBool("hasMail", false);
   appConfig.time24h = preferences.getBool("time24h", true);
+  appConfig.tempUnitF = preferences.getBool("tempUnitF", false);
   appConfig.buddyFontIndex = preferences.getInt("buddyFontIdx", 0);
   appConfig.g0mSens = preferences.getInt("g0mSens", 90);
   appConfig.g0sSens = preferences.getInt("g0sSens", 90);
@@ -576,6 +580,11 @@ void setup(void) {
   appConfig.openWeatherKey = preferences.getString("owKey", OpenWeatherKey);
   appConfig.openWeatherLat = preferences.getFloat("owLat", -23.11);
   appConfig.openWeatherLon = preferences.getFloat("owLon", -46.53);
+
+  // Load telemetry config
+  appConfig.telemetryEnabled = preferences.getBool("telemEn", false);
+  appConfig.telemetryEndpoint = preferences.getString("telemUrl", TELEMETRY_ENDPOINT_DEFAULT);
+
   preferences.end();
 
   // Initialize LittleFS & load daily stats
@@ -587,6 +596,10 @@ void setup(void) {
     Serial.println("[SYSTEM] LittleFS mounted successfully.");
 #endif
     loadDailyStats();
+
+  // Increment boot counter
+  appStats.bootCount++;
+  saveDailyStats();
   } else {
 #if DESKBUDDY_DEBUG
     Serial.println("[SYSTEM] ERROR: LittleFS mount failed!");
@@ -1881,6 +1894,9 @@ void loop(void) {
     gBootStateMsgPending = false;
     Logger::log("SYSTEM", "%s", gBootStateMsg.c_str());
   }
+
+  // Telemetry and firmware update handling
+  handleTelemetryUpdate(now);
 
   // Update TFT Display
   updateTFTDisplay(now);

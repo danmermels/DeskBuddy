@@ -1,6 +1,17 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
+#ifndef DESKBUDDY_VERSION
+#define DESKBUDDY_VERSION "0.0.0"
+#endif
+#ifndef TELEMETRY_ENDPOINT_DEFAULT
+#define TELEMETRY_ENDPOINT_DEFAULT ""
+#endif
+
+// --- Telemetry Constants ---
+#define TELEMETRY_SEND_INTERVAL_MS  3600000UL  // 1 hour between telemetry reports
+#define TELEMETRY_FW_CHECK_INTERVAL_MS 21600000UL // 6 hours between firmware checks (also checked on each telemetry send)
+
 // --- User State Definitions ---
 #define STATE_AWAY        0
 #define STATE_FOCUS       1
@@ -104,6 +115,7 @@
 #define TASK_OVERDUE_DAYS_LIMIT               3   // Overdue limit in days for daily tasks
 #define TASK_OVERDUE_MONTHS_LIMIT             3   // Overdue limit in months for monthly tasks
 #define TASK_SYNTHESIS_MAX_CHARS            500   // Max length of the compact task synthesis injected into AI observations
+#define TASK_LIST_MAX_PAGE_LINES              8   // Total lines per page (1 title + 6 items). Lower for larger fonts.
 
 // --- MQTT Service Constants ---
 #define MQTT_BROKER_IP             "192.168.15.18"
@@ -136,58 +148,40 @@ struct RGB {
   uint8_t r, g, b;
 };
 
-// ============================================================================
-// TASK JOURNAL & DUE NOW SCREEN CONFIGURATIONS
-// ============================================================================
-namespace JournalConfig {
-  // --- Page One Overview (Dashboard) ---
-  constexpr int pageOneTitleY = 17;
-  constexpr const char* pageOneTitleFont = "";          // Empty string "" defaults to small system font
-  constexpr RGB pageOneTitleColor = {245, 158, 11}; // Yellow
-  constexpr const char* pageOneTaskFont = "";           // Empty string "" defaults to small system font
-  constexpr RGB pageOneTaskColor = {255, 255, 255};  // White
-
-  // --- Tasks Page (Journal Page 2+) ---
-  constexpr int tasksTitleY = 17;
-  constexpr const char* tasksTitleFont = "";            // Empty string "" defaults to small system font
-  constexpr RGB tasksTitleColor = {245, 158, 11};   // Yellow
-  constexpr const char* tasksTaskFont = "";             // Empty string "" defaults to small system font
-  constexpr RGB tasksTaskColor = {255, 255, 255};    // White
-
-  // --- DUE Now Page ---
-  constexpr int dueTitleY = 17;
-  constexpr const char* dueTitleFont = "";              // Empty string "" defaults to small system font
-  constexpr RGB dueTitleColor = {245, 158, 11};     // Yellow
-  constexpr RGB dueTextColor = {255, 255, 255};     // White
-  
-  // Hour / Time Field
-  constexpr int dueTimeY = 200;                       // Position Y for the time
-  constexpr const char* dueTimeFont = "";             // Font for the time
-  constexpr RGB dueTimeColor = {239, 68, 68};       // Red
+#ifndef ELEMENT_CONFIG_STRUCT
+#define ELEMENT_CONFIG_STRUCT
+constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 
-// ============================================================================
-// NAGGING ALERT TITLE CONFIGURATION (red "DUE NOW" on top of the nag message)
-// ============================================================================
-namespace NaggingConfig {
-  constexpr const char* titleText = "DUE NOW";        // Text of the title
-  constexpr uint8_t titleFont = 2;                    // TFT_eSPI built-in font index (0-7; 2=small, 4=medium)
-  constexpr int titleX = 120;                         // X center of the title
-  constexpr int titleY = 24;                          // Y center of the title
-  constexpr RGB titleColor = {239, 68, 68};         // Red
-  constexpr int msgStartY = 55;                       // Y where the AI nag message begins
-}
+struct ElementConfig {
+  const char* font;
+  uint16_t color;
+  int x;
+  int y;
+  int clearX;
+  int clearY;
+  int clearW;
+  int clearH;
+};
+#endif
 
-// ============================================================================
-// POINTS CHECK-IN ALERT TITLE CONFIGURATION (gold "POINTS" on top of the message)
-// ============================================================================
-namespace PointsConfig {
-  constexpr const char* titleText = "POINTS CHECK";   // Text of the title
-  constexpr uint8_t titleFont = 2;                    // TFT_eSPI built-in font index (0-7; 2=small, 4=medium)
-  constexpr int titleX = 120;                         // X center of the title
-  constexpr int titleY = 24;                          // Y center of the title
-  constexpr RGB titleColor = {245, 158, 11};        // Gold
-  constexpr int msgStartY = 55;                       // Y where the AI points message begins
-}
+// Structured Event View Data Models
+struct TaskDueViewData {
+  String headerText;  // "TASK DUE" or "OVERDUE"
+  String taskText;    // Task title
+  String dueTimeStr;  // "02:30 PM"
+  bool isOverdue;
+};
+
+struct JournalDashboardViewData {
+  String titleStr;
+  int dueTodayCount;
+  int dailyCount;
+  int monthlyCount;
+  int diligenceScore;
+};
+
+JournalDashboardViewData getJournalDashboardData();
 
 #endif // CONSTANTS_H

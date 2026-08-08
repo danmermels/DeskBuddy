@@ -1782,6 +1782,13 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
         </select>
       </div>
       <div class="metric">
+        <span class="label">Unidade de Temperatura</span>
+        <select name="tempUnitF" id="tempUnitSelect" class="settings-select" onchange="this.form.submit()">
+          <option value="0">Celsius (&deg;C)</option>
+          <option value="1">Fahrenheit (&deg;F)</option>
+        </select>
+      </div>
+      <div class="metric">
         <span class="label">Nome do Usuário</span>
         <input type="text" name="userName" id="userNameInput" class="settings-input" style="width: 150px; text-align: left;">
       </div>
@@ -1796,6 +1803,16 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           <option value="0">Sem E-mail</option>
           <option value="1">E-mail Ativo</option>
         </select>
+      </div>
+      <div class="metric">
+        <span class="label">Telemetria Anônima</span>
+        <select name="telemEn" id="telemEnSelect" class="settings-select" onchange="this.form.submit()">
+          <option value="0">Desligado</option>
+          <option value="1">Ligado (Opt-in)</option>
+        </select>
+      </div>
+      <div style="font-size: 0.72rem; color: #64748b; margin: -10px 0 8px 0; padding: 0 0; line-height: 1.35;">
+        Envia estatísticas anônimas de uso (relógio, modo IA, horas na mesa, tarefas, versão do firmware) para ajudar a melhorar o DeskBuddy. Nenhum dado pessoal, senha WiFi ou chave API é enviado.
       </div>
       <div class="metric" style="flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 0;">
         <div style="display: flex; justify-content: space-between;">
@@ -2235,7 +2252,9 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
             setVal('targetHoursInput', data.targetHours);
             setVal('userNameInput', data.userName);
             setVal('hasMailSelect', data.hasMail ? "1" : "0");
+            setVal('telemEnSelect', data.telemetryEnabled ? "1" : "0");
             setVal('time24hSelect', data.time24h ? "1" : "0");
+            setVal('tempUnitSelect', data.tempUnitF ? "1" : "0");
 
             setVal('focusDistLimSlider', data.focusDistLim);
             setTxt('focusDistLimVal', data.focusDistLim + ' cm');
@@ -2480,6 +2499,21 @@ static const char CREDENTIALS_HTML[] PROGMEM = R"rawhtml(
     </div>
 
     <div class="card">
+      <h1>Telemetria</h1>
+      <div class="field-group">
+        <label class="field-label">URL do Endpoint <span style="color: #64748b; font-size: 0.75rem;">(Cloudflare Worker)</span></label>
+        <input type="text" name="telemUrl" id="telemUrl" class="settings-input" placeholder="https://your-worker.workers.dev">
+        <span class="field-help">Para onde os dados anônimos são enviados. Ative a telemetria na página de Configurações.</span>
+      </div>
+      <div class="field-group" style="margin-top: 12px;">
+        <div class="metric" style="border: none; padding: 4px 0;">
+          <span class="label">Firmware Atual</span>
+          <span class="value" id="currentFwVer" style="color: #38bdf8; font-family: monospace;">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <h1>Chaves de API de IA</h1>
       <div class="field-group">
         <label class="field-label">Chave Groq API <span style="color: #10b981; font-size: 0.75rem;">(camada gratuita disponível)</span></label>
@@ -2604,6 +2638,8 @@ static const char CREDENTIALS_HTML[] PROGMEM = R"rawhtml(
         toggleStaticFields();
         document.getElementById('mqttBroker').value = data.mqttBroker || '';
         document.getElementById('mqttPort').value = data.mqttPort || 1883;
+        document.getElementById('telemUrl').value = data.telemetryEndpoint || '';
+        document.getElementById('currentFwVer').textContent = data.fwVersion || 'desconhecido';
         if (data.hasGroqKey) document.getElementById('groqKey').placeholder = '*** configurada ***';
         if (data.hasGeminiKey) document.getElementById('geminiKey').placeholder = '*** configurada ***';
         if (data.hasDeepseekKey) document.getElementById('deepseekKey').placeholder = '*** configurada ***';
@@ -2771,6 +2807,11 @@ inline void handleSaveCredentials() {
   if (server.hasArg("mqttBroker")) { appConfig.mqttBroker = server.arg("mqttBroker"); preferences.putString("mqttBroker", appConfig.mqttBroker.c_str()); }
   if (server.hasArg("mqttPort")) { appConfig.mqttPort = server.arg("mqttPort").toInt(); preferences.putInt("mqttPort", appConfig.mqttPort); }
 
+  if (server.hasArg("telemUrl")) {
+    String val = server.arg("telemUrl");
+    if (val.length() > 0) { appConfig.telemetryEndpoint = val; preferences.putString("telemUrl", appConfig.telemetryEndpoint.c_str()); }
+  }
+
   if (server.hasArg("groqKey")) {
     String val = server.arg("groqKey");
     if (val.length() > 0) { appConfig.groqApiKey = val; preferences.putString("groqKey", appConfig.groqApiKey.c_str()); }
@@ -2839,7 +2880,11 @@ inline void handleRadarData() {
   doc["buddyFontIdx"] = appConfig.buddyFontIndex;
   doc["targetHours"] = appConfig.targetHours;
   doc["hasMail"] = appConfig.hasMail;
+  doc["telemetryEnabled"] = appConfig.telemetryEnabled;
+  doc["telemetryEndpoint"] = appConfig.telemetryEndpoint;
+  doc["fwVersion"] = DESKBUDDY_VERSION;
   doc["time24h"] = appConfig.time24h;
+  doc["tempUnitF"] = appConfig.tempUnitF;
   doc["userName"] = appConfig.userName;
   doc["focusDistLim"] = appConfig.focusDistanceLimit;
   doc["motionRatioLim"] = appConfig.motionRatioLimit;
@@ -2989,6 +3034,10 @@ inline void handleSaveSettings() {
       bool val = (server.arg("time24h").toInt() == 1);
       if (val != appConfig.time24h) { appConfig.time24h = val; preferences.putBool("time24h", appConfig.time24h); }
     }
+    if (server.hasArg("tempUnitF")) {
+      bool val = (server.arg("tempUnitF").toInt() == 1);
+      if (val != appConfig.tempUnitF) { appConfig.tempUnitF = val; preferences.putBool("tempUnitF", appConfig.tempUnitF); }
+    }
     if (server.hasArg("userName")) {
       String val = server.arg("userName");
       if (val != appConfig.userName) { appConfig.userName = val; preferences.putString("userName", appConfig.userName.c_str()); }
@@ -3079,6 +3128,15 @@ inline void handleSaveSettings() {
     if (server.hasArg("pointsExcellentMin")) {
       int val = server.arg("pointsExcellentMin").toInt();
       if (val != appConfig.pointsExcellentMin) { appConfig.pointsExcellentMin = val; preferences.putInt("pointsExcellentMin", appConfig.pointsExcellentMin); }
+    }
+
+    if (server.hasArg("telemEn")) {
+      bool val = (server.arg("telemEn").toInt() == 1);
+      if (val != appConfig.telemetryEnabled) { appConfig.telemetryEnabled = val; preferences.putBool("telemEn", appConfig.telemetryEnabled); }
+    }
+    if (server.hasArg("telemUrl")) {
+      String val = server.arg("telemUrl");
+      if (val != appConfig.telemetryEndpoint) { appConfig.telemetryEndpoint = val; preferences.putString("telemUrl", appConfig.telemetryEndpoint.c_str()); }
     }
 
     preferences.end();

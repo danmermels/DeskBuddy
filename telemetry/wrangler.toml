@@ -1,0 +1,14 @@
+name = "deskbuddy-api"
+main = "src/worker.js"
+compatibility_date = "2025-08-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "deskbuddy-db"
+database_id = "b9755ef5-1f91-4341-8c0e-fcd5c4e8a95a"
+
+# [[r2_buckets]]
+# binding = "FIRMWARE"
+# bucket_name = "deskbuddy-firmware"
+# R2 requires manual enable in Cloudflare Dashboard -> R2 -> Enable
+# Run: wrangler r2 bucket create deskbuddy-firmware  (after enabling R2)
