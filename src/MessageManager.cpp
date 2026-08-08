@@ -28,6 +28,8 @@ void MessageManager::sortQueue() {
 }
 
 MessageManager::DueMessage MessageManager::getNextDueMessage(bool journalSequenceActive) {
+  if (messageQueue.empty()) return DueMessage(-1, "");
+
   unsigned long now = millis();
   for (auto& msg : messageQueue) {
     if (msg.displayed) continue;

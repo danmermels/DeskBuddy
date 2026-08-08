@@ -1,0 +1,392 @@
+{
+  "first_sit": {
+    "coach": [
+      "Bom dia, {name}! O sono acabou. {detail} offline. Vamos fazer valer hoje!",
+      "Acorde e brilhe, {name}! Te recebendo de volta após {detail}. Hora de construir sucesso!",
+      "Saudações, {name}! Novo começo após {detail} de descanso. Firme suas metas hoje!",
+      "Bom dia, {name}! {detail} de sono terminaram. Pronto para superar suas metas?",
+      "Bem-vindo de volta, {name}! Vamos começar forte esta sessão após {detail} offline."
+    ],
+    "critic": [
+      "Bom dia, {name}. Dormiu {detail}? Espero que planeje realmente trabalhar agora.",
+      "Oh, {name}. Bem-vindo de volta após {detail}. Não comece a relaxar já.",
+      "Acorde e brilhe, {name}. {detail} de ócio offline. Vamos ver se consegue focar.",
+      "Saudações, {name}. De volta à mesa após {detail} ausente. Tente não disparatar.",
+      "Bem-vindo, {name}! Você ficou ausente por {detail}. A fila de tarefas espera por você."
+    ],
+    "sweet": [
+      "Bom dia, {name}! Dormiu bem durante seus {detail} ausente? Tenha um lindo dia.",
+      "Acorde e brilhe, {name}! Um caloroso bem-vindo de volta após {detail}. Cuide-se hoje.",
+      "Bom dia, {name}! Tão feliz em ver você após {detail} offline. Espero que sinta-se descansado!",
+      "Bem-vindo de volta, {name}! Espero que seu descanso de {detail} foi pacífico e doce.",
+      "Café pronto, {name}? Um caloroso bem-vindo de volta após {detail}. Vamos começar com calma."
+    ],
+    "friend": [
+      "Bom dia, {name}! Feliz em te ver de volta após {detail} offline. Vamos divertir hoje.",
+      "Bem-vindo de volta, {name}! Pronto para progredir após {detail} de sono?",
+      "Olá, {name}! Espero que sinta-se renovado após {detail} de descanso. Hora da mágica.",
+      "Acorde e brilhe, {name}! {detail} offline. Pronto para enfrentar o universo?",
+      "Saudações, {name}! O café espera após seu descanso de {detail}. Acomode-se."
+    ]
+  },
+  "late_hours": {
+    "coach": [
+      "Acordado a esta hora, {name}? {detail}. Qualquer que seja o motivo, faça valer.",
+      "{name}, são {time} e o expediente não começa tão cedo. {detail}. Rápido e focado.",
+      "Sessão noturna, {name}? {detail}. Tudo bem — mas mantenha curto.",
+      "{name}, {detail}. Uma tarefa rápida e de volta ao descanso.",
+      "A mesa fica aberta 24h, {name}. {detail}. Use as horas com sabedoria."
+    ],
+    "critic": [
+      "{name}, {detail}. A fila não pode ser tão urgente a esta hora.",
+      "Oh, {name}. {detail}. Espero que este não seja o plano para a noite toda.",
+      "{name}, são {time}. {detail}. Até as tarefas estão dormindo.",
+      "{name}, {detail}. Claro, mas lembre do que acontece quando você esgota.",
+      "Verificando às {time}, {name}? {detail}. A esta hora, a fila não espera por ninguém."
+    ],
+    "sweet": [
+      "Acordado a esta hora, {name}? {detail}. Por favor, não esqueça de descansar em breve.",
+      "{name}, são {time} e aqui está você. {detail}. Cuide de si mesmo.",
+      "A mesa está quieta às {time}, {name}. {detail}. Suave, rápido e depois durma.",
+      "{name}, {detail}. Seja o que for, espero que valha a noite virada.",
+      "Doce {name}, são {time}. {detail}. Termine com calma e descanse."
+    ],
+    "friend": [
+      "{detail}, {name}. A mesa chamou e você atendeu a esta hora.",
+      "São {time}, {name}. {detail}. Sua cama está te olhando feio.",
+      "{name}, {detail}. Visitas à mesa neste horário estão virando hábito.",
+      "Turno da noite, {name}? {detail}. Rápido, o café está cansado.",
+      "{name}, o relógio marca {time}. {detail}. Até corujas precisam de um limite."
+    ]
+  },
+  "welcome_back": {
+    "coach": [
+      "Pausa encerrada, {name}. {detail} foi sua janela de recuperação — agora trabalhe.",
+      "De volta à cadeira, {name}. Aquela pausa de {detail} acabou. Foca agora.",
+      "Hora de executar, {name}. Você esteve ausente por {detail}. Foco!",
+      "Recarregado após {detail}, {name}? Vamos acelerar o passo.",
+      "Bem-vindo de volta, {name}. Você tirou {detail} — agora conquiste esse progresso."
+    ],
+    "critic": [
+      "Oh, você voltou, {name}. Aquela pausa de {detail} pareceu uma eternidade.",
+      "Gentil da sua parte retornar, {name}. {detail} ausente não foi o bastante?",
+      "De volta de onde quer que tenha vagado por {detail}, {name}. Vamos trabalhar.",
+      "A mesa estava em paz sem você, {name}. A pausa de {detail} acabou.",
+      "Acomode-se, {name}. Vamos ver se você foca mais de 5 minutos desta vez."
+    ],
+    "sweet": [
+      "Bem-vindo de volta, {name}! Espero que tenha tido uma pausa de {detail} relaxante.",
+      "Feliz em te ver de volta, {name}! Sua pausa de {detail} foi tranquila?",
+      "Olá, querido {name}! Recarregado após {detail}? Não trabalhe demais.",
+      "Espero que sua pausa de {detail} tenha sido revigorante, {name}. Acomode-se confortável.",
+      "Bem-vindo de volta, {name}! Acomode-se, respire e foco com calma."
+    ],
+    "friend": [
+      "Ei {name}, bem-vindo de volta! {detail} ausente. Achou algum café?",
+      "Você voltou! A mesa sentiu sua falta durante esses {detail}, {name}.",
+      "Certo {name}, pausa de {detail} encerrada. De volta à lida.",
+      "Bem-vindo de volta, {name}. {detail} offline. Vamos fazer acontecer.",
+      "De volta à ação, {name}. Vamos retomar de onde paramos."
+    ]
+  },
+  "stretch": {
+    "coach": [
+      "Levante-se, {name}! Sua coluna está chorando. Mova essas pernas agora.",
+      "Pausa, {name}! Fique em pé um minuto. Circulação é essencial.",
+      "Postura de banana, {name}. Corrija e gire os ombros!",
+      "Sentar é o novo fumar, {name}. Levante e estique-se!",
+      "Levante-se, {name}! Sacuda. Energia alta gera resultado alto."
+    ],
+    "critic": [
+      "Pretende fundir-se à cadeira, {name}? Levante-se.",
+      "Sua postura é um desastre, {name}. Endireite ou levante.",
+      "Ei {name}, olhe para algo além desta tela. Seus olhos derretem.",
+      "Ainda sentado, {name}? Sua coluna vai virar um ponto de interrogação.",
+      "Levante-se, {name}. Seus músculos estão atrofiando."
+    ],
+    "sweet": [
+      "Hora de esticar, {name}! Seu corpo precisa de movimento.",
+      "Gire os ombros, {name}. Inspire e relaxe.",
+      "Hidrate-se, {name}! Vá beber água fresca agora.",
+      "Pisque, {name}! Dê um descanso aos seus olhinhos.",
+      "Respire fundo e estique, {name}. Você está sentado há tanto tempo."
+    ],
+    "friend": [
+      "Ei {name}, levante e estique. Seu corpo agradece.",
+      "Afaste-se da tela, {name}! Vá caminhar um pouco.",
+      "Gire os punhos, {name}. Respire fundo rápido.",
+      "Levante, {name}, e alcance o céu. Só um pequeno reset.",
+      "Hora de esticar 1 minuto, {name}. Vamos sacudir."
+    ]
+  },
+  "focus_end": {
+    "coach": [
+      "Sessão de foco completa! Ótima execução, {name}.",
+      "Foco profundo alcançado, {name}! Você é uma máquina! Continue.",
+      "Sessão de foco sólida, {name}. Agora eleve a meta na próxima.",
+      "Você destruiu aquele bloco de foco, {name}! Mantenha o ritmo.",
+      "Excelente sessão de foco, {name}. É assim que progredimos."
+    ],
+    "critic": [
+      "Olhe só, {name}. Você realmente focou por {detail}.",
+      "Sessão de foco completa. Não faça festa ainda, {name}.",
+      "Você concentrou bem por {detail}, {name}. Me surpreenda.",
+      "Sessão sólida, {name}. Esperemos que a próxima seja ainda melhor.",
+      "Alvo de foco batido. Vamos ver se repete, {name}."
+    ],
+    "sweet": [
+      "Trabalho profundo completo, {name}! Tão orgulhosa da sua concentração!",
+      "Ótimo foco, {name}. Agora vá curtir uma pausa merecida.",
+      "Você foi tão bem focando, {name}! Tire um descanso tranquilo agora.",
+      "Trabalho brilhante mantendo o foco, {name}! Você merece um mimo.",
+      "Sessão de foco acabou, {name}. Descanse a mente e os olhos agora."
+    ],
+    "friend": [
+      "Chefe da produtividade! Faça uma reverência, {name}.",
+      "Sessão de foco estelar, {name}! Tamo junto!",
+      "Você ficou firme, {name}. Bom trabalho.",
+      "Foco alcançado, {name}. Você ganhou um descanso.",
+      "Você mandou naquele bloco de foco, {name}! Boa!"
+    ]
+  },
+  "slacker": {
+    "coach": [
+      "Pontuação de foco baixa, {name}. Ajuste o foco e trave.",
+      "Aquela lista não vai se terminar sozinha, {name}. Empurre!",
+      "Seja lá o que faz, não é trabalho. Acalme e execute.",
+      "O tempo passa, {name}. Pare de vagar e gere resultado.",
+      "Foco baixo hoje, {name}. Vamos reverter isso agora."
+    ],
+    "critic": [
+      "Procrastinando de novo, {name}? Estratégia ousada.",
+      "Rolar feed conta como cardio agora? Novidade, {name}.",
+      "Pontuação de foco: baixa. Desculpas: muitas. Conserta, {name}.",
+      "Seu teclado está solitário, {name}. Dê atenção a ele.",
+      "Se o esforço fosse opcional hoje, você mandaria, {name}."
+    ],
+    "sweet": [
+      "Você parece distraído, {name}. Tudo bem?",
+      "Sua pontuação de foco está tendo um dia ruim, {name}. Acomode com calma.",
+      "Vamos tentar focar mais um pouco, {name}. Você consegue!",
+      "Respire fundo, {name}, e vamos tentar voltar aos trilhos.",
+      "Não deixe as distrações vencerem, {name}. Acredito em você."
+    ],
+    "friend": [
+      "Esse é o ritmo que buscava hoje, {name}?",
+      "Foco baixo. Potencial alto. Escolha, {name}.",
+      "A rede chamou. Você atendeu. O trabalho espera, {name}.",
+      "Você está à deriva, {name}. Volte à realidade.",
+      "Menos navegação, mais ação. A matemática é simples, {name}."
+    ]
+  },
+  "streak_beaten": {
+    "coach": [
+      "Novo recorde de sessão, {name}! Nível de foco máximo!",
+      "Recorde de sequência quebrado, {name}! Persistência excepcional!",
+      "Marco de sessão alcançado, {name}! Continue empurrando os limites.",
+      "Recorde de sequência destruído, {name}! Você dita o ritmo.",
+      "Novo recorde, {name}! Padrão alto estabelecido."
+    ],
+    "critic": [
+      "Novo recorde, {name}. Sua cadeira deve estar muito orgulhosa.",
+      "Sequência batida, {name}. Tente não criar raízes na cadeira.",
+      "Sessão maratona, {name}. Espero que a academia esteja ativa.",
+      "Nova sequência, {name}! Sentado como estátua. Impressionante.",
+      "Recorde quebrado, {name}. Ainda assim, levante eventualmente."
+    ],
+    "sweet": [
+      "Sequência batida, {name}! Você está pegando fogo hoje!",
+      "Novo recorde pessoal de sessão, {name}! Tão orgulhosa!",
+      "Incrível, {name}! Sessão mais longa do dia. Estique as pernas com calma.",
+      "Você bateu seu recorde anterior de sessão, {name}! Maraviolhoso!",
+      "Foco de elite, {name}! Só lembre de esticar as pernas."
+    ],
+    "friend": [
+      "Campeão de sessão, {name}! Um recorde totalmente novo!",
+      "Imparável, {name}! A cadeira é seu trono.",
+      "Incrível, {name}! Nova sessão mais longa hoje.",
+      "Sessão recorde, {name}! Você é um mago do foco.",
+      "Novo recorde, {name}! Destruiu."
+    ]
+  },
+  "lunch_reminder": {
+    "coach": [
+      "Hora do almoço, {name}! Reabasteça o corpo para a próxima metade.",
+      "Pausa para nutrição, {name}! Vá almoçar e recarregar.",
+      "Abasteça-se, {name}! A hora do almoço chegou. Mantenha a energia.",
+      "Pausa de almoço, {name}! Afaste-se, coma e prepare para empurrar.",
+      "Hora de comer, {name}! Corpo saudável sustenta mente afiada."
+    ],
+    "critic": [
+      "O estômago ronca, {name}. Vá comer antes de cair.",
+      "O almoço chama, {name}. Não ignore, você parece bravo de fome.",
+      "Hora do almoço, {name}. Afaste da tela. O teclado espera.",
+      "Dev faminto é dev irritado, {name}. Vá buscar comida.",
+      "Hora de fechar o notebook e comer, {name}. Você já encarou demais."
+    ],
+    "sweet": [
+      "Hora do almoço! Afaste da mesa e coma, querido {name}.",
+      "Hora da comida, {name}! Não pule o almoço, é muito importante.",
+      "Alimente seu cérebro, {name}! Hora de pegar um almoço gostoso.",
+      "Vá almoçar, {name}! Bom apetite, cuide-se.",
+      "Afaste e coma, {name}. Você precisa se nutrir."
+    ],
+    "friend": [
+      "Hora do almoço, {name}! Vá comer algo.",
+      "Pausa de almoço, {name}! Afaste e ache comida de verdade.",
+      "Hora de recarregar com comida, {name}. Senta e relaxa.",
+      "Pausa para comer, {name}! Você com certeza mereceu.",
+      "Com fome, {name}? Pegue uma fatia de pizza ou algo assim."
+    ]
+  },
+  "excessive_breaks": {
+    "coach": [
+      "Muitas pausas, {name}. Acomode e foco agora.",
+      "Vamos tentar um bloco de trabalho maior desta vez, {name}. Acalme.",
+      "Muitas pausas hoje. Acomode para um trabalho profundo, {name}.",
+      "Sessão de foco chegando. Acomode e mantenha foco, {name}.",
+      "Consistência é chave, {name}. Fique na mesa e execute."
+    ],
+    "critic": [
+      "Você voltou de novo, {name}. São muitas pausas hoje.",
+      "Entra e sai como dono de porta giratória, {name}. Foco.",
+      "A cadeira está contando, {name}. Não está impressionada.",
+      "Mais transições que resultados hoje. Acomode, {name}.",
+      "De volta de novo. Acabe com isso desta vez e tente ficar."
+    ],
+    "sweet": [
+      "Outro retorno. Vá com calma e acomode confortável, {name}.",
+      "Bem-vindo de volta. Vamos mirar um bloco de foco tranquilo, {name}.",
+      "Feliz em te ver de volta, {name}. Acomode e trabalhemos com calma.",
+      "Pronto para uma sessão sem interrupção desta vez, querido {name}?",
+      "Mais um retorno. Vamos trabalhar calma e focado, {name}."
+    ],
+    "friend": [
+      "De volta de novo. A mesa é um pit stop hoje, {name}.",
+      "Você subiu e desceu mais que uma ação, {name}.",
+      "Sua razão pausa-trabalho está aventureira hoje, {name}.",
+      "Na cadeira. De novo. Acomode desta vez, {name}.",
+      "Bem-vindo de volta. Vamos trabalhar agora, {name}."
+    ]
+  },
+  "goal_completed": {
+    "coach": [
+      "Meta diária completa! Você bateu as horas, {name}!",
+      "Meta concluída, {name}! Você trabalhou as horas-alvo hoje.",
+      "Meta de tempo na mesa batida! Missão cumprida. Mandou, {name}.",
+      "Horas-alvo alcançadas! Ótimo esforço e disciplina hoje, {name}.",
+      "Meta diária completa! Você bateu o alvo, {name}."
+    ],
+    "critic": [
+      "Meta diária completa! Pode finalmente deslogar, {name}.",
+      "Você bateu o alvo, {name}. Vá para casa antes que eu caia.",
+      "Meta de mesa completa, {name}. Não trabalhe tanto amanhã.",
+      "Horas-alvo completas. A mesa está livre de você agora, {name}.",
+      "Meta concluída, {name}. Você realmente cumpriu as horas hoje."
+    ],
+    "sweet": [
+      "Parabéns, {name}! Você alcançou sua meta diária de tempo na mesa!",
+      "Meta alcançada, querido {name}! Você trabalhou as horas-alvo hoje.",
+      "Meta diária completa! Orgulhosa do seu tempo hoje, {name}.",
+      "Meta desbloqueada! Você bateu o alvo, {name}. Descanse.",
+      "Meta diária cumprida, {name}! Vá relaxar e tenha uma boa noite."
+    ],
+    "friend": [
+      "Meta de mesa completa, {name}! Ótima persistência!",
+      "Alvo batido! Trabalho excelente hoje, {name}.",
+      "Meta desbloqueada! Senta e comemora, {name}.",
+      "Alvo de expediente alcançado! Bem feito, {name}.",
+      "Meta diária alcançada! Você cumpriu o alvo diário, {name}."
+    ]
+  },
+  "nagging": {
+    "coach": [
+      "Lembrete: {detail}, {name}. Vamos resolver essa tarefa!",
+      "Pendência na mesa, {name}: {detail}. Vamos riscar isso agora.",
+      "Foco na prioridade, {name}: {detail}. Ação supera intenção.",
+      "{name}, {detail} ainda precisa de você. Mãos à obra!",
+      "Atenção, {name}: {detail}. Resolva e avance."
+    ],
+    "critic": [
+      "{detail} continua esperando, {name}. Vai encarar ou ignorar?",
+      "Oh, veja só: {detail} ainda está pendente, {name}.",
+      "{name}, {detail} não vai se resolver magicamente.",
+      "Ainda enrolando com {detail}, {name}?",
+      "Lembrete amigável: {detail} está mofando na sua lista, {name}."
+    ],
+    "sweet": [
+      "Querido {name}, não esqueça de {detail} quando puder.",
+      "Pequeno lembrete, {name}: {detail} espera por você com carinho.",
+      "{name}, assim que der uma brecha, dê uma olhada em {detail}.",
+      "Você consegue resolver {detail}, {name}! Um passo de cada vez.",
+      "Lembrete suave, {name}: {detail} está quase lá!"
+    ],
+    "friend": [
+      "Ei {name}, {detail} tá te chamando!",
+      "Bora matar {detail}, {name}?",
+      "Olha a pendência, {name}: {detail}. Vamos nessa!",
+      "Não esquece de {detail}, {name}! Tamo junto.",
+      "Hora de riscar {detail} da lista, {name}!"
+    ]
+  },
+  "points": {
+    "coach": [
+      "55 minutos de foco, {name}! {detail}. Excelente ritmo, continue acumulando!",
+      "Check-in de 55m, {name}! {detail}. Mantenha a disciplina em alta.",
+      "Foco constante, {name}! {detail}. O progresso é visível.",
+      "Mais 55m na conta, {name}! {detail}. Rumo ao topo!",
+      "Ótimo ritmo, {name}! {detail}. Continue empilhando, o mês é seu."
+    ],
+    "critic": [
+      "Uma hora sentado, {name}. {detail}. Esse número não se move sozinho.",
+      "{name}, {detail}. Impressiona só se as tarefas saíram.",
+      "55 minutos, {name}. {detail}. Não comemore; acumule mais.",
+      "{name}, seu placar lê {detail}. Deixe vergonhoso — para o acúmulo.",
+      "Você está em {detail}, {name}. Bom. Agora continue bom."
+    ],
+    "sweet": [
+      "55 minutos de foco, {name} — bem feito. {detail}. Continue com calma.",
+      "Você foi tão bem nesta hora, {name}. {detail}. Orgulhosa de você.",
+      "Aqui seu check-in, {name}. {detail}. Cada tarefa add um brilho.",
+      "{name}, você está construindo algo lindo. {detail}. Mais uma vitória pequena?",
+      "Progresso doce, {name}. {detail}. Respire, depois continue fluindo."
+    ],
+    "friend": [
+      "Hora dada, {name}! Placar: {detail}. Vamos subir.",
+      "{name}, {detail}. Não mal — não mal mesmo. Outra rodada?",
+      "55 minutos, {name}. {detail}. Vamos, mais uma tarefa para o mérito.",
+      "{name}, o quadro de pontos diz {detail}. Vamos deixar vergonhoso-bom.",
+      "De volta da hora, {name}: {detail}. Mantenha a sequência viva!"
+    ]
+  },
+  "curation": {
+    "coach": [
+      "Notei algo, {name}: {detail}. Use. É um padrão que vale agir.",
+      "{name}, {detail}. Consciência é a primeira ferramenta — decida o que fazer.",
+      "Veja o que percebo, {name}: {detail}. Pequeno dado, grande sinal.",
+      "Observação para você, {name}: {detail}. Padrões viram hábitos. Escolha bem.",
+      "Notando isso, {name}: {detail}. Os melhores rastreiam os detalhes."
+    ],
+    "critic": [
+      "Olhe isso, {name}: {detail}. A evidência não mente.",
+      "{name}, {detail}. Diria 'interessante' mas você sabe o que significa.",
+      "Alerta de padrão: {detail}. {name}, você não é sutil.",
+      "Pois pois, {name}: {detail}. Os dados têm opiniões sobre você hoje.",
+      "{name}, {detail}. Sou só o mensageiro — e o mensageiro julga."
+    ],
+    "sweet": [
+      "Oi {name}! Só notando: {detail}. Espero que esteja bem.",
+      "{name}, notei algo hoje: {detail}. Cuide de si mesmo.",
+      "Uma pequena observação, {name}: {detail}. Sem pressão, só consciência.",
+      "Doce amigo {name}, {detail}. Só quis que saiba que presto atenção.",
+      "{name}! {detail}. Pequeno, mas vale menção gentil."
+    ],
+    "friend": [
+      "Ei {name}, fato curioso: {detail}. A mesa vê tudo.",
+      "{name}, confira: {detail}. Nem bom nem mal — só dado com bigode.",
+      "Sua mesa sussurrou: {detail}. {name}, está ficando filosófica.",
+      "{name}! {detail}. É sua mesa falando. Agora ela tem opiniões.",
+      "Cara, {detail}. {name}, não estou dizendo nada, só DIGO."
+    ]
+  }
+}

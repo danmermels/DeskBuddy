@@ -1153,10 +1153,6 @@ enum BuddyEyeMode {
   EYE_MODE_SQUINT
 };
 
-constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
-  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-}
-
 struct DeskbuddyThemeConfig {
   const char* bgRle;
   const char* browRle;
@@ -2243,6 +2239,386 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
       }
     }
   }
+}
+
+inline bool loadFontExact(const char* name) {
+  if (name == nullptr || strlen(name) == 0) return false;
+  String path = "/" + String(name) + ".vlw";
+  if (LittleFS.exists(path)) {
+    tft.loadFont(name, LittleFS);
+    return tft.fontLoaded;
+  }
+  return false;
+}
+
+inline int drawDynamicMultiLineText(
+    const String& text, 
+    int startY, 
+    int lineHeight = 16, 
+    int maxLines = 12, 
+    const char* fontName = nullptr, 
+    uint16_t defaultColor = TFT_WHITE, 
+    uint16_t bgColor = TFT_BLACK,
+    bool truncatePerLine = false,
+    const char* subtitleFontName = nullptr,
+    int dateRightX = 0,
+    int contentLeftX = 0
+) {
+  tft.setTextDatum(MC_DATUM);
+
+  int y = startY;
+  int startIdx = 0;
+  int linesDrawn = 0;
+
+  while (startIdx < text.length() && linesDrawn < maxLines) {
+    if (y + lineHeight > 225) break; // Circular screen bottom clipping safety
+
+    int yc = y + (lineHeight / 2);
+    int dy = yc - 120;
+    int maxR = 105;
+    int charsForThisLine = DISPLAY_CHARS_PER_LINE;
+    if (abs(dy) < maxR) {
+      float halfWidth = sqrtf((float)(maxR * maxR - dy * dy));
+      charsForThisLine = (int)((halfWidth * 2.0f) / 6.0f);
+    }
+    if (charsForThisLine < 8) charsForThisLine = 8;
+
+    String line = "";
+    int nextNewline = text.indexOf('\n', startIdx);
+    if (nextNewline != -1) {
+      line = text.substring(startIdx, nextNewline);
+      startIdx = nextNewline + 1;
+    } else {
+      line = text.substring(startIdx);
+      startIdx = text.length();
+    }
+
+    uint16_t lineCol = defaultColor;
+    line.replace("\r", "");
+    if (line.indexOf("[RED]") != -1)         { lineCol = tft.color565(239,  68,  68); line.replace("[RED]", ""); }
+    else if (line.indexOf("[GREEN]") != -1)  { lineCol = tft.color565( 34, 197,  94); line.replace("[GREEN]", ""); }
+    else if (line.indexOf("[YELLOW]") != -1) { lineCol = tft.color565(245, 158,  11); line.replace("[YELLOW]", ""); }
+    else if (line.indexOf("[BLUE]") != -1)   { lineCol = tft.color565( 56, 189, 248); line.replace("[BLUE]", ""); }
+    else if (line.indexOf("[ORANGE]") != -1) { lineCol = tft.color565(249, 115,  22); line.replace("[ORANGE]", ""); }
+    else if (line.indexOf("[GREY]") != -1)   { lineCol = tft.color565(148, 163, 184); line.replace("[GREY]", ""); }
+    else if (line.indexOf("[GRAY]") != -1)   { lineCol = tft.color565(148, 163, 184); line.replace("[GRAY]", ""); }
+    else if (line.indexOf("[WHITE]") != -1)  { lineCol = TFT_WHITE; line.replace("[WHITE]", ""); }
+
+    line.trim();
+    if (line.length() == 0) continue; // Skip blank lines
+
+    bool isSubtitle = (line.indexOf("--") != -1);
+    const char* activeFontName = (isSubtitle && subtitleFontName != nullptr && strlen(subtitleFontName) > 0)
+                                 ? subtitleFontName 
+                                 : fontName;
+
+    if (truncatePerLine) {
+      if (line.length() > charsForThisLine) {
+        line = line.substring(0, charsForThisLine);
+      }
+    }
+
+    bool fontLoaded = loadFontExact(activeFontName);
+    tft.setTextColor(lineCol, bgColor);
+
+    // Blocked Two-Column Layout (Date Right-Aligned, Content Left-Aligned)
+    if (!isSubtitle && dateRightX > 0 && contentLeftX > 0) {
+      int pipeIdx = line.indexOf('|');
+      if (pipeIdx != -1) {
+        String datePart = line.substring(0, pipeIdx);
+        String contentPart = line.substring(pipeIdx + 1);
+        datePart.trim();
+        contentPart.trim();
+
+        String ampmStr = "";
+        if (datePart.endsWith("PM")) {
+          ampmStr = "P";
+          datePart = datePart.substring(0, datePart.length() - 2);
+          datePart.trim();
+        } else if (datePart.endsWith("P")) {
+          ampmStr = "P";
+          datePart = datePart.substring(0, datePart.length() - 1);
+          datePart.trim();
+        } else if (datePart.endsWith("AM")) {
+          ampmStr = "A";
+          datePart = datePart.substring(0, datePart.length() - 2);
+          datePart.trim();
+        } else if (datePart.endsWith("A")) {
+          ampmStr = "A";
+          datePart = datePart.substring(0, datePart.length() - 1);
+          datePart.trim();
+        }
+
+        // 1. Draw Date / Time Digits (Right Aligned at dateRightX)
+        tft.setTextDatum(MR_DATUM);
+        if (fontLoaded) tft.drawString(datePart, dateRightX, y);
+        else tft.drawString(datePart, dateRightX, y, 1);
+
+        // 2. Draw A/P Suffix (Small RobotoCondensed10, Left Aligned at Column 61, matching time color)
+        if (ampmStr.length() > 0) {
+          if (fontLoaded) tft.unloadFont();
+          bool loadAmpmFont = loadFontExact("RobotoCondensed10");
+          tft.setTextDatum(ML_DATUM);
+          tft.setTextColor(lineCol, bgColor); // Matched to time color (lineCol)
+          tft.drawString(ampmStr, 61, y + 5, loadAmpmFont ? 0 : 1);
+          if (loadAmpmFont) tft.unloadFont();
+          fontLoaded = loadFontExact(activeFontName);
+          tft.setTextColor(lineCol, bgColor);
+        }
+
+        // 3. Draw Entry Content (Left Aligned at contentLeftX)
+        tft.setTextDatum(ML_DATUM);
+        if (fontLoaded) tft.drawString(contentPart, contentLeftX, y);
+        else tft.drawString(contentPart, contentLeftX, y, 1);
+      } else {
+        // Items without date (e.g. Daily tasks): Left Aligned at contentLeftX
+        tft.setTextDatum(ML_DATUM);
+        if (fontLoaded) tft.drawString(line, contentLeftX, y);
+        else tft.drawString(line, contentLeftX, y, 1);
+      }
+    } else {
+      // Standard Centered Line (Subtitles & default text)
+      tft.setTextDatum(MC_DATUM);
+      if (fontLoaded) tft.drawString(line, 120, y);
+      else tft.drawString(line, 120, y, 1);
+    }
+
+    if (fontLoaded) {
+      tft.unloadFont();
+    }
+
+    tft.setTextDatum(MC_DATUM);
+    y += lineHeight;
+    linesDrawn++;
+  }
+
+  return linesDrawn;
+}
+
+// ============================================================================
+// NON-AI EVENT FACEPLATES (Task Due, Journal Dashboard, Journal Tasks)
+// Standardized fonts decoupled from clock faceplates.
+// ============================================================================
+
+inline void drawTaskDueFaceplate(const TaskDueViewData& data, uint16_t bgColor, const char* fontNameOverride) {
+  // [FONT SELECTOR]: Body Task Name & Time Badge Font
+  // Controls: data.taskText and data.dueTimeStr
+  const char* fontName = "RobotoCondensed32"; //DUE NOW Body
+  uint8_t systemFontIdx = 1;
+
+  tft.fillScreen(bgColor);
+
+  // 1. Header (DUE NOW / OVERDUE - Localized)
+  tft.setTextDatum(MC_DATUM);
+  uint16_t headerColor = data.isOverdue ? tft.color565(239, 68, 68) : tft.color565(245, 158, 11);
+  tft.setTextColor(headerColor, bgColor);
+
+  String headerStr = data.headerText;
+  if (headerStr.length() == 0 || headerStr == "DUE NOW" || headerStr == "OVERDUE") {
+#if DESKBUDDY_LANG_PTBR
+    headerStr = data.isOverdue ? "ATRASADO" : "VENCENDO AGORA";
+#else
+    headerStr = data.isOverdue ? "OVERDUE" : "DUE NOW";
+#endif
+  }
+  // [FONT SELECTOR]: Top Header Banner Font
+  // Controls: "ATRASADO", "VENCENDO AGORA", "OVERDUE", "DUE NOW"
+  bool loadHeaderFont = loadFontExact("RobotoCondensed20"); //DUE NOW Title
+  tft.drawString(headerStr, 120, 30, loadHeaderFont ? 0 : 1);
+  if (loadHeaderFont) tft.unloadFont();
+
+  // 2. Task Name
+  bool fontLoaded = loadFontExact(fontName);
+  tft.setTextColor(tft.color565(34, 197, 94), bgColor); // GREEN (diagnostic test)
+  tft.drawString(data.taskText, 120, 105, fontLoaded ? 0 : systemFontIdx);
+
+  // 3. Time Badge with AM/PM Support
+  tft.setTextColor(tft.color565(245, 158, 11), bgColor);
+  String timeStr = data.dueTimeStr;
+  String ampmStr = "";
+
+  int amIdx = timeStr.indexOf("AM");
+  int pmIdx = timeStr.indexOf("PM");
+  if (amIdx != -1) {
+    ampmStr = "AM";
+    timeStr = timeStr.substring(0, amIdx);
+    timeStr.trim();
+  } else if (pmIdx != -1) {
+    ampmStr = "PM";
+    timeStr = timeStr.substring(0, pmIdx);
+    timeStr.trim();
+  }
+
+  // Respect appConfig.time24h setting dynamically
+  if (!appConfig.time24h && ampmStr.length() == 0) {
+    int colonIdx = timeStr.indexOf(':');
+    if (colonIdx != -1) {
+      int h = timeStr.substring(0, colonIdx).toInt();
+      int m = timeStr.substring(colonIdx + 1).toInt();
+      int h12 = h % 12;
+      if (h12 == 0) h12 = 12;
+      ampmStr = (h >= 12) ? "PM" : "AM";
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", h12, m);
+      timeStr = String(buf);
+    }
+  } else if (appConfig.time24h && ampmStr.length() > 0) {
+    int colonIdx = timeStr.indexOf(':');
+    if (colonIdx != -1) {
+      int h = timeStr.substring(0, colonIdx).toInt();
+      int m = timeStr.substring(colonIdx + 1).toInt();
+      if (ampmStr == "PM" && h < 12) h += 12;
+      if (ampmStr == "AM" && h == 12) h = 0;
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", h, m);
+      timeStr = String(buf);
+      ampmStr = "";
+    }
+  }
+
+  if (ampmStr.length() > 0) {
+    tft.setTextDatum(MR_DATUM);
+    tft.drawString(timeStr, 135, 195, fontLoaded ? 0 : systemFontIdx);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(tft.color565(148, 163, 184), bgColor);
+    tft.drawString(ampmStr, 142, 195, systemFontIdx);
+    tft.setTextDatum(MC_DATUM);
+  } else {
+    tft.drawString(timeStr, 120, 195, fontLoaded ? 0 : systemFontIdx);
+  }
+
+  if (fontLoaded) tft.unloadFont();
+}
+
+inline void drawJournalDashboardFaceplate(
+    const JournalDashboardViewData& data, 
+    uint16_t bgColor,
+    const char* titleFontOverride,
+    const char* labelFontOverride
+) {
+  // [FONT SELECTORS]: Journal Dashboard Fonts
+  // titleFont: Controls top header ("RESUMO TODO" / "TODO SUMMARY")
+  // labelFont: Controls all dashboard labels & count values ("ParaHoje:", "Diarias:", etc.)
+  const char* titleFont = "RobotoCondensed20"; // Summary Title
+  const char* labelFont = "RobotoCondensed20"; // Summary body
+  uint8_t systemFontIdx = 1;
+
+  tft.fillScreen(bgColor);
+
+#if DESKBUDDY_LANG_PTBR
+  const char* titleText  = "RESUMO TO-DO";
+  const char* lblDue     = "PARA HOJE:";
+  const char* lblDaily   = "DIÁRIAS:";
+  const char* lblMonth   = "MENSAIS:";
+  const char* lblScore   = "DILIGÊNCIA:";
+#else
+  const char* titleText  = "TO-DO SUMMARY";
+  const char* lblDue     = "DUE TODAY:";
+  const char* lblDaily   = "DAILY:";
+  const char* lblMonth   = "MONTHLY:";
+  const char* lblScore   = "DILIGENCE:";
+#endif
+
+  String displayTitle = (data.titleStr.length() > 0) ? data.titleStr : String(titleText);
+
+  // 1. Header Title
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(tft.color565(245, 158, 11), bgColor);
+  bool loadTitleFont = loadFontExact(titleFont);
+  tft.drawString(displayTitle, 120, 32, loadTitleFont ? 0 : 1);
+  if (loadTitleFont) tft.unloadFont();
+
+  bool loadLabelFont = loadFontExact(labelFont);
+
+  // 2. Labels & Values - Forced Green for diagnostic test
+  tft.setTextColor(tft.color565(34, 197, 94), bgColor);
+
+  tft.setTextDatum(ML_DATUM);
+  tft.drawString(lblDue,   50,  82, loadLabelFont ? 0 : systemFontIdx);
+  tft.drawString(lblDaily, 50, 112, loadLabelFont ? 0 : systemFontIdx);
+  tft.drawString(lblMonth, 50, 142, loadLabelFont ? 0 : systemFontIdx);
+  tft.drawString(lblScore, 50, 172, loadLabelFont ? 0 : systemFontIdx);
+
+  tft.setTextDatum(ML_DATUM);
+  tft.drawString(String(data.dueTodayCount), 180, 82, loadLabelFont ? 0 : systemFontIdx);
+  tft.drawString(String(data.dailyCount), 180, 112, loadLabelFont ? 0 : systemFontIdx);
+  tft.drawString(String(data.monthlyCount), 180, 142, loadLabelFont ? 0 : systemFontIdx);
+  tft.drawString(String(data.diligenceScore) + "%", 180, 172, loadLabelFont ? 0 : systemFontIdx);
+
+  if (loadLabelFont) tft.unloadFont();
+  tft.setTextDatum(MC_DATUM);
+}
+
+inline void drawJournalTasksFaceplate(
+    const String& rawTaskList, 
+    uint16_t bgColor, 
+    const char* fontNameOverride, 
+    int maxLines,
+    int lineHeight
+) {
+  // ==========================================================================
+  // JOURNAL TASK LIST UNIFIED SETTINGS & CONFIGURATION BLOCK
+  // ==========================================================================
+  
+  // 1. [FONT SELECTOR]: Task Item Body Font (e.g. "05/08 | Rent", "Arrumar a cama")
+  const char* fontName = "RobotoCondensed17";
+
+  // 2. [FONT SELECTOR]: Section Subtitle Font ("-- DIARIAS --" / "-- MENSAIS --")
+  const char* subtitleFont = "RobotoCondensed18";
+
+  // 3. [FONT SELECTOR]: Page Header Title Font ("TAREFAS (1)")
+  const char* titleFontName = "RobotoCondensed20";
+
+  // 4. [LINE SPACING SELECTOR]: Vertical pixel step between task list lines
+  int taskLineHeight = 22;
+
+  // 5. [LAYOUT SELECTOR]: Top Y position of page title ("TAREFAS (1)")
+  int titleTopY = 17;
+
+  // 6. [LAYOUT SELECTOR]: Top Y position of first task list entry (distance below title)
+  int bodyStartY = 45;
+
+  // 7. [PAGE BREAK SELECTOR]: Maximum items per page before breaking to a new screen
+  //    Note: To change page break limit, edit TASK_LIST_MAX_PAGE_LINES in Constants.h
+  //    (Formula: 1 title line + N body items. E.g. 7 = 1 title + 6 items per page)
+  //    Current Value: TASK_LIST_MAX_PAGE_LINES = 7
+
+  // ==========================================================================
+
+  tft.fillScreen(bgColor);
+
+  String cleanList = rawTaskList;
+  String pageSuffix = "";
+  int firstNL = cleanList.indexOf('\n');
+  if (firstNL != -1) {
+    String firstLine = cleanList.substring(0, firstNL);
+    if (firstLine.indexOf("LISTA DE TAREFAS") != -1 || firstLine.indexOf("TASK LIST") != -1) {
+      int openParen = firstLine.indexOf('(');
+      int closeParen = firstLine.indexOf(')', openParen);
+      if (openParen != -1 && closeParen != -1) {
+        pageSuffix = " " + firstLine.substring(openParen + 1, closeParen);
+      }
+      cleanList = cleanList.substring(firstNL + 1);
+    }
+  }
+
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextColor(tft.color565(245, 158, 11), bgColor);
+  bool loadTitleFont = loadFontExact(titleFontName);
+#if DESKBUDDY_LANG_PTBR
+  tft.drawString("TAREFAS" + pageSuffix, 120, titleTopY, loadTitleFont ? 0 : 1);
+#else
+  tft.drawString("TASKS" + pageSuffix, 120, titleTopY, loadTitleFont ? 0 : 1);
+#endif
+  if (loadTitleFont) tft.unloadFont();
+
+  // 7. [LAYOUT SELECTOR]: Date column right-alignment X position (Column 60)
+  int dateRightX = 60;
+
+  // 8. [LAYOUT SELECTOR]: Task content left-alignment X position (Column 80)
+  int contentLeftX = 80;
+
+  drawDynamicMultiLineText(cleanList, bodyStartY, taskLineHeight, maxLines, fontName, tft.color565(34, 197, 94), bgColor, true, subtitleFont, dateRightX, contentLeftX);
 }
 
 #endif // FACEPLATES_H

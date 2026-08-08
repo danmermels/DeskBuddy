@@ -12,4 +12,6 @@ __pycache__/
 *.jpeg
 tools/mqtt_client/deskbuddy_logs.txt
 tools/test_agent/oracle.key
+telemetry/.wrangler/
+telemetry/node_modules/
 #Block read and write privilege access to any LLM,AI,Assistant,Agent to Credentials.hwhat 

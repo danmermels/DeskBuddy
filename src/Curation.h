@@ -195,8 +195,15 @@ inline String getTodoObservations(int eventType) {
             String ddMm = tDate.substring(8, 10) + "/" + tDate.substring(5, 7);
             synthBullets.push_back("- Daily task: " + taskText + " (OVERDUE: was due " + ddMm + ")");
           } else {
-            char timeBuf[10];
-            snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", tHour, tMin);
+            char timeBuf[12];
+            if (appConfig.time24h) {
+              snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", tHour, tMin);
+            } else {
+              int h12 = tHour % 12;
+              if (h12 == 0) h12 = 12;
+              const char* ampm = (tHour >= 12) ? "PM" : "AM";
+              snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d %s", h12, tMin, ampm);
+            }
             synthBullets.push_back("- Daily task: " + taskText + " (due " + String(timeBuf) + ")");
           }
         }
@@ -550,6 +557,120 @@ inline std::vector<OverdueTask> buildOverdueTaskQueue(String currentDayString, S
   return queue;
 }
 
+inline JournalDashboardViewData getJournalDashboardData() {
+  JournalDashboardViewData data;
+  data.titleStr = "";
+  data.dueTodayCount = 0;
+  data.dailyCount = 0;
+  data.monthlyCount = 0;
+  data.diligenceScore = 0;
+
+  if (!LittleFS.exists("/todo.json")) return data;
+  fs::File file = LittleFS.open("/todo.json", "r");
+  if (!file) return data;
+
+  DynamicJsonDocument doc(12288);
+  DeserializationError err = deserializeJson(doc, file);
+  file.close();
+  if (err) return data;
+
+  int currentYear = 2026, currentMonth = 8, currentDay = 7;
+  String currentMonthString = "2026-08", currentDayString = "2026-08-07";
+  if (timeClient.isTimeSet()) {
+    time_t epochTime = timeClient.getEpochTime();
+    struct tm *ptm = localtime(&epochTime);
+    if (ptm != nullptr) {
+      currentYear = ptm->tm_year + 1900;
+      currentMonth = ptm->tm_mon + 1;
+      currentDay = ptm->tm_mday;
+      char mStr[8], dStr[11];
+      snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
+      snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
+      currentMonthString = String(mStr);
+      currentDayString = String(dStr);
+    }
+  }
+
+  int dailyUncompleted = 0, monthlyUncompleted = 0;
+  int dueTodayDailies = 0, dueTodayMonthlies = 0;
+  int dailyActive = 0, dailyDone = 0, monthlyActive = 0, monthlyDone = 0;
+
+  if (doc.containsKey("daily")) {
+    for (JsonObject task : doc["daily"].as<JsonArray>()) {
+      bool isRecurrent = task["recurrent"] | false;
+      bool isCompleted = false;
+      bool isActiveToday = false;
+      String tDate = task["startDate"] | "";
+
+      if (isRecurrent) {
+        String endDate = task["endDate"] | "";
+        if ((tDate.length() == 0 || currentDayString >= tDate) &&
+            (endDate.length() == 0 || currentDayString < endDate)) {
+          isActiveToday = true;
+        }
+        if (task.containsKey("completedDates")) {
+          for (JsonVariant d : task["completedDates"].as<JsonArray>()) {
+            if (d.as<String>() == currentDayString) { isCompleted = true; break; }
+          }
+        }
+      } else {
+        isActiveToday = (String(task["targetDate"] | "") == currentDayString);
+        isCompleted = task["completed"] | false;
+      }
+      if (isActiveToday) { dailyActive++; if (isCompleted) dailyDone++; }
+      if (!isCompleted) { dailyUncompleted++; if (isActiveToday) dueTodayDailies++; }
+    }
+  }
+
+  if (doc.containsKey("monthly")) {
+    for (JsonObject task : doc["monthly"].as<JsonArray>()) {
+      bool isRecurrent = task["recurrent"] | false;
+      bool isCompleted = false;
+      bool isActiveThisMonth = false;
+      String startMonth = task.containsKey("startMonth") ? String(task["startMonth"] | "") : (task.containsKey("startDate") ? String(task["startDate"] | "").substring(0, 7) : "");
+      int dueDay = task.containsKey("day") ? (int)task["day"] : (task.containsKey("dayOfMonth") ? (int)task["dayOfMonth"] : 1);
+
+      if (isRecurrent) {
+        String endDate = task.containsKey("endDate") ? String(task["endDate"] | "").substring(0, 7) : (task.containsKey("endMonth") ? String(task["endMonth"] | "") : "");
+        if ((startMonth.length() == 0 || currentMonthString >= startMonth) &&
+            (endDate.length() == 0 || currentMonthString < endDate)) {
+          isActiveThisMonth = true;
+        }
+        if (task.containsKey("completedMonths")) {
+          for (JsonVariant d : task["completedMonths"].as<JsonArray>()) {
+            if (d.as<String>() == currentMonthString) { isCompleted = true; break; }
+          }
+        }
+      } else {
+        String targetDate = task["targetDate"] | "";
+        isActiveThisMonth = (targetDate.length() >= 7 && targetDate.substring(0, 7) == currentMonthString);
+        isCompleted = task["completed"] | false;
+      }
+      if (isActiveThisMonth) { monthlyActive++; if (isCompleted) monthlyDone++; }
+      if (!isCompleted) {
+        monthlyUncompleted++;
+        if (isRecurrent) {
+          if (dueDay == currentDay) dueTodayMonthlies++;
+        } else {
+          if (String(task["targetDate"] | "") == currentDayString) dueTodayMonthlies++;
+        }
+      }
+    }
+  }
+
+  data.dueTodayCount = dueTodayDailies + dueTodayMonthlies;
+  data.dailyCount = dailyUncompleted;
+  data.monthlyCount = monthlyUncompleted;
+
+  int dailyNet = 2 * dailyDone - dailyActive;
+  int monthlyNet = 2 * monthlyDone - monthlyActive;
+  int net = dailyNet + monthlyNet;
+  data.diligenceScore = (int)constrain(50 + net * 10, 0, 100);
+
+  return data;
+}
+
+// Inline helper to build task journal summary and chunk pages
 inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>& pageLines) {
   pages.clear();
   pageLines.clear();
@@ -579,10 +700,10 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
 
   // Get current date details
   int currentYear = 2026;
-  int currentMonth = 7;
-  int currentDay = 18;
-  String currentMonthString = "2026-07";
-  String currentDayString = "2026-07-18";
+  int currentMonth = 8;
+  int currentDay = 7;
+  String currentMonthString = "2026-08";
+  String currentDayString = "2026-08-07";
   int currentDaysCount = 0;
 
   int curHour = 12;
@@ -614,8 +735,8 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
   int monthlyUncompleted = 0;
   int overdueDailies = 0;
   int dueTodayDailies = 0;
-  int overdueMonthlies = 0;
   int dueTodayMonthlies = 0;
+  int overdueMonthlies = 0;
   int dailyActive = 0;
   int dailyDone = 0;
   int monthlyActive = 0;
@@ -668,8 +789,15 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
         if (isActiveToday) {
           dueTodayDailies++;
           
-          char timeBuf[6];
-          snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", tHour, tMin);
+          char timeBuf[12];
+          if (appConfig.time24h) {
+            snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", tHour, tMin);
+          } else {
+            int h12 = tHour % 12;
+            if (h12 == 0) h12 = 12;
+            const char* ampm = (tHour >= 12) ? "PM" : "AM";
+            snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d %s", h12, tMin, ampm);
+          }
           String timeStr = String(timeBuf);
 
           bool isOverdueToday = (curHour > tHour || (curHour == tHour && curMin > tMin));
@@ -687,20 +815,35 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
   }
 
   // 2. Process monthly tasks
+  struct MonthlyTaskEntry {
+    String colorTag;
+    int daysOrder;
+    String dateStr;
+    String text;
+  };
+  std::vector<MonthlyTaskEntry> monthlyEntries;
+
   if (doc.containsKey("monthly")) {
     JsonArray monthly = doc["monthly"].as<JsonArray>();
     for (JsonObject task : monthly) {
       bool isRecurrent = task["recurrent"] | false;
       bool isCompleted = false;
       bool isActiveThisMonth = false;
-      int dueDay = task["day"] | 1;
+      int dueDay = task.containsKey("day") ? (int)task["day"] : (task.containsKey("dayOfMonth") ? (int)task["dayOfMonth"] : 1);
       String taskText = task["text"] | "";
-      int tMonth = 1;
-      int tYear = 2026;
+      int tMonth = task["month"] | currentMonth;
+      int tYear = task["year"] | currentYear;
+      String targetDate = task["targetDate"] | "";
+      if (targetDate.length() >= 10) {
+        tYear = targetDate.substring(0, 4).toInt();
+        tMonth = targetDate.substring(5, 7).toInt();
+        dueDay = targetDate.substring(8, 10).toInt();
+      }
+
+      String startMonth = task.containsKey("startMonth") ? String(task["startMonth"] | "") : (task.containsKey("startDate") ? String(task["startDate"] | "").substring(0, 7) : "");
+      String endMonth = task.containsKey("endMonth") ? String(task["endMonth"] | "") : (task.containsKey("endDate") ? String(task["endDate"] | "").substring(0, 7) : "");
 
       if (isRecurrent) {
-        String startMonth = task["startMonth"] | "";
-        String endMonth = task["endMonth"] | "";
         if ((startMonth.length() == 0 || currentMonthString >= startMonth) &&
             (endMonth.length() == 0 || currentMonthString < endMonth)) {
           isActiveThisMonth = true;
@@ -715,8 +858,6 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
           }
         }
       } else {
-        tMonth = task["month"] | 1;
-        tYear = task["year"] | 2026;
         isActiveThisMonth = (tMonth == currentMonth && tYear == currentYear);
         isCompleted = task["completed"] | false;
       }
@@ -731,90 +872,114 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
         if (isActiveThisMonth) {
           String missedMonth = (isRecurrent) ? recurrentLastMissedMonth(task, currentMonthString) : "";
 
+          if (missedMonth.length() > 0) {
+            overdueMonthlies++;
+            int mYr = missedMonth.substring(0, 4).toInt();
+            int mMon = missedMonth.substring(5, 7).toInt();
+            char mbuf[6];
+            snprintf(mbuf, sizeof(mbuf), "%02d/%02d", dueDay, mMon);
+            monthlyEntries.push_back({ "[RED]", mYr * 10000 + mMon * 100 + dueDay, String(mbuf), taskText });
+          }
+
           char dateBuf[6];
           snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d", dueDay, currentMonth);
-          String dateStr = String(dateBuf);
+          int orderVal = currentYear * 10000 + currentMonth * 100 + dueDay;
 
           if (currentDay == dueDay) {
             dueTodayMonthlies++;
-            monthlyListItems.push_back("[GREEN]" + dateStr + " | " + truncateTaskText(taskText, 30));
-            if (missedMonth.length() > 0) {
-              overdueMonthlies++;
-              char mbuf[6];
-              snprintf(mbuf, sizeof(mbuf), "%02d/%02d", dueDay, missedMonth.substring(5, 7).toInt());
-              monthlyListItems.push_back("[RED]" + String(mbuf) + " | " + truncateTaskText(taskText, 30));
-            }
+            monthlyEntries.push_back({ "[GREEN]", orderVal, String(dateBuf), taskText });
           } else if (currentDay > dueDay) {
             overdueMonthlies++;
-            monthlyListItems.push_back("[RED]" + dateStr + " | " + truncateTaskText(taskText, 30));
-            if (missedMonth.length() > 0) {
-              overdueMonthlies++;
-              char mbuf[6];
-              snprintf(mbuf, sizeof(mbuf), "%02d/%02d", dueDay, missedMonth.substring(5, 7).toInt());
-              monthlyListItems.push_back("[RED]" + String(mbuf) + " | " + truncateTaskText(taskText, 30));
-            }
+            monthlyEntries.push_back({ "[RED]", orderVal, String(dateBuf), taskText });
           } else {
-            if (missedMonth.length() > 0) {
-              overdueMonthlies++;
-              char mbuf[6];
-              snprintf(mbuf, sizeof(mbuf), "%02d/%02d", dueDay, missedMonth.substring(5, 7).toInt());
-              monthlyListItems.push_back("[RED]" + String(mbuf) + " | " + truncateTaskText(taskText, 30));
-            }
-            monthlyListItems.push_back("[WHITE]" + dateStr + " | " + truncateTaskText(taskText, 30));
+            monthlyEntries.push_back({ "[WHITE]", orderVal, String(dateBuf), taskText });
           }
         } else {
           if (!isRecurrent && (tYear < currentYear || (tYear == currentYear && tMonth < currentMonth))) {
             overdueMonthlies++;
-            
             char dateBuf[6];
             snprintf(dateBuf, sizeof(dateBuf), "%02d/%02d", dueDay, tMonth);
-            String dateStr = String(dateBuf);
-            monthlyListItems.push_back("[RED]" + dateStr + " | " + truncateTaskText(taskText, 30));
+            monthlyEntries.push_back({ "[RED]", tYear * 10000 + tMonth * 100 + dueDay, String(dateBuf), taskText });
           }
         }
       }
     }
   }
 
+  // Sort monthly entries by most overdue first (earliest due date ascending)
+  std::sort(monthlyEntries.begin(), monthlyEntries.end(), [](const MonthlyTaskEntry& a, const MonthlyTaskEntry& b) {
+    return a.daysOrder < b.daysOrder;
+  });
+
+  for (const auto& entry : monthlyEntries) {
+    monthlyListItems.push_back(entry.colorTag + entry.dateStr + " | " + truncateTaskText(entry.text, 30));
+  }
+
   // Page 1 generation - Clean Center-Justified Dashboard
   updateTodoTally(dailyDone, dailyActive, monthlyDone, monthlyActive, currentDayString, currentMonthString);
   saveDailyStats();
 
-  String p1 = "[YELLOW]TODO\n";
-  p1 += "[BLUE]-- DAILY --\n";
-  p1 += "[WHITE]Open: " + String(dailyUncompleted) + "\n";
-  p1 += "[GREEN]Due Today: " + String(dueTodayDailies) + "\n";
-  p1 += "[RED]Overdue: " + String(overdueDailies) + "\n\n";
-  p1 += "[BLUE]-- MONTHLY --\n";
-  p1 += "[WHITE]Open: " + String(monthlyUncompleted) + "\n";
-  p1 += "[GREEN]Due Today: " + String(dueTodayMonthlies) + "\n";
-  p1 += "[RED]Overdue: " + String(overdueMonthlies) + "\n";
+#if DESKBUDDY_LANG_PTBR
+  const char* titleStr       = "[YELLOW]RESUMO TODO\n";
+  const char* secDaily       = "[BLUE]-- DIARIAS --\n";
+  const char* lblOpen        = "[WHITE]Abertas: ";
+  const char* lblDue         = "[GREEN]Para Hoje: ";
+  const char* lblOver        = "[RED]Atrasadas: ";
+  const char* secMonthly     = "[BLUE]-- MENSAIS --\n";
+  const char* nameDaily      = "Diarias ";
+  const char* nameMonthly    = "Mensais ";
+  const char* secDailyList   = "[YELLOW]-- DIARIAS --";
+  const char* secMonthlyList = "[YELLOW]-- MENSAIS --";
+  const char* titleList      = "[YELLOW]LISTA DE TAREFAS (";
+#else
+  const char* titleStr       = "[YELLOW]TODO SUMMARY\n";
+  const char* secDaily       = "[BLUE]-- DAILY --\n";
+  const char* lblOpen        = "[WHITE]Open: ";
+  const char* lblDue         = "[GREEN]Due Today: ";
+  const char* lblOver        = "[RED]Overdue: ";
+  const char* secMonthly     = "[BLUE]-- MONTHLY --\n";
+  const char* nameDaily      = "Daily ";
+  const char* nameMonthly    = "Monthly ";
+  const char* secDailyList   = "[YELLOW]-- DAILY --";
+  const char* secMonthlyList = "[YELLOW]-- MONTHLY --";
+  const char* titleList      = "[YELLOW]TASK LIST (";
+#endif
+
+  String p1 = String(titleStr);
+  p1 += String(secDaily);
+  p1 += String(lblOpen) + String(dailyUncompleted) + "\n";
+  p1 += String(lblDue) + String(dueTodayDailies) + "\n";
+  p1 += String(lblOver) + String(overdueDailies) + "\n\n";
+  p1 += String(secMonthly);
+  p1 += String(lblOpen) + String(monthlyUncompleted) + "\n";
+  p1 += String(lblDue) + String(dueTodayMonthlies) + "\n";
+  p1 += String(lblOver) + String(overdueMonthlies) + "\n";
 
   int dailyNet = 2 * dailyDone - dailyActive;
   int monthlyNet = 2 * monthlyDone - monthlyActive;
   String dailyCol = (dailyNet >= 0) ? "[GREEN]" : "[RED]";
   String monthlyCol = (monthlyNet >= 0) ? "[GREEN]" : "[RED]";
 
-  p1 += dailyCol + "Daily " + diligenceSigned(dailyNet) + " | " + monthlyCol + "Monthly " + diligenceSigned(monthlyNet);
+  p1 += dailyCol + String(nameDaily) + diligenceSigned(dailyNet) + " | " + monthlyCol + String(nameMonthly) + diligenceSigned(monthlyNet);
   pages.push_back(p1);
   pageLines.push_back(11);
 
-  // Group task list lines
+  // Group task list lines (Daily first, then Monthly rolls directly after)
   std::vector<String> pageLinesList;
   if (dailyListItems.size() > 0) {
-    pageLinesList.push_back("[YELLOW]-- DAILY --");
+    pageLinesList.push_back(String(secDailyList));
     for (const auto& item : dailyListItems) {
       pageLinesList.push_back(item);
     }
   }
   if (monthlyListItems.size() > 0) {
-    pageLinesList.push_back("[YELLOW]-- MONTHLY --");
+    pageLinesList.push_back(String(secMonthlyList));
     for (const auto& item : monthlyListItems) {
       pageLinesList.push_back(item);
     }
   }
 
-  // Chunk pages
+  // Chunk pages (Controlled by TASK_LIST_MAX_PAGE_LINES in Constants.h / Faceplates.h)
   if (pageLinesList.size() > 0) {
     int currentPageIndex = 2;
     String currentPageContent = "";
@@ -822,12 +987,12 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
 
     for (size_t i = 0; i < pageLinesList.size(); i++) {
       if (currentLineCount == 0) {
-        currentPageContent = "[YELLOW]TASK LIST (" + String(currentPageIndex - 1) + ")\n";
+        currentPageContent = String(titleList) + String(currentPageIndex - 1) + ")\n";
         currentLineCount = 1;
       }
 
-      // Orphan Header Protection
-      if (pageLinesList[i].startsWith("[YELLOW]--") && currentLineCount == 11) {
+      // Orphan Header Protection (if -- MENSAIS -- falls on the last line of a page)
+      if (pageLinesList[i].startsWith("[YELLOW]--") && currentLineCount == (TASK_LIST_MAX_PAGE_LINES - 1)) {
         if (currentPageContent.length() > 0 && currentPageContent[currentPageContent.length() - 1] == '\n') {
           currentPageContent.remove(currentPageContent.length() - 1);
         }
@@ -835,14 +1000,14 @@ inline void buildTaskJournalSummary(std::vector<String>& pages, std::vector<int>
         pageLines.push_back(currentLineCount);
 
         currentPageIndex++;
-        currentPageContent = "[YELLOW]TASK LIST (" + String(currentPageIndex - 1) + ")\n";
+        currentPageContent = String(titleList) + String(currentPageIndex - 1) + ")\n";
         currentLineCount = 1;
       }
 
       currentPageContent += pageLinesList[i] + "\n";
       currentLineCount++;
 
-      if (currentLineCount == 12 || i == pageLinesList.size() - 1) {
+      if (currentLineCount == TASK_LIST_MAX_PAGE_LINES || i == pageLinesList.size() - 1) {
         if (currentPageContent.length() > 0 && currentPageContent[currentPageContent.length() - 1] == '\n') {
           currentPageContent.remove(currentPageContent.length() - 1);
         }

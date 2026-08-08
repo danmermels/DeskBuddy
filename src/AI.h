@@ -2,6 +2,8 @@
 #define AI_H
 
 #include <Arduino.h>
+#include <FS.h>
+#include <LittleFS.h>
 #include <ESP32_AI_Connect.h>
 #include "Behaviour.h"
 #include "Curation.h"
@@ -55,26 +57,65 @@ inline String resolveLocalPlaceholders(String templateStr, String detail) {
   return templateStr;
 }
 
-inline const char* getLocalFallbackQuote(int eventType) {
-  int persona = appConfig.aiPersona;
-  if (persona < 0 || persona > 3) persona = 0;
-  int randIdx = random(5);
+inline String getLocalFallbackQuote(int eventType) {
+  const char* keyName = "welcome_back";
   switch (eventType) {
-    case EVENT_FIRST_SIT:     return localFirstSit[persona][randIdx];
-    case EVENT_WELCOME_BACK:  return localWelcomeBack[persona][randIdx];
-    case EVENT_LATEHOURS_SIT: return localLateHours[persona][randIdx];
-    case EVENT_STRETCH:       return localStretch[persona][randIdx];
-    case EVENT_FOCUS_END:     return localFocus[persona][randIdx];
-    case EVENT_SLACKER:       return localSlacker[persona][randIdx];
-    case EVENT_STREAK_BEATEN: return localStreakBeaten[persona][randIdx];
-    case EVENT_LUNCH_REMINDER: return localLunchReminder[persona][randIdx];
-    case EVENT_EXCESSIVE_BREAKS: return localExcessiveBreaks[persona][randIdx];
-    case EVENT_GOAL_COMPLETED:   return localGoalCompleted[persona][randIdx];
-    case EVENT_NAGGING:          return localNagging[persona][randIdx];
-    case EVENT_POINTS:           return localPoints[persona][randIdx];
-    case EVENT_CURATION:         return localCuration[persona][randIdx];
+    case EVENT_FIRST_SIT:        keyName = "first_sit"; break;
+    case EVENT_WELCOME_BACK:     keyName = "welcome_back"; break;
+    case EVENT_LATEHOURS_SIT:    keyName = "late_hours"; break;
+    case EVENT_STRETCH:          keyName = "stretch"; break;
+    case EVENT_FOCUS_END:        keyName = "focus_end"; break;
+    case EVENT_SLACKER:          keyName = "slacker"; break;
+    case EVENT_STREAK_BEATEN:    keyName = "streak_beaten"; break;
+    case EVENT_LUNCH_REMINDER:   keyName = "lunch_reminder"; break;
+    case EVENT_EXCESSIVE_BREAKS: keyName = "excessive_breaks"; break;
+    case EVENT_GOAL_COMPLETED:   keyName = "goal_completed"; break;
+    case EVENT_NAGGING:          keyName = "nagging"; break;
+    case EVENT_POINTS:           keyName = "points"; break;
+    case EVENT_CURATION:         keyName = "curation"; break;
   }
-  return localWelcomeBack[persona][randIdx];
+
+  const char* personaKey = "coach";
+  if (appConfig.aiPersona == 1) personaKey = "critic";
+  else if (appConfig.aiPersona == 2) personaKey = "sweet";
+  else if (appConfig.aiPersona == 3) personaKey = "friend";
+
+#ifdef DESKBUDDY_LANG_PTBR
+  const char* primaryFile = "/fallbackquotes_ptbr.json";
+#else
+  const char* primaryFile = "/fallbackquotes_en.json";
+#endif
+
+  const char* fileToOpen = primaryFile;
+  if (!LittleFS.exists(fileToOpen)) {
+    fileToOpen = "/fallbackquotes.json";
+  }
+
+  if (LittleFS.exists(fileToOpen)) {
+    fs::File file = LittleFS.open(fileToOpen, "r");
+    if (file) {
+      DynamicJsonDocument doc(32768); // 32KB buffer (JSON file is ~20.5KB)
+      DeserializationError err = deserializeJson(doc, file);
+      file.close();
+      if (!err) {
+        JsonArray arr = doc[keyName][personaKey].as<JsonArray>();
+        if (arr && arr.size() > 0) {
+          int randIdx = random(arr.size());
+          return arr[randIdx].as<String>();
+        } else {
+          Logger::log("BEHAVIOUR", "Fallback quotes key [%s][%s] not found or empty in %s", keyName, personaKey, fileToOpen);
+        }
+      } else {
+        Logger::log("BEHAVIOUR", "Failed to parse %s: %s", fileToOpen, err.c_str());
+      }
+    } else {
+      Logger::log("BEHAVIOUR", "Failed to open file: %s", fileToOpen);
+    }
+  } else {
+    Logger::log("BEHAVIOUR", "Fallback quotes file not found: %s", fileToOpen);
+  }
+
+  return "Bem-vindo de volta, {name}!";
 }
 
 inline String resolvePromptPlaceholders(int eventType, String templateStr, String detail) {
@@ -287,14 +328,14 @@ void aiQueryTask(void * parameter) {
                   httpCode, HTTPClient::errorToString(httpCode).c_str(),
                   wifiStatusStr.c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
       
-      const char* quote = getLocalFallbackQuote(appState.lastTriggeredEventType);
+      String quote = getLocalFallbackQuote(appState.lastTriggeredEventType);
 
       xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
       appState.lastResponseIsAi = false;
       String nameCopy = appState.currentUserName;
       xSemaphoreGive(appState.aiMutex);
 
-      String personalQuote = resolveLocalPlaceholders(String(quote), appState.lastTriggeredEventDetail);
+      String personalQuote = resolveLocalPlaceholders(quote, appState.lastTriggeredEventDetail);
       
       bool discard = false;
       if (appState.lastTriggeredEventType == EVENT_FIRST_SIT || appState.lastTriggeredEventType == EVENT_WELCOME_BACK) {
@@ -384,22 +425,14 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   if (eventType == EVENT_JOURNAL) {
     if (detail.startsWith("PAGE:")) {
       int pipe1 = detail.indexOf('|');
-      int pipe2 = detail.indexOf('|', pipe1 + 1);
+      int pipe2 = (pipe1 != -1) ? detail.indexOf('|', pipe1 + 1) : -1;
       if (pipe1 != -1 && pipe2 != -1) {
         int pageIdx = detail.substring(5, pipe1).toInt();
         int pLines = detail.substring(pipe1 + 1, pipe2).toInt();
         
-        String remaining = detail.substring(pipe2 + 1);
-        int separatorIdx = remaining.indexOf("|||");
-        
-        String pageContent = "";
-        String nextPages = "";
-        if (separatorIdx != -1) {
-          pageContent = remaining.substring(0, separatorIdx);
-          nextPages = remaining.substring(separatorIdx + 3);
-        } else {
-          pageContent = remaining;
-        }
+        int separatorIdx = detail.indexOf("|||", pipe2 + 1);
+        String pageContent = (separatorIdx != -1) ? detail.substring(pipe2 + 1, separatorIdx) : detail.substring(pipe2 + 1);
+        String nextPages = (separatorIdx != -1) ? detail.substring(separatorIdx + 3) : "";
 
         Logger::log("BEHAVIOUR", "Journal trigger: showing page %d (lines=%d)", pageIdx, pLines);
 
@@ -439,6 +472,7 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         xSemaphoreGive(appState.aiMutex);
 
         if (pages.size() > 1) {
+          appState.journalSequenceActive = true;
           String serialized = "";
           for (size_t i = 1; i < pages.size(); i++) {
             serialized += "PAGE:" + String(i + 1) + "|" + String(pageLines[i]) + "|" + pages[i];
@@ -457,9 +491,10 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
             MessageManager::R_NORMAL
           );
           Logger::log("BEHAVIOUR", "Journal trigger: scheduled remaining pages in %lu ms", page1DurationMs);
+        } else {
+          appState.journalSequenceActive = false;
         }
-      }
-      if (pages.size() <= 1) {
+      } else {
         appState.journalSequenceActive = false;
       }
       return;
@@ -467,38 +502,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   }
 
   if (eventType == EVENT_TASK_DUE) {
-    std::vector<String> tasks;
-    int start = 0;
-    int idx = 0;
-    while ((idx = detail.indexOf('|', start)) != -1) {
-      tasks.push_back(detail.substring(start, idx));
-      start = idx + 1;
-    }
-    if (start < detail.length()) {
-      tasks.push_back(detail.substring(start));
-    }
-    if (tasks.empty() && detail.length() > 0) {
-      tasks.push_back(detail);
-    }
-
-    int h = timeClient.getHours();
-    int m = timeClient.getMinutes();
-    char timeBuf[6];
-    snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", h, m);
-    String timeStr = String(timeBuf);
-
-    String pageContent = "[YELLOW]DUE NOW\n\n";
-    for (size_t i = 0; i < tasks.size(); i++) {
-      pageContent += "[WHITE]- " + tasks[i];
-      if (i < tasks.size() - 1) {
-        pageContent += "\n";
-      }
-    }
-    pageContent += "\n\n[RED]" + timeStr;
-
     xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
     appState.lastResponseIsAi = false;
-    appState.aiResponse = pageContent;
+    appState.aiResponse = detail;
     appState.hasNewAIResponse = true;
     xSemaphoreGive(appState.aiMutex);
     return;
@@ -559,9 +565,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
         appState.isAILoading = false;
         
         // Immediately load fallback
-        const char* quote = getLocalFallbackQuote(eventType);
+        String quote = getLocalFallbackQuote(eventType);
 
-        String personalQuote = resolveLocalPlaceholders(String(quote), detail);
+        String personalQuote = resolveLocalPlaceholders(quote, detail);
         xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
         appState.lastResponseIsAi = false;
         appState.aiResponse = personalQuote;
@@ -570,9 +576,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       }
     } else {
       Logger::log("BEHAVIOUR", "AI query already loading; using local fallback instead of dropping event %d", eventType);
-      const char* quote = getLocalFallbackQuote(eventType);
+      String quote = getLocalFallbackQuote(eventType);
 
-      String personalQuote = resolveLocalPlaceholders(String(quote), detail);
+      String personalQuote = resolveLocalPlaceholders(quote, detail);
       Logger::log("BEHAVIOUR", "Picked local fallback (AI busy): \"%s\"", personalQuote.c_str());
       xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
       appState.lastResponseIsAi = false;
@@ -581,9 +587,9 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       xSemaphoreGive(appState.aiMutex);
     }
   } else {
-    const char* quote = getLocalFallbackQuote(eventType);
+    String quote = getLocalFallbackQuote(eventType);
 
-    String personalQuote = resolveLocalPlaceholders(String(quote), detail);
+    String personalQuote = resolveLocalPlaceholders(quote, detail);
     Logger::log("BEHAVIOUR", "Picked local fallback: \"%s\"", personalQuote.c_str());
 
     // Immediately post fallback quote to display thread-safely

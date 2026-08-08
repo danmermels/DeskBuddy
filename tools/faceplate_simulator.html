@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeskBuddy GC9A01 Faceplate Design Studio v7.0</title>
+  <!-- Google & System Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Inter:wght@300;400;600;700;800&family=Outfit:wght@300;400;600;700;800&family=Roboto+Condensed:ital,wght@0,300;0,400;0,700;1,400&family=Share+Tech+Mono&family=VT323&family=Orbitron:wght@400;600;700;900&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --card-bg: #151d2a;
+      --panel-bg: #1e293b;
+      --border-color: #334155;
+      --accent: #38bdf8;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #060911;
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header .subtitle {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+
+    .main-container {
+      display: flex;
+      flex: 1;
+      gap: 20px;
+      padding: 20px;
+      max-width: 1700px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Left: Screen Viewport */
+    .viewport-panel {
+      flex: 0 0 380px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 20px;
+      height: fit-content;
+    }
+
+    .screen-bezel {
+      width: 330px;
+      height: 330px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #1e293b, #0f172a);
+      border: 8px solid #334155;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+
+    /* 240x240 Screen Frame */
+    .screen-display {
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: #000000;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.9);
+      transform-origin: center center;
+    }
+
+    .screen-bg-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 240px; height: 240px;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .visor-layer {
+      position: absolute;
+      top: 22px;
+      left: 55px;
+      width: 130px;
+      height: 98px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      pointer-events: none;
+    }
+
+    .eye-img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.6));
+    }
+
+    /* Overlay Text Layer (9 Independent Elements) */
+    .text-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 240px; height: 240px;
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .text-item {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+      text-align: center;
+      line-height: 1;
+    }
+
+    /* Clear Box Debug Bounds Overlay */
+    .clear-box-debug {
+      position: absolute;
+      border: 1px dashed rgba(239, 68, 68, 0.85);
+      background: rgba(239, 68, 68, 0.2);
+      z-index: 4;
+      pointer-events: none;
+      display: none;
+    }
+
+    .clear-box-debug.active {
+      display: block;
+    }
+
+    /* Controls Panel */
+    .controls-panel {
+      flex: 1;
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.82rem;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover { color: var(--text-main); border-color: var(--accent); }
+    .tab-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    .control-card {
+      background: #0f172a;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #1e293b;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #1e293b;
+    }
+
+    .section-title {
+      font-size: 0.88rem;
+      color: var(--accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+
+    label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    label span.val { color: var(--accent); font-family: monospace; }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    select, input[type="text"], input[type="number"] {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 0.82rem;
+      width: 100%;
+    }
+
+    .color-picker-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="color"] {
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+    }
+
+    .code-box {
+      background: #060911;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.76rem;
+      color: #34d399;
+      max-height: 260px;
+      overflow-y: auto;
+      white-space: pre;
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      font-size: 0.82rem;
+    }
+
+    .btn:hover { opacity: 0.9; }
+
+    .btn-secondary {
+      background: #334155;
+      color: var(--text-main);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+
+    .toggle-row input { cursor: pointer; }
+
+    .file-input-btn {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+
+    .file-input-btn input[type="file"] {
+      position: absolute;
+      left: 0; top: 0; opacity: 0;
+      width: 100%; height: 100%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      DeskBuddy Faceplate Studio v7.0 (9 Granular Elements)
+    </h1>
+    <div class="subtitle">Standalone AM/PM Badge · Custom Stat Marker · System Fonts Discovery</div>
+  </header>
+
+  <div class="main-container">
+    
+    <!-- LEFT PANEL: Display Viewport -->
+    <div class="viewport-panel">
+      <div class="screen-bezel" id="dropArea" title="Drag & drop custom 240x240 JPG/PNG background image here">
+        <div class="screen-display" id="screenDisplay">
+          <!-- Background Layer -->
+          <div class="screen-bg-layer" id="bgLayer"></div>
+
+          <!-- Visor / Eyes Layer -->
+          <div class="visor-layer" id="visorLayer">
+            <img class="eye-img" id="eyeL" src="../buddy_eye_o.jpg" alt="Left Eye">
+            <img class="eye-img" id="eyeR" src="../buddy_eye_o.jpg" alt="Right Eye">
+          </div>
+
+          <!-- Text Layer (9 Independent Elements) -->
+          <div class="text-layer">
+            <div class="text-item" id="timeText">14:35</div>
+            <div class="text-item" id="ampmText">PM</div>
+            <div class="text-item" id="wdayText">WED</div>
+            <div class="text-item" id="dayText">06</div>
+            <div class="text-item" id="monthText">AUG</div>
+            <div class="text-item" id="tempText">24°C</div>
+            <div class="text-item" id="weatherText">CLEAR</div>
+            <div class="text-item" id="metricText">SCORE: 88%</div>
+            <div class="text-item" id="customStatText">SIT: 1h 20m</div>
+          </div>
+
+          <!-- Clear Box Debug Outlines -->
+          <div class="clear-box-debug" id="timeClearBox"></div>
+          <div class="clear-box-debug" id="ampmClearBox"></div>
+          <div class="clear-box-debug" id="wdayClearBox"></div>
+          <div class="clear-box-debug" id="dayClearBox"></div>
+          <div class="clear-box-debug" id="monthClearBox"></div>
+          <div class="clear-box-debug" id="tempClearBox"></div>
+          <div class="clear-box-debug" id="weatherClearBox"></div>
+          <div class="clear-box-debug" id="metricClearBox"></div>
+          <div class="clear-box-debug" id="customStatClearBox"></div>
+        </div>
+      </div>
+
+      <label class="toggle-row">
+        <input type="checkbox" id="toggleDebug" onchange="updateView()">
+        Show Redraw Clear Boxes (`fillRect` Bounds)
+      </label>
+
+      <!-- Asset Upload Buttons -->
+      <div style="display: flex; gap: 8px; width: 100%;">
+        <div class="file-input-btn btn btn-secondary" style="flex: 1; text-align: center;">
+          📁 Load 240x240 BG Image
+          <input type="file" id="bgFileInput" accept="image/*" onchange="handleBgFileUpload(event)">
+        </div>
+        <div class="file-input-btn btn btn-secondary" style="flex: 1; text-align: center;">
+          👁️ Load Custom Eye PNG
+          <input type="file" id="eyeFileInput" accept="image/*" onchange="handleEyeFileUpload(event)">
+        </div>
+      </div>
+
+      <button class="btn btn-secondary" style="width: 100%;" onclick="requestSystemFonts()">
+        🔍 Load All System Fonts from Computer
+      </button>
+    </div>
+
+    <!-- RIGHT PANEL: 9 Granular Element Design Controls -->
+    <div class="controls-panel">
+      
+      <div class="tabs">
+        <button class="tab-btn active" onclick="selectTheme(0)">Theme 0: Robot (Default)</button>
+        <button class="tab-btn" onclick="selectTheme(2)">Theme 2: DeskCat</button>
+        <button class="tab-btn" onclick="selectTheme(3)">Theme 3: DeskWho (Owl)</button>
+        <button class="tab-btn" onclick="selectTheme(1)">Theme 1: DeskAura</button>
+        <button class="tab-btn" onclick="selectTheme(4)">Theme 4: DeskBit</button>
+      </div>
+
+      <!-- Theme Asset & Exception Controls -->
+      <div class="control-card">
+        <div class="section-header">
+          <span class="section-title">Background, Eye Assets & Display Exceptions</span>
+        </div>
+        <div class="grid-2">
+          <div>
+            <label>Background Image</label>
+            <select id="bgSelect" onchange="updateView()">
+              <option value="../buddy_bg.jpg">buddy_bg.jpg (Robot/Machine)</option>
+              <option value="../buddy_who_bg.jpg">buddy_who_bg.jpg (Owl/Plants)</option>
+              <option value="none">Pure Dark Black (#000000)</option>
+            </select>
+          </div>
+          <div>
+            <label>Eye Sprite Asset</label>
+            <select id="eyeSelect" onchange="updateEyeAsset()">
+              <option value="../buddy_eye_o.jpg">buddy_eye_o.jpg (Robot Cyan)</option>
+              <option value="../buddy_who_eye_o.jpg">buddy_who_eye_o.jpg (Owl Green)</option>
+              <option value="../buddy_aura_eye_o.png">buddy_aura_eye_o.png (Aura Pink)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top: 8px;">
+          <div>
+            <label>Time Format (12h AM/PM vs 24h)</label>
+            <select id="timeFormatSelect" onchange="updateView()">
+              <option value="24h">24-Hour (14:35)</option>
+              <option value="12h" selected>12-Hour (02:35 PM)</option>
+            </select>
+          </div>
+          <div>
+            <label>Temperature Unit (°C vs °F)</label>
+            <select id="tempUnitSelect" onchange="updateView()">
+              <option value="C" selected>Celsius (°C — 24°C)</option>
+              <option value="F">Fahrenheit (°F — 75°F)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1. Clock Time -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">1. Clock Time Digits (HH:MM)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="timeFontSelect" class="font-dropdown" onchange="handleFontSelect('time')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="timeCustomFont" placeholder="e.g. Impact, Arial Black" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="timeSizeVal">38</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="timeSize" min="16" max="72" value="38" oninput="updateView()"><input type="number" id="timeSizeNum" min="16" max="72" value="38" style="width: 50px;" oninput="syncNumToRange('timeSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="timeXVal">110</span></label><input type="range" id="timeX" min="20" max="220" value="110" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="timeYVal">100</span></label><input type="range" id="timeY" min="60" max="180" value="100" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="timeWeight" onchange="updateView()"><option value="300">Light</option><option value="400">Regular</option><option value="600">SemiBold</option><option value="700" selected>Bold</option><option value="900">Black</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="timeColor" value="#00e5ff" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="timeClearHVal">34</span></label><input type="range" id="timeClearH" min="14" max="60" value="34" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 2. AM/PM Badge -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">2. AM/PM Badge (e.g. AM / PM)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="ampmFontSelect" class="font-dropdown" onchange="handleFontSelect('ampm')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="ampmCustomFont" placeholder="e.g. Trebuchet MS" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="ampmSizeVal">14</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="ampmSize" min="10" max="32" value="14" oninput="updateView()"><input type="number" id="ampmSizeNum" min="10" max="32" value="14" style="width: 50px;" oninput="syncNumToRange('ampmSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="ampmXVal">175</span></label><input type="range" id="ampmX" min="20" max="220" value="175" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="ampmYVal">92</span></label><input type="range" id="ampmY" min="60" max="180" value="92" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="ampmWeight" onchange="updateView()"><option value="300">Light</option><option value="400">Regular</option><option value="600" selected>SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="ampmColor" value="#00e5ff" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="ampmClearHVal">16</span></label><input type="range" id="ampmClearH" min="10" max="40" value="16" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 3. Day of Week -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">3. Day of Week (e.g. WED / SEG)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="wdayFontSelect" class="font-dropdown" onchange="handleFontSelect('wday')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="wdayCustomFont" placeholder="e.g. Trebuchet MS" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="wdaySizeVal">16</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="wdaySize" min="10" max="36" value="16" oninput="updateView()"><input type="number" id="wdaySizeNum" min="10" max="36" value="16" style="width: 50px;" oninput="syncNumToRange('wdaySize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="wdayXVal">65</span></label><input type="range" id="wdayX" min="20" max="220" value="65" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="wdayYVal">146</span></label><input type="range" id="wdayY" min="80" max="210" value="146" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="wdayWeight" onchange="updateView()"><option value="300">Light</option><option value="400">Regular</option><option value="600" selected>SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="wdayColor" value="#38bdf8" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="wdayClearHVal">18</span></label><input type="range" id="wdayClearH" min="10" max="40" value="18" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 4. Day of Month Number -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">4. Day of Month Number (e.g. 06 / 18)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="dayFontSelect" class="font-dropdown" onchange="handleFontSelect('day')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="dayCustomFont" placeholder="e.g. Impact, Arial Black" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="daySizeVal">18</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="daySize" min="10" max="36" value="18" oninput="updateView()"><input type="number" id="daySizeNum" min="10" max="36" value="18" style="width: 50px;" oninput="syncNumToRange('daySize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="dayXVal">135</span></label><input type="range" id="dayX" min="20" max="220" value="135" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="dayYVal">146</span></label><input type="range" id="dayY" min="80" max="210" value="146" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="dayWeight" onchange="updateView()"><option value="300">Light</option><option value="400">Regular</option><option value="600">SemiBold</option><option value="700" selected>Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="dayColor" value="#cbd5e1" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="dayClearHVal">20</span></label><input type="range" id="dayClearH" min="10" max="40" value="20" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 5. Month Name / Number -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">5. Month Name / Number (e.g. AUG / 08)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="monthFontSelect" class="font-dropdown" onchange="handleFontSelect('month')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="monthCustomFont" placeholder="e.g. Segoe UI, Georgia" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="monthSizeVal">18</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="monthSize" min="10" max="36" value="18" oninput="updateView()"><input type="number" id="monthSizeNum" min="10" max="36" value="18" style="width: 50px;" oninput="syncNumToRange('monthSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="monthXVal">175</span></label><input type="range" id="monthX" min="20" max="220" value="175" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="monthYVal">146</span></label><input type="range" id="monthY" min="80" max="210" value="146" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="monthWeight" onchange="updateView()"><option value="300">Light</option><option value="400" selected>Regular</option><option value="600">SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="monthColor" value="#cbd5e1" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="monthClearHVal">20</span></label><input type="range" id="monthClearH" min="10" max="40" value="20" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 6. Temperature -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">6. Temperature (e.g. 24°C / 75°F)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="tempFontSelect" class="font-dropdown" onchange="handleFontSelect('temp')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="tempCustomFont" placeholder="e.g. Arial Black" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="tempSizeVal">16</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="tempSize" min="10" max="32" value="16" oninput="updateView()"><input type="number" id="tempSizeNum" min="10" max="32" value="16" style="width: 50px;" oninput="syncNumToRange('tempSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="tempXVal">85</span></label><input type="range" id="tempX" min="20" max="220" value="85" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="tempYVal">168</span></label><input type="range" id="tempY" min="100" max="220" value="168" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="tempWeight" onchange="updateView()"><option value="300">Light</option><option value="400" selected>Regular</option><option value="600">SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="tempColor" value="#ffb800" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="tempClearHVal">18</span></label><input type="range" id="tempClearH" min="10" max="36" value="18" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 7. Weather Condition -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">7. Weather Condition (e.g. CLEAR / SUNNY)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="weatherFontSelect" class="font-dropdown" onchange="handleFontSelect('weather')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="weatherCustomFont" placeholder="e.g. Helvetica" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="weatherSizeVal">15</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="weatherSize" min="10" max="32" value="15" oninput="updateView()"><input type="number" id="weatherSizeNum" min="10" max="32" value="15" style="width: 50px;" oninput="syncNumToRange('weatherSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="weatherXVal">155</span></label><input type="range" id="weatherX" min="20" max="220" value="155" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="weatherYVal">168</span></label><input type="range" id="weatherY" min="100" max="220" value="168" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="weatherWeight" onchange="updateView()"><option value="300">Light</option><option value="400" selected>Regular</option><option value="600">SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="weatherColor" value="#ffb800" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="weatherClearHVal">18</span></label><input type="range" id="weatherClearH" min="10" max="36" value="18" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 8. Metric Carousel -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">8. Telemetry Metric Carousel</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="metricFontSelect" class="font-dropdown" onchange="handleFontSelect('metric')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="metricCustomFont" placeholder="e.g. Monaco, Consolas" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="metricSizeVal">15</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="metricSize" min="10" max="32" value="15" oninput="updateView()"><input type="number" id="metricSizeNum" min="10" max="32" value="15" style="width: 50px;" oninput="syncNumToRange('metricSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="metricXVal">120</span></label><input type="range" id="metricX" min="30" max="210" value="120" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="metricYVal">192</span></label><input type="range" id="metricY" min="130" max="230" value="192" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="metricWeight" onchange="updateView()"><option value="300">Light</option><option value="400" selected>Regular</option><option value="600">SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="metricColor" value="#2dd4bf" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="metricClearHVal">18</span></label><input type="range" id="metricClearH" min="10" max="36" value="18" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- 9. Standalone Custom Stat (Sitting Time) -->
+      <div class="control-card">
+        <div class="section-header"><span class="section-title">9. Standalone Custom Stat Marker (e.g. SIT: 1h 20m)</span></div>
+        <div class="grid-3" style="margin-bottom: 8px;">
+          <div><label>Font Dropdown</label><select id="customStatFontSelect" class="font-dropdown" onchange="handleFontSelect('customStat')"></select></div>
+          <div><label>Custom System Font Name</label><input type="text" id="customStatCustomFont" placeholder="e.g. GoodTiming15" oninput="updateView()"></div>
+          <div><label>Font Size (px) <span class="val" id="customStatSizeVal">14</span></label><div style="display: flex; gap: 8px; align-items: center;"><input type="range" id="customStatSize" min="10" max="32" value="14" oninput="updateView()"><input type="number" id="customStatSizeNum" min="10" max="32" value="14" style="width: 50px;" oninput="syncNumToRange('customStatSize', this.value)"></div></div>
+        </div>
+        <div class="grid-5">
+          <div><label>Draw X <span class="val" id="customStatXVal">120</span></label><input type="range" id="customStatX" min="0" max="220" value="120" oninput="updateView()"></div>
+          <div><label>Draw Y <span class="val" id="customStatYVal">212</span></label><input type="range" id="customStatY" min="0" max="230" value="212" oninput="updateView()"></div>
+          <div><label>Font Weight</label><select id="customStatWeight" onchange="updateView()"><option value="300">Light</option><option value="400" selected>Regular</option><option value="600">SemiBold</option><option value="700">Bold</option></select></div>
+          <div><label>Color</label><div class="color-picker-wrapper"><input type="color" id="customStatColor" value="#ff9f1c" onchange="updateView()"></div></div>
+          <div><label>Clear Box H <span class="val" id="customStatClearHVal">16</span></label><input type="range" id="customStatClearH" min="0" max="36" value="16" oninput="updateView()"></div>
+        </div>
+      </div>
+
+      <!-- Generated C++ Export -->
+      <div class="control-card">
+        <div class="section-header">
+          <span class="section-title">Generated C++ Configuration (`DeskbuddyThemeConfig`)</span>
+          <button class="btn" onclick="copyCode()">Copy C++ Code</button>
+        </div>
+        <div class="code-box" id="cppOutput"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // Standard system fonts list
+    const systemFonts = [
+      "Arial, sans-serif",
+      "Segoe UI, sans-serif",
+      "Impact, sans-serif",
+      "Trebuchet MS, sans-serif",
+      "Courier New, monospace",
+      "Consolas, monospace",
+      "Georgia, serif",
+      "Times New Roman, serif",
+      "Verdana, sans-serif",
+      "Tahoma, sans-serif",
+      "Comic Sans MS, cursive",
+      "Century Gothic, sans-serif",
+      "Franklin Gothic Medium, sans-serif",
+      "Palatino Linotype, serif",
+      "Gill Sans, sans-serif",
+      "'Roboto Condensed', sans-serif",
+      "'Outfit', sans-serif",
+      "'Inter', sans-serif",
+      "'Chakra Petch', sans-serif",
+      "'Orbitron', sans-serif",
+      "'Space Grotesk', sans-serif",
+      "'Share Tech Mono', monospace",
+      "'VT323', monospace"
+    ];
+
+    const themes = [
+      { id: 0, name: "Robot Default", bg: "../buddy_bg.jpg", eye: "../buddy_eye_o.jpg",
+        timeFont: "Impact, sans-serif", timeX: 110, timeY: 100, timeSize: 38, timeWeight: "700", timeColor: "#00e5ff", timeClearH: 34,
+        ampmFont: "'Roboto Condensed', sans-serif", ampmX: 175, ampmY: 92, ampmSize: 14, ampmWeight: "600", ampmColor: "#00e5ff", ampmClearH: 16,
+        wdayFont: "'Trebuchet MS', sans-serif", wdayX: 65, wdayY: 146, wdaySize: 16, wdayWeight: "700", wdayColor: "#38bdf8", wdayClearH: 18,
+        dayFont: "Impact, sans-serif", dayX: 135, dayY: 146, daySize: 18, dayWeight: "700", dayColor: "#cbd5e1", dayClearH: 20,
+        monthFont: "Segoe UI, sans-serif", monthX: 175, monthY: 146, monthSize: 18, monthWeight: "400", monthColor: "#cbd5e1", monthClearH: 20,
+        tempFont: "Arial, sans-serif", tempX: 85, tempY: 168, tempSize: 15, tempWeight: "700", tempColor: "#ffb800", tempClearH: 18,
+        weatherFont: "'Roboto Condensed', sans-serif", weatherX: 155, weatherY: 168, weatherSize: 15, weatherWeight: "400", weatherColor: "#ffb800", weatherClearH: 18,
+        metricFont: "'Share Tech Mono', monospace", metricX: 120, metricY: 192, metricSize: 15, metricWeight: "400", metricColor: "#2dd4bf", metricClearH: 18,
+        customStatFont: "'Share Tech Mono', monospace", customStatX: 0, customStatY: 0, customStatSize: 14, customStatWeight: "400", customStatColor: "#f472b6", customStatClearH: 0 },
+
+      { id: 1, name: "DeskAura", bg: "none", eye: "../buddy_aura_eye_o.png",
+        timeFont: "'Orbitron', sans-serif", timeX: 110, timeY: 100, timeSize: 32, timeWeight: "600", timeColor: "#a855f7", timeClearH: 30,
+        ampmFont: "'Outfit', sans-serif", ampmX: 175, ampmY: 92, ampmSize: 14, ampmWeight: "600", ampmColor: "#a855f7", ampmClearH: 16,
+        wdayFont: "'Outfit', sans-serif", wdayX: 65, wdayY: 146, wdaySize: 16, wdayWeight: "600", wdayColor: "#f472b6", wdayClearH: 18,
+        dayFont: "'Outfit', sans-serif", dayX: 135, dayY: 146, daySize: 16, dayWeight: "600", dayColor: "#f472b6", dayClearH: 20,
+        monthFont: "'Outfit', sans-serif", monthX: 175, monthY: 146, monthSize: 16, monthWeight: "400", monthColor: "#f472b6", monthClearH: 20,
+        tempFont: "'Outfit', sans-serif", tempX: 85, tempY: 168, tempSize: 14, tempWeight: "600", tempColor: "#facc15", tempClearH: 18,
+        weatherFont: "'Outfit', sans-serif", weatherX: 155, weatherY: 168, weatherSize: 14, weatherWeight: "400", weatherColor: "#facc15", weatherClearH: 18,
+        metricFont: "'Space Grotesk', sans-serif", metricX: 120, metricY: 192, metricSize: 14, metricWeight: "400", metricColor: "#38bdf8", metricClearH: 18,
+        customStatFont: "'Outfit', sans-serif", customStatX: 0, customStatY: 0, customStatSize: 14, customStatWeight: "400", customStatColor: "#f472b6", customStatClearH: 0 },
+
+      { id: 2, name: "DeskCat", bg: "../buddy_bg.jpg", eye: "../buddy_eye_o.jpg",
+        timeFont: "Impact, sans-serif", timeX: 110, timeY: 100, timeSize: 38, timeWeight: "700", timeColor: "#ff9f1c", timeClearH: 34,
+        ampmFont: "Segoe UI, sans-serif", ampmX: 175, ampmY: 92, ampmSize: 14, ampmWeight: "600", ampmColor: "#ff9f1c", ampmClearH: 16,
+        wdayFont: "Segoe UI, sans-serif", wdayX: 65, wdayY: 146, wdaySize: 16, wdayWeight: "600", wdayColor: "#ffe0b2", wdayClearH: 18,
+        dayFont: "Impact, sans-serif", dayX: 135, dayY: 146, daySize: 17, dayWeight: "700", dayColor: "#ffe0b2", dayClearH: 20,
+        monthFont: "Segoe UI, sans-serif", monthX: 175, monthY: 146, monthSize: 17, monthWeight: "400", monthColor: "#ffe0b2", monthClearH: 20,
+        tempFont: "Arial, sans-serif", tempX: 85, tempY: 168, tempSize: 14, tempWeight: "700", tempColor: "#ffbf00", tempClearH: 18,
+        weatherFont: "Arial, sans-serif", weatherX: 155, weatherY: 168, weatherSize: 14, weatherWeight: "400", weatherColor: "#ffbf00", weatherClearH: 18,
+        metricFont: "Trebuchet MS, sans-serif", metricX: 120, metricY: 192, metricSize: 14, metricWeight: "400", metricColor: "#f472b6", metricClearH: 18,
+        customStatFont: "Trebuchet MS, sans-serif", customStatX: 120, customStatY: 212, customStatSize: 14, customStatWeight: "600", customStatColor: "#ff9f1c", customStatClearH: 16 },
+
+      { id: 3, name: "DeskWho", bg: "../buddy_who_bg.jpg", eye: "../buddy_who_eye_o.jpg",
+        timeFont: "Georgia, serif", timeX: 72, timeY: 118, timeSize: 20, timeWeight: "700", timeColor: "#34d399", timeClearH: 24,
+        ampmFont: "Verdana, sans-serif", ampmX: 120, ampmY: 118, ampmSize: 14, ampmWeight: "600", ampmColor: "#34d399", ampmClearH: 16,
+        wdayFont: "Verdana, sans-serif", wdayX: 168, wdayY: 118, wdaySize: 16, wdayWeight: "700", wdayColor: "#a7f3d0", wdayClearH: 18,
+        dayFont: "Verdana, sans-serif", dayX: 155, dayY: 138, daySize: 16, dayWeight: "700", dayColor: "#a7f3d0", dayClearH: 18,
+        monthFont: "Verdana, sans-serif", monthX: 185, monthY: 138, monthSize: 16, monthWeight: "400", monthColor: "#a7f3d0", monthClearH: 18,
+        tempFont: "Arial, sans-serif", tempX: 85, tempY: 168, tempSize: 15, tempWeight: "600", tempColor: "#bef264", tempClearH: 18,
+        weatherFont: "Arial, sans-serif", weatherX: 155, weatherY: 168, weatherSize: 15, weatherWeight: "400", weatherColor: "#bef264", weatherClearH: 18,
+        metricFont: "Segoe UI, sans-serif", metricX: 120, metricY: 192, metricSize: 15, metricWeight: "400", metricColor: "#14b8a6", metricClearH: 18,
+        customStatFont: "Segoe UI, sans-serif", customStatX: 0, customStatY: 0, customStatSize: 14, customStatWeight: "400", customStatColor: "#14b8a6", customStatClearH: 0 },
+
+      { id: 4, name: "DeskBit", bg: "none", eye: "../buddy_eye_o.jpg",
+        timeFont: "'VT323', monospace", timeX: 110, timeY: 100, timeSize: 36, timeWeight: "400", timeColor: "#ffffff", timeClearH: 28,
+        ampmFont: "'VT323', monospace", ampmX: 175, ampmY: 92, ampmSize: 16, ampmWeight: "400", ampmColor: "#ffffff", ampmClearH: 16,
+        wdayFont: "'VT323', monospace", wdayX: 65, wdayY: 146, wdaySize: 20, wdayWeight: "400", wdayColor: "#cbd5e1", wdayClearH: 20,
+        dayFont: "'VT323', monospace", dayX: 135, dayY: 146, daySize: 20, dayWeight: "400", dayColor: "#cbd5e1", dayClearH: 20,
+        monthFont: "'VT323', monospace", monthX: 175, monthY: 146, monthSize: 20, monthWeight: "400", monthColor: "#cbd5e1", monthClearH: 20,
+        tempFont: "'VT323', monospace", tempX: 85, tempY: 168, tempSize: 18, tempWeight: "400", tempColor: "#ffffff", tempClearH: 18,
+        weatherFont: "'VT323', monospace", weatherX: 155, weatherY: 168, weatherSize: 18, weatherWeight: "400", weatherColor: "#ffffff", weatherClearH: 18,
+        metricFont: "'VT323', monospace", metricX: 120, metricY: 192, metricSize: 18, metricWeight: "400", metricColor: "#ffffff", metricClearH: 18,
+        customStatFont: "'VT323', monospace", customStatX: 0, customStatY: 0, customStatSize: 16, customStatWeight: "400", customStatColor: "#ffffff", customStatClearH: 0 }
+    ];
+
+    let currentThemeIdx = 0;
+    let uploadedBgUrl = null;
+    let uploadedEyeUrl = null;
+
+    function populateFontDropdowns(fontList = systemFonts) {
+      const dropdowns = document.querySelectorAll('.font-dropdown');
+      dropdowns.forEach(dp => {
+        const currentVal = dp.value;
+        dp.innerHTML = '';
+        fontList.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f;
+          opt.textContent = f.replace(/['"]/g, '');
+          dp.appendChild(opt);
+        });
+        const customOpt = document.createElement('option');
+        customOpt.value = 'custom';
+        customOpt.textContent = 'Custom Font Name...';
+        dp.appendChild(customOpt);
+        if (currentVal) dp.value = currentVal;
+      });
+    }
+
+    async function requestSystemFonts() {
+      if ('queryLocalFonts' in window) {
+        try {
+          const availableFonts = await window.queryLocalFonts();
+          const fontFamilies = new Set(systemFonts);
+          availableFonts.forEach(font => fontFamilies.add(`"${font.family}", sans-serif`));
+          const sorted = Array.from(fontFamilies).sort();
+          populateFontDropdowns(sorted);
+          alert(`Successfully loaded ${availableFonts.length} system fonts!`);
+        } catch (err) {
+          alert('Local font access permission was denied or not supported in this browser window.');
+        }
+      } else {
+        alert('Local Font Access API is not supported in this browser window. Use the Custom System Font Name text field to type any installed font!');
+      }
+    }
+
+    function selectTheme(idx) {
+      currentThemeIdx = idx;
+      document.querySelectorAll('.tab-btn').forEach((btn) => {
+        const isMatch = btn.getAttribute('onclick').includes(`selectTheme(${idx})`);
+        btn.classList.toggle('active', isMatch);
+      });
+      const t = themes[idx];
+      
+      document.getElementById('bgSelect').value = t.bg;
+      document.getElementById('eyeSelect').value = t.eye;
+      
+      const elems = ['time', 'ampm', 'wday', 'day', 'month', 'temp', 'weather', 'metric', 'customStat'];
+      elems.forEach(p => {
+        setElemFont(p, t[p + 'Font']);
+        setElemVal(p + 'X', t[p + 'X']);
+        setElemVal(p + 'Y', t[p + 'Y']);
+        setElemVal(p + 'Size', t[p + 'Size']);
+        setElemVal(p + 'ClearH', t[p + 'ClearH']);
+        document.getElementById(p + 'Weight').value = t[p + 'Weight'];
+        document.getElementById(p + 'Color').value = t[p + 'Color'];
+      });
+
+      updateEyeAsset();
+      updateView();
+    }
+
+    function setElemVal(id, val) {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+      const numInput = document.getElementById(id + 'Num');
+      if (numInput) numInput.value = val;
+    }
+
+    function setElemFont(prefix, fontStr) {
+      const sel = document.getElementById(prefix + 'FontSelect');
+      const customInput = document.getElementById(prefix + 'CustomFont');
+      if (!sel) return;
+      let found = false;
+      for (let opt of sel.options) {
+        if (opt.value === fontStr) {
+          sel.value = fontStr;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        sel.value = 'custom';
+        customInput.style.display = 'block';
+        customInput.value = fontStr.replace(/['"]/g, '');
+      } else {
+        customInput.style.display = 'none';
+      }
+    }
+
+    function handleFontSelect(prefix) {
+      const sel = document.getElementById(prefix + 'FontSelect').value;
+      const customInput = document.getElementById(prefix + 'CustomFont');
+      if (sel === 'custom') {
+        customInput.style.display = 'block';
+        customInput.focus();
+      } else {
+        customInput.style.display = 'none';
+      }
+      updateView();
+    }
+
+    function syncNumToRange(rangeId, val) {
+      document.getElementById(rangeId).value = val;
+      updateView();
+    }
+
+    function getResolvedFont(prefix) {
+      const sel = document.getElementById(prefix + 'FontSelect').value;
+      if (sel === 'custom') {
+        const customName = document.getElementById(prefix + 'CustomFont').value.trim();
+        return customName ? `'${customName}', sans-serif` : "sans-serif";
+      }
+      return sel;
+    }
+
+    function handleBgFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        uploadedBgUrl = URL.createObjectURL(file);
+        updateView();
+      }
+    }
+
+    function handleEyeFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        uploadedEyeUrl = URL.createObjectURL(file);
+        updateEyeAsset();
+      }
+    }
+
+    function updateEyeAsset() {
+      const eyeSelect = document.getElementById('eyeSelect').value;
+      const eyeL = document.getElementById('eyeL');
+      const eyeR = document.getElementById('eyeR');
+
+      if (uploadedEyeUrl) {
+        eyeL.src = uploadedEyeUrl;
+        eyeR.src = uploadedEyeUrl;
+      } else {
+        eyeL.src = eyeSelect;
+        eyeR.src = eyeSelect;
+      }
+    }
+
+    function hexToRgb565(hex) {
+      hex = hex.replace('#', '');
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      return `rgb565(${r}, ${g}, ${b})`;
+    }
+
+    function updateView() {
+      const bgLayer = document.getElementById('bgLayer');
+
+      if (uploadedBgUrl) {
+        bgLayer.style.backgroundImage = `url('${uploadedBgUrl}')`;
+      } else {
+        const bgVal = document.getElementById('bgSelect').value;
+        if (bgVal === 'none') {
+          bgLayer.style.backgroundImage = 'none';
+          bgLayer.style.backgroundColor = '#000';
+        } else {
+          bgLayer.style.backgroundImage = `url('${bgVal}')`;
+        }
+      }
+
+      const is12h = document.getElementById('timeFormatSelect').value === '12h';
+      const isF = document.getElementById('tempUnitSelect').value === 'F';
+
+      const elems = [
+        { id: 'time', defaultText: is12h ? '02:35' : '14:35', clearW: 150 },
+        { id: 'ampm', defaultText: 'PM', clearW: 35, visible: is12h },
+        { id: 'wday', defaultText: 'WED', clearW: 50 },
+        { id: 'day', defaultText: '06', clearW: 40 },
+        { id: 'month', defaultText: 'AUG', clearW: 50 },
+        { id: 'temp', defaultText: isF ? '75°F' : '24°C', clearW: 55 },
+        { id: 'weather', defaultText: 'CLEAR', clearW: 75 },
+        { id: 'metric', defaultText: 'SCORE: 88%', clearW: 130 },
+        { id: 'customStat', defaultText: 'SIT: 1h 20m', clearW: 120 }
+      ];
+
+      elems.forEach(e => {
+        const p = e.id;
+        const font = getResolvedFont(p);
+        const x = parseInt(document.getElementById(p + 'X').value);
+        const y = parseInt(document.getElementById(p + 'Y').value);
+        const size = parseInt(document.getElementById(p + 'Size').value);
+        const weight = document.getElementById(p + 'Weight').value;
+        const color = document.getElementById(p + 'Color').value;
+        const clearH = parseInt(document.getElementById(p + 'ClearH').value);
+
+        document.getElementById(p + 'XVal').innerText = x;
+        document.getElementById(p + 'YVal').innerText = y;
+        document.getElementById(p + 'SizeVal').innerText = size;
+        document.getElementById(p + 'ClearHVal').innerText = clearH;
+        const numInput = document.getElementById(p + 'SizeNum');
+        if (numInput) numInput.value = size;
+
+        const isVisible = (e.visible !== undefined) ? (e.visible && clearH > 0 && x > 0 && y > 0) : (clearH > 0 && x > 0 && y > 0);
+
+        const el = document.getElementById(p + 'Text');
+        el.innerText = e.defaultText;
+        el.style.fontFamily = font;
+        el.style.fontSize = size + 'px';
+        el.style.fontWeight = weight;
+        el.style.color = color;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.display = isVisible ? 'block' : 'none';
+
+        const box = document.getElementById(p + 'ClearBox');
+        box.style.left = (x - Math.round(e.clearW / 2)) + 'px';
+        box.style.width = e.clearW + 'px';
+        box.style.top = (y - Math.round(clearH / 2)) + 'px';
+        box.style.height = clearH + 'px';
+      });
+
+      // Debug Clear Boxes Toggle
+      const debug = document.getElementById('toggleDebug').checked;
+      document.querySelectorAll('.clear-box-debug').forEach(box => {
+        box.classList.toggle('active', debug);
+      });
+
+      // C++ Export Code Generator
+      const code = `// Theme ${currentThemeIdx} C++ DeskbuddyThemeConfig (9 Granular Elements)
+{
+  "${getVal('bgSelect')}", "/buddy_brow.rle", "${getVal('eyeSelect')}", "/buddy_eye_s.rle",
+  // 1. Time: (${getVal('timeX')}, ${getVal('timeY')}) Size:${getVal('timeSize')}px Font:${getResolvedFont('time')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('timeColor'))}, ${getVal('timeX')}, ${getVal('timeY')}, ${getVal('timeX')}-75}, ${getVal('timeY')}-Math.round(getVal('timeClearH')/2)}, 150, ${getVal('timeClearH')} },
+  // 2. AM/PM: (${getVal('ampmX')}, ${getVal('ampmY')}) Size:${getVal('ampmSize')}px Font:${getResolvedFont('ampm')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('ampmColor'))}, ${getVal('ampmX')}, ${getVal('ampmY')}, ${getVal('ampmX')}-18}, ${getVal('ampmY')}-Math.round(getVal('ampmClearH')/2)}, 35, ${getVal('ampmClearH')} },
+  // 3. Wday: (${getVal('wdayX')}, ${getVal('wdayY')}) Size:${getVal('wdaySize')}px Font:${getResolvedFont('wday')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('wdayColor'))}, ${getVal('wdayX')}, ${getVal('wdayY')}, ${getVal('wdayX')}-25}, ${getVal('wdayY')}-Math.round(getVal('wdayClearH')/2)}, 50, ${getVal('wdayClearH')} },
+  // 4. Day: (${getVal('dayX')}, ${getVal('dayY')}) Size:${getVal('daySize')}px Font:${getResolvedFont('day')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('dayColor'))}, ${getVal('dayX')}, ${getVal('dayY')}, ${getVal('dayX')}-20}, ${getVal('dayY')}-Math.round(getVal('dayClearH')/2)}, 40, ${getVal('dayClearH')} },
+  // 5. Month: (${getVal('monthX')}, ${getVal('monthY')}) Size:${getVal('monthSize')}px Font:${getResolvedFont('month')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('monthColor'))}, ${getVal('monthX')}, ${getVal('monthY')}, ${getVal('monthX')}-25}, ${getVal('monthY')}-Math.round(getVal('monthClearH')/2)}, 50, ${getVal('monthClearH')} },
+  // 6. Temp: (${getVal('tempX')}, ${getVal('tempY')}) Size:${getVal('tempSize')}px Font:${getResolvedFont('temp')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('tempColor'))}, ${getVal('tempX')}, ${getVal('tempY')}, ${getVal('tempX')-28}, ${getVal('tempY')-Math.round(getVal('tempClearH')/2)}, 55, ${getVal('tempClearH')} },
+  // 7. Weather: (${getVal('weatherX')}, ${getVal('weatherY')}) Size:${getVal('weatherSize')}px Font:${getResolvedFont('weather')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('weatherColor'))}, ${getVal('weatherX')}, ${getVal('weatherY')}, ${getVal('weatherX')-38}, ${getVal('weatherY')-Math.round(getVal('weatherClearH')/2)}, 75, ${getVal('weatherClearH')} },
+  // 8. Metric: (${getVal('metricX')}, ${getVal('metricY')}) Size:${getVal('metricSize')}px Font:${getResolvedFont('metric')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('metricColor'))}, ${getVal('metricX')}, ${getVal('metricY')}, ${getVal('metricX')}-65}, ${getVal('metricY')}-Math.round(getVal('metricClearH')/2)}, 130, ${getVal('metricClearH')} },
+  // 9. CustomStat: (${getVal('customStatX')}, ${getVal('customStatY')}) Size:${getVal('customStatSize')}px Font:${getResolvedFont('customStat')}
+  { "RobotoCondensed20", ${hexToRgb565(getVal('customStatColor'))}, ${getVal('customStatX')}, ${getVal('customStatY')}, ${getVal('customStatX')}-60}, ${getVal('customStatY')}-Math.round(getVal('customStatClearH')/2)}, 120, ${getVal('customStatClearH')} }
+}`;
+      document.getElementById('cppOutput').innerText = code;
+    }
+
+    function getVal(id) {
+      const el = document.getElementById(id);
+      return el ? el.value : '';
+    }
+
+    function copyCode() {
+      const code = document.getElementById('cppOutput').innerText;
+      navigator.clipboard.writeText(code);
+      alert('C++ Configuration copied to clipboard!');
+    }
+
+    // Drag & Drop BG Image
+    const dropArea = document.getElementById('dropArea');
+    dropArea.addEventListener('dragover', (e) => { e.preventDefault(); });
+    dropArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        uploadedBgUrl = URL.createObjectURL(e.dataTransfer.files[0]);
+        updateView();
+      }
+    });
+
+    // Init system fonts & select theme 0
+    populateFontDropdowns();
+    selectTheme(0);
+  </script>
+</body>
+</html>
