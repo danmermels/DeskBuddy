@@ -292,15 +292,24 @@ export default {
           line_items.push({ price_data: { currency:'cad', product_data:{name:product.name}, unit_amount:product.price_cents }, quantity:Math.min(item.qty||1,99) });
         }
         if (line_items.length === 0) return Response.json({ error:'No valid items found' }, { status:400, headers:corsHeaders });
+        const params = new URLSearchParams();
+        params.set('mode', 'payment');
+        params.set('success_url', `${url.origin}/store/success?session_id={CHECKOUT_SESSION_ID}`);
+        params.set('cancel_url', `${url.origin}/store`);
+        params.set('shipping_address_collection[allowed_countries][0]', 'CA');
+        params.set('shipping_address_collection[allowed_countries][1]', 'US');
+        params.set('shipping_address_collection[allowed_countries][2]', 'BR');
+        line_items.forEach((item, i) => {
+          params.set(`line_items[${i}][price_data][currency]`, 'cad');
+          params.set(`line_items[${i}][price_data][product_data][name]`, item.price_data.product_data.name);
+          params.set(`line_items[${i}][price_data][unit_amount]`, item.price_data.unit_amount);
+          params.set(`line_items[${i}][quantity]`, item.quantity);
+        });
+        if (body.email) params.set('customer_email', body.email);
         const stripeResp = await fetch('https://api.stripe.com/v1/checkout/sessions', {
           method:'POST',
           headers:{ Authorization:`Bearer ${stripeKey}`, 'Content-Type':'application/x-www-form-urlencoded' },
-          body:new URLSearchParams({
-            'line_items':JSON.stringify(line_items), 'mode':'payment',
-            'success_url':`${url.origin}/store/success?session_id={CHECKOUT_SESSION_ID}`,
-            'cancel_url':`${url.origin}/store`,
-            'customer_email': body.email||'', 'shipping_address_collection': JSON.stringify({allowed_countries:['CA','US']})
-          }).toString()
+          body: params.toString()
         });
         const session = await stripeResp.json();
         if (session.url) {
