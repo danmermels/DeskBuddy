@@ -1,0 +1,75 @@
+name: Build DeskBuddy Companion
+on:
+  push:
+    paths:
+      - 'tools/deskbuddy_companion/**'
+      - '.github/workflows/build-companion.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bundle: deb
+            artifact: linux
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bundle: dmg
+            artifact: mac-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundle: dmg
+            artifact: mac-x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundle: nsis
+            artifact: windows
+
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: tools/deskbuddy_companion
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install npm deps
+        run: npm install
+
+      - name: Generate icons (Windows/Mac)
+        if: runner.os == 'Windows' || runner.os == 'macOS'
+        run: python generate_icons.py
+
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: tools/deskbuddy_companion
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deskbuddy-companion-${{ matrix.artifact }}
+          path: tools/deskbuddy_companion/src-tauri/target/${{ matrix.target }}/release/bundle/**/*

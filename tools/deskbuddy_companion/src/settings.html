@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskBuddy IP</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#1e293b; color:#f8fafc; padding:24px; }
+  h3 { font-size:1rem; margin-bottom:6px; }
+  p { color:#94a3b8; font-size:0.82rem; margin-bottom:16px; }
+  .row { display:flex; gap:8px; align-items:center; }
+  input { flex:1; padding:8px 10px; border-radius:6px; border:1px solid #334155; background:#0f172a; color:#f8fafc; font-size:0.9rem; outline:none; }
+  input:focus { border-color:#38bdf8; }
+  button { background:#38bdf8; color:#0f172a; padding:8px 18px; border:none; border-radius:6px; font-weight:600; cursor:pointer; font-size:0.88rem; white-space:nowrap; }
+  button:hover { background:#7dd3fc; }
+  .hint { color:#64748b; font-size:0.72rem; margin-top:12px; }
+  #status { color:#38bdf8; font-size:0.78rem; margin-top:8px; height:18px; }
+</style>
+</head>
+<body>
+<h3>Enter DeskBuddy IP Address</h3>
+<p>If mDNS auto-discovery doesn't work, type the local IP of your device.</p>
+<div class="row">
+  <input type="text" id="ip" placeholder="e.g. 192.168.1.100" autofocus />
+  <button id="saveBtn">Save</button>
+</div>
+<div id="status"></div>
+<p class="hint">Logs are written to <code>%LOCALAPPDATA%\DeskBuddy Companion\companion.log</code></p>
+
+<script>
+const invoke = window.__TAURI_INTERNALS__
+  ? (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {})
+  : null;
+
+const status = document.getElementById('status');
+const ipInput = document.getElementById('ip');
+
+async function init() {
+  if (!invoke) { status.textContent = 'IPC not available'; return; }
+  try {
+    const saved = await invoke('get_saved_ip_cmd');
+    if (saved) ipInput.value = saved;
+  } catch (e) {
+    status.textContent = 'Error loading settings';
+  }
+}
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const ip = ipInput.value.trim();
+  if (!ip) { status.textContent = 'Please enter an IP'; return; }
+  if (!invoke) { status.textContent = 'IPC not available'; return; }
+  try {
+    await invoke('save_ip_cmd', { ip });
+    status.textContent = 'Saved! Checking connection...';
+    setTimeout(() => invoke('close_settings_window'), 600);
+  } catch (e) {
+    status.textContent = 'Save failed';
+  }
+});
+
+ipInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('saveBtn').click();
+});
+
+init();
+</script>
+</body>
+</html>

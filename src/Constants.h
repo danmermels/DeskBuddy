@@ -46,6 +46,8 @@
 #define CROSSOVER_THRESHOLD_MS      900000UL // 15 min continuous sit during late hours = real session, burn flag early
 #define DISPLAY_THROTTLE_MS           500UL // 500ms minimum between display faceplate redraws
 #define DEV_REFRESH_MS                200UL // 200ms refresh for dev faceplate
+#define BEACON_PORT                    42042  // UDP beacon port for companion app discovery
+#define BEACON_INTERVAL_MS             30000UL // 30s between beacon broadcasts
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay
 #define METRIC_CYCLE_MS             15000UL // 15s cycle for dashboard bottom metric
 #define SCORE_INITIAL_PERIOD_S        300   // 300s (5 min): productivity = 100% initially

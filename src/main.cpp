@@ -69,6 +69,7 @@ TFT_eSprite centerBgSprite = TFT_eSprite(&tft);
 ld2410 radar;
 WebServer server(80);
 DNSServer dnsServer;
+WiFiUDP beaconUDP;
 
 // MessageManager instance
 MessageManager messageManager;
@@ -1897,6 +1898,17 @@ void loop(void) {
 
   // Telemetry and firmware update handling
   handleTelemetryUpdate(now);
+
+  // UDP beacon for companion app discovery
+  static unsigned long lastBeaconSent = 0;
+  if (WiFi.status() == WL_CONNECTED && now - lastBeaconSent > BEACON_INTERVAL_MS) {
+    lastBeaconSent = now;
+    IPAddress broadcastIP = WiFi.localIP();
+    broadcastIP[3] = 255;
+    beaconUDP.beginPacket(broadcastIP, BEACON_PORT);
+    beaconUDP.print("deskbuddy");
+    beaconUDP.endPacket();
+  }
 
   // Update TFT Display
   updateTFTDisplay(now);
