@@ -51,19 +51,21 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - name: Install npm deps
         run: npm install
-
-      - name: Generate icons (Windows/Mac)
-        if: runner.os == 'Windows' || runner.os == 'macOS'
-        run: python generate_icons.py
 
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ""
+          APPLE_CERTIFICATE: ""
+          APPLE_CERTIFICATE_PASSWORD: ""
+          APPLE_ID: ""
+          APPLE_TEAM_ID: ""
+          APPLE_PASSWORD: ""
         with:
           projectPath: tools/deskbuddy_companion
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
