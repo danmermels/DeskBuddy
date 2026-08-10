@@ -241,20 +241,25 @@ export default {
       });
     }
 
-    // Companion app direct download
-    if (request.method === 'GET' && path === '/companion/download') {
-      const obj = await env.FIRMWARE.get('companion/deskbuddy-companion-setup.exe');
-      if (!obj) {
-        return new Response('Not Found', { status: 404, headers: corsHeaders });
+    // Platform-specific downloads
+    if (request.method === 'GET' && path.startsWith('/companion/download')) {
+      const downloads = {
+        '/companion/download/windows':    { key: 'companion/windows-setup.exe',    name: 'DeskBuddy_Companion_Setup.exe',    type: 'application/vnd.microsoft.portable-executable' },
+        '/companion/download':            { key: 'companion/windows-setup.exe',    name: 'DeskBuddy_Companion_Setup.exe',    type: 'application/vnd.microsoft.portable-executable' },
+        '/companion/download/mac-arm64':  { key: 'companion/mac-arm64.dmg',       name: 'DeskBuddy_Companion_arm64.dmg',     type: 'application/x-apple-diskimage' },
+        '/companion/download/mac-x64':    { key: 'companion/mac-x64.dmg',         name: 'DeskBuddy_Companion_x64.dmg',       type: 'application/x-apple-diskimage' },
+        '/companion/download/linux':      { key: 'companion/linux-amd64.deb',     name: 'DeskBuddy_Companion_amd64.deb',     type: 'application/vnd.debian.binary-package' },
+      };
+      const dl = downloads[path];
+      if (dl) {
+        const obj = await env.FIRMWARE.get(dl.key);
+        if (obj) {
+          return new Response(obj.body, {
+            headers: { 'Content-Type': dl.type, 'Content-Disposition': `attachment; filename="${dl.name}"`, 'Content-Length': obj.size, ...corsHeaders },
+          });
+        }
       }
-      return new Response(obj.body, {
-        headers: {
-          'Content-Type': 'application/vnd.microsoft.portable-executable',
-          'Content-Disposition': 'attachment; filename="DeskBuddy_Companion_Setup.exe"',
-          'Content-Length': obj.size,
-          ...corsHeaders,
-        },
-      });
+      return new Response('Not Found', { status: 404, headers: corsHeaders });
     }
 
     return new Response(LANDING_PAGE('2.5 MB', 'B303AFFC9D5DFBC2053237B483BA12FB34ECC8D84487612C45BAAD2F8105E9CB'), {
@@ -264,9 +269,20 @@ export default {
 };
 
 function COMPANION_PAGE(fileSize, checksum) {
+  const dl = (href, platform, size) =>
+    `<a href="${href}" class="dl-btn">
+      ${platform === 'Windows' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.5l8-1.1v6.6H3zm0 1h8v6.6l-8-1.1V13zm9-7.3L21 3v9h-9V5.7zm0 13.6V13h9v9l-9-2.7z"/></svg>' : platform === 'macOS' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>' : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.6 17.7c-.4.9-.9 1.7-1.4 2.4-.8 1-1.5 1.7-2.3 1.7s-1.1-.3-2-.3c-.9 0-1.6.3-2 .3-.8 0-1.6-.7-2.5-1.9C9.5 18.5 8.7 16 9.1 14c.3-1.4 1.2-2.3 2.1-2.3.9 0 1.5.3 2 .3s1.3-.3 2.1-.3c.7 0 1.5.4 2.1 1 .1.1-1.3.8-1.3 2.5 0 2 1.7 2.7 1.8 2.7l-.1.3c-.3.7-.8 1.5-1.2 2.2zM16 3.2c-.7.8-1.5 1.5-2.6 1.5-.2-1.4.4-2.7 1.1-3.5.7-.9 2-1.5 3-1.5.1 1.3-.3 2.7-1.5 3.5z"/></svg>'}
+      ${platform}${size ? ` <span class="btn-meta">${size}</span>` : ''}
+    </a>`;
+
   const downloadBlock = fileSize
-    ? `<a href="/companion/download" class="dl-btn">Download for Windows — v1.0.0 (${fileSize})</a>`
-    : `<p class="soon">Installer coming soon. Build it from <code>tools/deskbuddy_companion</code>.</p>`;
+    ? `<div class="dl-grid">
+        ${dl('/companion/download/windows', 'Windows', fileSize)}
+        ${dl('/companion/download/mac-arm64', 'macOS Apple Silicon', '3.6 MB')}
+        ${dl('/companion/download/mac-x64', 'macOS Intel', '3.7 MB')}
+        ${dl('/companion/download/linux', 'Linux (.deb)', '3.9 MB')}
+       </div>`
+    : `<p class="soon">Installers coming soon. Build from <code>tools/deskbuddy_companion</code>.</p>`;
   const checksumBlock = checksum
     ? `<div class="checksum"><span>SHA-256:</span><code>${checksum}</code></div>`
     : '';
@@ -279,7 +295,7 @@ function COMPANION_PAGE(fileSize, checksum) {
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0f172a; color:#f8fafc; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
-    .card { background:#1e293b; border:1px solid #334155; border-radius:16px; padding:40px; max-width:520px; width:100%; text-align:center; }
+    .card { background:#1e293b; border:1px solid #334155; border-radius:16px; padding:40px; max-width:580px; width:100%; text-align:center; }
     .card .icon { font-size:3rem; margin-bottom:16px; }
     h1 { font-size:1.6rem; color:#38bdf8; margin-bottom:8px; }
     .subtitle { color:#94a3b8; font-size:0.92rem; line-height:1.5; margin-bottom:24px; }
@@ -287,8 +303,12 @@ function COMPANION_PAGE(fileSize, checksum) {
     .steps h3 { color:#e2e8f0; font-size:0.85rem; margin-bottom:10px; text-transform:uppercase; letter-spacing:0.05em; }
     .steps ol { color:#94a3b8; font-size:0.88rem; padding-left:20px; }
     .steps ol li { margin-bottom:6px; }
-    .dl-btn { display:inline-block; background:#38bdf8; color:#0f172a; padding:14px 32px; border-radius:10px; text-decoration:none; font-weight:700; font-size:1rem; transition:background .2s; margin-bottom:16px; }
-    .dl-btn:hover { background:#7dd3fc; }
+    .dl-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+    @media(max-width:500px){.dl-grid{grid-template-columns:1fr}}
+    .dl-btn { display:flex; align-items:center; gap:8px; background:#1e293b; border:1px solid #334155; color:#e2e8f0; padding:12px 14px; border-radius:10px; text-decoration:none; font-weight:600; font-size:0.85rem; transition:all .2s; text-align:left; line-height:1.3; }
+    .dl-btn:hover { border-color:#38bdf8; background:#38bdf810; }
+    .dl-btn svg { flex-shrink:0; opacity:0.6; }
+    .btn-meta { display:block; font-size:0.68rem; font-weight:400; color:#64748b; }
     .soon { color:#64748b; font-style:italic; }
     code { background:#334155; padding:2px 6px; border-radius:4px; font-size:0.78rem; word-break:break-all; }
     .checksum { margin-bottom:16px; }
@@ -318,11 +338,11 @@ function COMPANION_PAGE(fileSize, checksum) {
     ${downloadBlock}
     ${checksumBlock}
     <div class="warn">
-      <h4>&#x26A0; Windows SmartScreen</h4>
-      <p>Windows may show a "Windows protected your PC" warning because the app is not code-signed. Click <strong>More info</strong> then <strong>Run anyway</strong>. The app is safe — it only connects to your local network. Verify the SHA-256 checksum above to confirm the file hasn\'t been tampered with.</p>
+      <h4>&#x26A0; Security Note</h4>
+      <p>The app is not code-signed. <strong>Windows</strong>: click "More info" then "Run anyway". <strong>macOS</strong>: right-click the app in Finder and select "Open". The app only connects to your local network and does not send data externally.</p>
     </div>
     <div class="footer">
-      v1.0.0 &middot; Publisher: DeskBuddy &middot; <a href="http://deskbuddy.local">deskbuddy.local</a> &middot; <a href="/dashboard">Telemetry</a>
+      v1.0.0 &middot; <a href="/companion/download/windows">Windows</a> &middot; <a href="/companion/download/mac-arm64">Mac ARM</a> &middot; <a href="/companion/download/mac-x64">Mac Intel</a> &middot; <a href="/companion/download/linux">Linux</a>
     </div>
   </div>
 </body>
@@ -330,19 +350,19 @@ function COMPANION_PAGE(fileSize, checksum) {
 }
 
 function LANDING_PAGE(fileSize, checksum) {
-  const winBtn = `<a href="/companion/download" class="btn btn-primary">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.5l8-1.1v6.6H3zm0 1h8v6.6l-8-1.1V13zm9-7.3L21 3v9h-9V5.7zm0 13.6V13h9v9l-9-2.7z"/></svg>
-    Download for Windows<span class="btn-meta">v1.0.0 — ${fileSize || 'Coming soon'}</span>
-  </a>`;
-  const macBtn = `<span class="btn btn-disabled">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-    macOS — Coming Soon
-  </span>`;
+  const svg = (platform) => {
+    if (platform === 'win') return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.5l8-1.1v6.6H3zm0 1h8v6.6l-8-1.1V13zm9-7.3L21 3v9h-9V5.7zm0 13.6V13h9v9l-9-2.7z"/></svg>';
+    if (platform === 'mac') return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>';
+    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.6 17.7c-.4.9-.9 1.7-1.4 2.4-.8 1-1.5 1.7-2.3 1.7s-1.1-.3-2-.3c-.9 0-1.6.3-2 .3-.8 0-1.6-.7-2.5-1.9C9.5 18.5 8.7 16 9.1 14c.3-1.4 1.2-2.3 2.1-2.3.9 0 1.5.3 2 .3s1.3-.3 2.1-.3c.7 0 1.5.4 2.1 1 .1.1-1.3.8-1.3 2.5 0 2 1.7 2.7 1.8 2.7l-.1.3c-.3.7-.8 1.5-1.2 2.2zM16 3.2c-.7.8-1.5 1.5-2.6 1.5-.2-1.4.4-2.7 1.1-3.5.7-.9 2-1.5 3-1.5.1 1.3-.3 2.7-1.5 3.5z"/></svg>';
+  };
+  const btn = (href, platform, label, size) =>
+    `<a href="${href}" class="btn btn-dl">${svg(platform)}${label}<span class="btn-meta">${size}</span></a>`;
+
   const downloadSection = checksum
-    ? `<div class="download-grid">${winBtn}${macBtn}</div>
-       <div class="checksum"><span>SHA-256:</span><code>${checksum}</code></div>
-       <p class="checksum-note">Verify the checksum after downloading to confirm file integrity.</p>`
-    : `<div class="download-grid">${macBtn}</div>`;
+    ? `<div class="download-grid">${btn('/companion/download/windows','win','Windows',fileSize)}${btn('/companion/download/mac-arm64','mac','macOS ARM','3.6 MB')}${btn('/companion/download/mac-x64','mac','macOS Intel','3.7 MB')}${btn('/companion/download/linux','linux','Linux .deb','3.9 MB')}</div>
+       <div class="checksum"><span>SHA-256 (Windows):</span><code>${checksum}</code></div>
+       <p class="checksum-note">Verify checksums after downloading to confirm integrity.</p>`
+    : `<div class="download-grid">${btn('#','mac','macOS','Coming soon')}${btn('#','linux','Linux','Coming soon')}</div>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -369,6 +389,8 @@ function LANDING_PAGE(fileSize, checksum) {
   .btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
   .btn-secondary:hover{background:#334155;transform:translateY(-1px)}
   .btn-disabled{background:#0f172a;color:#475569;border:1px solid #1e293b;cursor:not-allowed}
+  .btn-dl{background:#111827;color:#e2e8f0;border:1px solid #1e293b;line-height:1.3}
+  .btn-dl:hover{border-color:#38bdf8;background:#38bdf810;transform:translateY(-1px)}
   .btn-meta{display:block;font-size:0.7rem;font-weight:400;opacity:0.7;margin-top:2px}
   section{padding:80px 20px}
   .section-label{text-align:center;color:#38bdf8;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px}
