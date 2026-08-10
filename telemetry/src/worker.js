@@ -262,6 +262,90 @@ export default {
       return new Response('Not Found', { status: 404, headers: corsHeaders });
     }
 
+    // ─── Store ────────────────────────────────────
+    if (request.method === 'GET' && path === '/store') {
+      let products = await env.DB.prepare('SELECT * FROM products WHERE active=1 ORDER BY sort_order').all();
+      if (!products.results || products.results.length === 0) {
+        await seedProducts(env.DB);
+        products = await env.DB.prepare('SELECT * FROM products WHERE active=1 ORDER BY sort_order').all();
+      }
+      return new Response(STORE_PAGE(products.results || []), { headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders } });
+    }
+
+    if (request.method === 'GET' && path === '/api/products') {
+      const products = await env.DB.prepare('SELECT * FROM products WHERE active=1 ORDER BY sort_order').all();
+      return Response.json(products.results || [], { headers: corsHeaders });
+    }
+
+    if (request.method === 'POST' && path === '/api/checkout') {
+      try {
+        const stripeKey = env.STRIPE_SECRET_KEY;
+        if (!stripeKey) return Response.json({ error: 'Store not configured yet' }, { status: 503, headers: corsHeaders });
+        const body = await request.json();
+        if (!body.items || !Array.isArray(body.items) || body.items.length === 0) {
+          return Response.json({ error: 'No items in cart' }, { status: 400, headers: corsHeaders });
+        }
+        const line_items = [];
+        for (const item of body.items) {
+          const product = await env.DB.prepare('SELECT * FROM products WHERE slug=?1 AND active=1').bind(item.slug).first();
+          if (!product) continue;
+          line_items.push({ price_data: { currency:'cad', product_data:{name:product.name}, unit_amount:product.price_cents }, quantity:Math.min(item.qty||1,99) });
+        }
+        if (line_items.length === 0) return Response.json({ error:'No valid items found' }, { status:400, headers:corsHeaders });
+        const stripeResp = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+          method:'POST',
+          headers:{ Authorization:`Bearer ${stripeKey}`, 'Content-Type':'application/x-www-form-urlencoded' },
+          body:new URLSearchParams({
+            'line_items':JSON.stringify(line_items), 'mode':'payment',
+            'success_url':`${url.origin}/store/success?session_id={CHECKOUT_SESSION_ID}`,
+            'cancel_url':`${url.origin}/store`,
+            'customer_email': body.email||'', 'shipping_address_collection': JSON.stringify({allowed_countries:['CA','US']})
+          }).toString()
+        });
+        const session = await stripeResp.json();
+        if (session.url) {
+          await env.DB.prepare('INSERT INTO orders (stripe_session_id, customer_email, total_cents, items_json, status) VALUES (?1,?2,?3,?4,?)')
+            .bind(session.id, body.email||'', line_items.reduce((s,i)=>s+i.price_data.unit_amount*i.quantity,0), JSON.stringify(line_items), 'pending').run();
+          return Response.json({ url:session.url }, { headers:corsHeaders });
+        }
+        return Response.json({ error:session.error?.message||'Stripe error' }, { status:400, headers:corsHeaders });
+      } catch(e) { return Response.json({ error:e.message }, { status:500, headers:corsHeaders }); }
+    }
+
+    if (request.method === 'GET' && path === '/store/success') {
+      return new Response(STORE_SUCCESS_PAGE(), { headers:{ 'Content-Type':'text/html;charset=utf-8', ...corsHeaders }});
+    }
+
+    if (request.method === 'POST' && path === '/webhook/stripe') {
+      try {
+        if (!env.STRIPE_SECRET_KEY) return new Response(null, { status:200 });
+        const event = await request.json();
+        if (event.type === 'checkout.session.completed') {
+          const s = event.data.object;
+          await env.DB.prepare("UPDATE orders SET status='paid', customer_email=?2 WHERE stripe_session_id=?1")
+            .bind(s.id, s.customer_details?.email||'').run();
+        }
+        return Response.json({ received:true }, { headers:corsHeaders });
+      } catch(e) { return Response.json({ error:e.message }, { status:400, headers:corsHeaders }); }
+    }
+
+    // ─── Support ─────────────────────────────────
+    if (request.method === 'GET' && path === '/support') {
+      return new Response(SUPPORT_PAGE(), { headers:{ 'Content-Type':'text/html;charset=utf-8', ...corsHeaders }});
+    }
+
+    if (request.method === 'POST' && path === '/api/support') {
+      try {
+        const { name, email, subject, message } = await request.json();
+        if (!name || !email || !subject || !message) {
+          return Response.json({ ok:false, error:'All fields required' }, { status:400, headers:corsHeaders });
+        }
+        await env.DB.prepare('INSERT INTO support_tickets (name, email, subject, message) VALUES (?1,?2,?3,?4)')
+          .bind(name, email, subject, message).run();
+        return Response.json({ ok:true }, { headers:corsHeaders });
+      } catch(e) { return Response.json({ ok:false, error:e.message }, { status:500, headers:corsHeaders }); }
+    }
+
     return new Response(LANDING_PAGE('2.5 MB', 'B303AFFC9D5DFBC2053237B483BA12FB34ECC8D84487612C45BAAD2F8105E9CB'), {
       headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders },
     });
@@ -447,6 +531,8 @@ function LANDING_PAGE(fileSize, checksum) {
   <a href="/" class="nav-logo">DeskBuddy</a>
   <div class="nav-links">
     <a href="#features">Features</a>
+    <a href="/store">Store</a>
+    <a href="/support">Support</a>
     <a href="#download">Download</a>
     <a href="#pricing">Pricing</a>
     <a href="/companion">Companion App</a>
@@ -602,4 +688,29 @@ function LANDING_PAGE(fileSize, checksum) {
 </footer>
 </body>
 </html>`;
+}
+
+async function seedProducts(db) {
+  const products = [
+    { slug:'deskbuddy-kit', name:'DeskBuddy Kit', price_cents:9900, description:'ESP32-C3 + GC9A01 display + mmWave sensor', sort_order:0 },
+    { slug:'deskbuddy-ai', name:'DeskBuddy + AI Bundle', price_cents:14900, description:'Kit + AI coaching (Groq/Gemini/DeepSeek) + cloud telemetry', sort_order:1 },
+    { slug:'deskbuddy-pro', name:'DeskBuddy Pro', price_cents:19900, description:'AI Bundle + MQTT, REST API, multi-device dashboard', sort_order:2 },
+  ];
+  for (const p of products) {
+    await db.prepare('INSERT OR IGNORE INTO products (slug,name,description,price_cents,sort_order) VALUES (?1,?2,?3,?4,?5)')
+      .bind(p.slug, p.name, p.description, p.price_cents, p.sort_order).run();
+  }
+}
+
+function STORE_PAGE(products) {
+  const items = products.map(p => '<div class="store-card" data-slug="'+p.slug+'"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="store-price">$'+(p.price_cents/100).toFixed(2)+' CAD</div><button class="btn btn-primary store-add" data-slug="'+p.slug+'" data-name="'+p.name+'" data-price="'+p.price_cents+'">Add to Cart</button></div>').join('');
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>DeskBuddy Store</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;min-height:100vh}.nav{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;max-width:1200px;margin:0 auto}.nav-logo{font-size:1.3rem;font-weight:800;color:#38bdf8;text-decoration:none}.nav-links{display:flex;gap:28px;align-items:center}.nav-links a{color:#94a3b8;text-decoration:none;font-size:0.88rem}.nav-links a:hover{color:#e2e8f0}.cart-badge{background:#38bdf8;color:#0a0e17;border-radius:10px;padding:2px 8px;font-size:0.72rem;font-weight:700;display:none}.container{max-width:1000px;margin:0 auto;padding:40px 20px}.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:30px}.store-card{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:28px;transition:border-color .2s}.store-card:hover{border-color:#38bdf840}.store-card h3{font-size:1.1rem;margin-bottom:8px;color:#f1f5f9}.store-card p{color:#64748b;font-size:0.85rem;line-height:1.5;margin-bottom:16px}.store-price{font-size:1.6rem;font-weight:800;color:#38bdf8;margin-bottom:16px}.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:8px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all .2s;cursor:pointer;border:none}.btn-primary{background:#38bdf8;color:#0a0e17}.btn-primary:hover{background:#7dd3fc;transform:translateY(-1px)}.btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}.btn-secondary:hover{background:#334155}.cart-panel{position:fixed;right:0;top:0;width:380px;height:100vh;background:#111827;border-left:1px solid #1e293b;padding:24px;transform:translateX(100%);transition:transform .2s;z-index:100;overflow-y:auto}.cart-panel.open{transform:translateX(0)}.cart-overlay{display:none;position:fixed;inset:0;background:#00000060;z-index:99}.cart-overlay.open{display:block}.cart-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e293b}.cart-item button{background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem}.cart-total{font-size:1.3rem;font-weight:800;margin:16px 0;text-align:right}#checkout-email{width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#f8fafc;margin-bottom:12px;font-size:0.88rem}.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#38bdf8;color:#0a0e17;padding:12px 24px;border-radius:10px;font-weight:700;font-size:0.9rem;z-index:200;opacity:0;transition:opacity .3s}.toast.show{opacity:1}.footer{text-align:center;padding:40px 20px;color:#475569;font-size:0.78rem;border-top:1px solid #1e293b;margin-top:40px}.footer a{color:#64748b}@media(max-width:640px){.nav{padding:16px 20px}.cart-panel{width:100%}}</style></head><body><nav class="nav"><a href="/" class="nav-logo">DeskBuddy</a><div class="nav-links"><a href="/store">Store</a><a href="/support">Support</a><a href="/companion">App</a><button class="btn btn-secondary" onclick="toggleCart()" style="padding:8px 14px;font-size:0.82rem">Cart <span class="cart-badge" id="cartBadge">0</span></button></div></nav><div class="container"><div style="color:#38bdf8;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;text-align:center">Store</div><h1 style="text-align:center;font-size:2rem;font-weight:800;margin:8px 0 4px">DeskBuddy Products</h1><p style="text-align:center;color:#64748b;font-size:0.9rem">Free shipping across Canada and the US.</p><div class="store-grid">'+items+'</div></div><div class="cart-overlay" id="cartOverlay" onclick="closeCart()"></div><div class="cart-panel" id="cartPanel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:1.2rem">Your Cart</h2><button onclick="closeCart()" style="background:none;border:none;color:#94a3b8;font-size:1.3rem;cursor:pointer">&times;</button></div><div id="cartItems"><p style="color:#64748b;font-size:0.85rem">Your cart is empty.</p></div><div class="cart-total" id="cartTotal"></div><input type="email" id="checkout-email" placeholder="Email for receipt (optional)" /><button class="btn btn-primary" style="width:100%;justify-content:center" id="checkoutBtn" onclick="checkout()" disabled>Checkout</button><p style="color:#64748b;font-size:0.7rem;margin-top:8px;text-align:center">Powered by Stripe. Secure payment.</p></div><div class="toast" id="toast"></div><footer class="footer">DeskBuddy &copy; 2026 &middot; <a href="/">Home</a> &middot; <a href="/support">Support</a></footer><script>var cart=JSON.parse(localStorage.getItem("deskbuddy_cart")||"[]");function saveCart(){localStorage.setItem("deskbuddy_cart",JSON.stringify(cart));updateCartUI()}function addToCart(slug,name,price){var i=cart.findIndex(function(c){return c.slug===slug});if(i>=0){cart[i].qty++}else{cart.push({slug:slug,name:name,price:parseInt(price),qty:1})}saveCart();showToast(name+" added!")}function removeFromCart(slug){cart=cart.filter(function(c){return c.slug!==slug});saveCart()}function toggleCart(){document.getElementById("cartPanel").classList.toggle("open");document.getElementById("cartOverlay").classList.toggle("open")}function closeCart(){document.getElementById("cartPanel").classList.remove("open");document.getElementById("cartOverlay").classList.remove("open")}function updateCartUI(){var b=document.getElementById("cartBadge"),t=cart.reduce(function(s,i){return s+i.qty},0);b.textContent=t;b.style.display=t>0?"inline":"none";var e=document.getElementById("cartItems");if(cart.length===0){e.innerHTML="Your cart is empty."}else{e.innerHTML=cart.map(function(c){return "<div class=cart-item><div><strong>"+c.name+"</strong> x"+c.qty+"<br><span style=color:#64748b;font-size:0.75rem>$"+(c.price*c.qty/100).toFixed(2)+"</span></div><button onclick=removeFromCart(\""+c.slug+"\")>&times;</button></div><\/div>"}).join("")}document.getElementById("cartTotal").textContent=cart.length?"Total: $"+(cart.reduce(function(s,i){return s+i.price*i.qty},0)/100).toFixed(2):"";document.getElementById("checkoutBtn").disabled=cart.length===0}async function checkout(){var email=document.getElementById("checkout-email").value.trim(),items=cart.map(function(c){return{slug:c.slug,qty:c.qty}}),btn=document.getElementById("checkoutBtn");btn.disabled=true;btn.textContent="Redirecting...";try{var r=await fetch("/api/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:items,email:email||undefined})}),d=await r.json();if(d.url){window.location.href=d.url;return}showToast(d.error||"Checkout failed");btn.disabled=false;btn.textContent="Checkout"}catch(e){showToast("Network error");btn.disabled=false;btn.textContent="Checkout"}}function showToast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show")},2500)}document.querySelectorAll(".store-add").forEach(function(b){b.addEventListener("click",function(){addToCart(b.dataset.slug,b.dataset.name,b.dataset.price);toggleCart()})});updateCartUI();<\/script><\/body><\/html>';
+}
+
+function STORE_SUCCESS_PAGE() {
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Order Confirmed &mdash; DeskBuddy</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.card{background:#111827;border:1px solid #1e293b;border-radius:16px;padding:48px;text-align:center;max-width:480px}.icon{font-size:3.5rem;margin-bottom:16px}h1{font-size:1.6rem;color:#38bdf8;margin-bottom:8px}p{color:#94a3b8;font-size:0.92rem;line-height:1.5;margin-bottom:24px}.btn{display:inline-block;background:#38bdf8;color:#0a0e17;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;transition:transform .2s}.btn:hover{transform:translateY(-1px)}<\/style><\/head><body><div class="card"><div class="icon">&#x2705;<\/div><h1>Order Confirmed!<\/h1><p>Your DeskBuddy is being prepared. You will receive a confirmation email with tracking details once shipped.<\/p><a href="/" class="btn">Back to Home<\/a><\/div><\/body><\/html>';
+}
+
+function SUPPORT_PAGE() {
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Support &mdash; DeskBuddy</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;min-height:100vh}.nav{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;max-width:1200px;margin:0 auto}.nav-logo{font-size:1.3rem;font-weight:800;color:#38bdf8;text-decoration:none}.nav-links{display:flex;gap:28px}.nav-links a{color:#94a3b8;text-decoration:none;font-size:0.88rem}.nav-links a:hover{color:#e2e8f0}.container{max-width:560px;margin:0 auto;padding:60px 20px}h1{font-size:1.8rem;color:#38bdf8;margin-bottom:8px}.sub{color:#64748b;font-size:0.92rem;margin-bottom:32px}.form-group{margin-bottom:16px}.form-group label{display:block;color:#94a3b8;font-size:0.8rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em}.form-group input,.form-group textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#111827;color:#f8fafc;font-size:0.9rem;outline:none}.form-group input:focus,.form-group textarea:focus{border-color:#38bdf8}.form-group textarea{min-height:120px;resize:vertical}.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:8px;font-weight:700;font-size:0.92rem;text-decoration:none;transition:all .2s;cursor:pointer;border:none}.btn-primary{background:#38bdf8;color:#0a0e17}.btn-primary:hover{background:#7dd3fc;transform:translateY(-1px)}#msg{color:#38bdf8;font-size:0.85rem;margin-top:12px;min-height:20px}.footer{text-align:center;padding:40px 20px;color:#475569;font-size:0.78rem;border-top:1px solid #1e293b}.footer a{color:#64748b}<\/style><\/head><body><nav class="nav"><a href="/" class="nav-logo">DeskBuddy<\/a><div class="nav-links"><a href="/store">Store<\/a><a href="/support">Support<\/a><a href="/companion">App<\/a><\/div><\/nav><div class="container"><h1>Contact Support<\/h1><p class="sub">Have a question or issue with your DeskBuddy? Send us a message and we will reply within 24 hours.<\/p><div class="form-group"><label>Name<\/label><input type="text" id="name" placeholder="Your name" /><\/div><div class="form-group"><label>Email<\/label><input type="email" id="email" placeholder="you@example.com" /><\/div><div class="form-group"><label>Subject<\/label><input type="text" id="subject" placeholder="What is this about?" /><\/div><div class="form-group"><label>Message<\/label><textarea id="message" placeholder="Describe your issue..."><\/textarea><\/div><button class="btn btn-primary" onclick="submitTicket()">Send Message<\/button><div id="msg"><\/div><\/div><footer class="footer">DeskBuddy &copy; 2026 &middot; <a href="/">Home<\/a> &middot; <a href="/store">Store<\/a><\/footer><script>async function submitTicket(){var n=document.getElementById("name").value.trim(),e=document.getElementById("email").value.trim(),s=document.getElementById("subject").value.trim(),m=document.getElementById("message").value.trim();if(!n||!e||!s||!m){document.getElementById("msg").textContent="All fields are required.";return}try{var r=await fetch("/api/support",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n,email:e,subject:s,message:m})}),d=await r.json();if(d.ok){document.getElementById("msg").textContent="Message sent! We will get back to you soon.";document.querySelectorAll("input,textarea").forEach(function(el){el.value=""})}else{document.getElementById("msg").textContent=d.error||"Something went wrong."}}catch(err){document.getElementById("msg").textContent="Network error."}}<\/script><\/body><\/html>';
 }

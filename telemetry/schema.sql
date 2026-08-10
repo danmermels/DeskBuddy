@@ -36,3 +36,41 @@ CREATE TABLE IF NOT EXISTS firmware_versions (
     min_fw_ver TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- Store
+CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    price_cents INTEGER NOT NULL,
+    image_key TEXT DEFAULT '',
+    active INTEGER DEFAULT 1,
+    sort_order INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stripe_session_id TEXT NOT NULL UNIQUE,
+    customer_email TEXT DEFAULT '',
+    customer_name TEXT DEFAULT '',
+    total_cents INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    items_json TEXT DEFAULT '[]',
+    shipping_address_json TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_stripe ON orders(stripe_session_id);
+
+-- Support
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT DEFAULT 'open',
+    created_at TEXT DEFAULT (datetime('now'))
+);
