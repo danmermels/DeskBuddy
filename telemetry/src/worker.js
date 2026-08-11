@@ -416,8 +416,9 @@ export default {
       return Response.json({ error:'Not found' }, { status:404, headers:corsHeaders });
     }
 
+    const langParam = url.searchParams.get('lang');
     const country = (request.cf && request.cf.country) || '';
-    const landingLang = country === 'BR' ? 'pt' : 'en';
+    const landingLang = langParam || (country === 'BR' ? 'pt' : 'en');
     return new Response(LANDING_PAGE('2.5 MB', 'B303AFFC9D5DFBC2053237B483BA12FB34ECC8D84487612C45BAAD2F8105E9CB', landingLang), {
       headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders },
     });
@@ -620,8 +621,8 @@ function LANDING_PAGE(fileSize, checksum, lang) {
   .price-features li{color:#94a3b8;font-size:0.84rem;padding:6px 0;border-bottom:1px solid #1e293b}
   .price-features li:last-child{border:none}
   .price-features li::before{content:'\\2713';color:#38bdf8;margin-right:8px;font-weight:700}
-  .btn-buy{display:inline-block;width:100%;padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all .2s;text-align:center}
-  .btn-buy:hover{transform:translateY(-1px)}
+  .btn-buy{display:inline-block;width:100%;padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all .2s;text-align:center;cursor:pointer;opacity:1}
+  .btn-buy:hover{transform:translateY(-1px);opacity:0.9}
   .btn-buy.purple{background:#7c3aed;color:#fff}
   .btn-buy.frost{background:#38bdf8;color:#0a0e17}
   .coming-soon-badge{display:inline-block;background:#7c3aed20;color:#a78bfa;font-size:0.65rem;padding:2px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:0.05em}
@@ -647,6 +648,10 @@ function LANDING_PAGE(fileSize, checksum, lang) {
     <a href="#pricing">Pricing</a>
     <a href="/companion">Companion App</a>
   </div>
+  <select id="langSelect" style="background:#111827;color:#94a3b8;border:1px solid #334155;border-radius:6px;padding:6px 10px;font-size:0.82rem;cursor:pointer;outline:none;margin-left:8px">
+    <option value="en">EN</option>
+    <option value="pt">PT</option>
+  </select>
 </nav>
 
 <section class="hero">
@@ -796,6 +801,19 @@ function LANDING_PAGE(fileSize, checksum, lang) {
   <a href="/companion">Companion App</a> &middot; 
   <a href="/api/stats">Telemetry</a>
 </footer>
+<script>
+(function(){
+  var sel = document.getElementById('langSelect');
+  if (!sel) return;
+  var params = new URLSearchParams(window.location.search);
+  var current = params.get('lang') || localStorage.getItem('deskbuddy_lang') || 'en';
+  sel.value = current;
+  sel.addEventListener('change', function(){
+    localStorage.setItem('deskbuddy_lang', sel.value);
+    window.location.search = '?lang=' + sel.value;
+  });
+})();
+</script>
 </body>
 </html>`;
 }
