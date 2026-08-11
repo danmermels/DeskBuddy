@@ -1,1 +1,184 @@
-# DeskBuddy Architecture## OverviewDeskBuddy is an ESP32-C3-based smart desk companion with a round GC9A01 display, mmWave presence sensor, AI coaching, task management, and a full e-commerce web platform.```GöîGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÉ     GöîGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÉ     GöîGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÉGöé   ESP32-C3 Device  GöéGöÇGöÇGöÇGöÇGû¦Göé   Cloudflare Worker  GöéGöÇGöÇGöÇGöÇGû¦Göé   Stripe Checkout GöéGöé   (firmware)       Göé     Göé   (web/)             Göé     Göé   (payments)      GöéGö£GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöñ     Gö£GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöñ     GööGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÿGöé GÇó Presence radar   Göé     Göé GÇó Landing page       Göé              GöéGöé GÇó AI coach (Groq)  Göé     Göé GÇó Store (cart/check) Göé              Gû+Göé GÇó Task manager     Göé     Göé GÇó Admin dashboard    Göé     GöîGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÉGöé GÇó Clock faces      Göé     Göé GÇó Support tickets    Göé     Göé   D1 Database     GöéGöé GÇó UDP beacon       Göé     Göé GÇó Companion dl       Göé     Göé   (SQLite)        GöéGöé GÇó mDNS discovery   Göé     Göé GÇó Telemetry ingest   Göé     Gö£GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöñGöé GÇó WiFi / OTA       Göé     Göé GÇó R2 static files    Göé     Göé GÇó telemetry       GöéGööGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÿ     GööGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÿ     Göé GÇó products        Göé         Göé                          Göé                  Göé GÇó orders          Göé         Gû+                          Gû+                  Göé GÇó support_tickets GöéGöîGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÉ     GöîGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÉ     Göé GÇó firmware_ver    GöéGöé  Companion App     Göé     Göé   R2 Object Store    Göé     GööGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÿGöé  (Tauri)           Göé     Gö£GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöñGö£GöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöñ     Göé GÇó Companion install  GöéGöé GÇó System tray      Göé     Göé GÇó admin.html         GöéGöé GÇó mDNS discovery   Göé     Göé GÇó store.js           GöéGöé GÇó UDP beacon       Göé     GööGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÿGöé GÇó TCP health check GöéGöé GÇó Win/Mac/Linux    GöéGööGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÇGöÿ```## Repository Structure```DeskBuddy/Gö£GöÇGöÇ src/                     # ESP32-C3 firmware (C++)Göé   Gö£GöÇGöÇ main.cpp             # Entry point, setup(), loop()Göé   Gö£GöÇGöÇ Constants.h          # Timing thresholds, network configGöé   Gö£GöÇGöÇ Display.h            # TFT display rendering, RLE decoderGöé   Gö£GöÇGöÇ Faceplates.h         # Clock face presetsGöé   Gö£GöÇGöÇ Behaviour.h          # AI prompt templates, personasGöé   Gö£GöÇGöÇ AI.h                 # FreeRTOS background AI query taskGöé   Gö£GöÇGöÇ Radar.h              # LD2410 mmWave sensor driverGöé   Gö£GöÇGöÇ PresenceAnalysis.h   # Occupancy history, day rolloverGöé   Gö£GöÇGöÇ Web.h / Web_EN.h     # Inline web server (English)Göé   Gö£GöÇGöÇ Web_PTBR.h           # Inline web server (Portuguese)Göé   GööGöÇGöÇ ...                  # MQTT, logging, stats, timer modulesGöéGö£GöÇGöÇ web/                     # Cloudflare Worker (JavaScript)Göé   Gö£GöÇGöÇ wrangler.toml        # Worker config, D1/R2 bindingsGöé   Gö£GöÇGöÇ schema.sql           # D1 database schemaGöé   Gö£GöÇGöÇ store.js             # Client-side cart JS (served from R2)Göé   Gö£GöÇGöÇ admin.html           # Admin dashboard (served from R2)Göé   Gö£GöÇGöÇ dashboard/Göé   Göé   GööGöÇGöÇ index.html       # Legacy telemetry dashboard (static)Göé   GööGöÇGöÇ src/Göé       Gö£GöÇGöÇ worker.js        # Main entry GÇö route dispatch (~50 lines)Göé       Gö£GöÇGöÇ seed.js          # Product seed dataGöé       Gö£GöÇGöÇ routes/Göé       Göé   Gö£GöÇGöÇ telemetry.js # POST /telemetry, GET /api/stats, /api/deviceGöé       Göé   Gö£GöÇGöÇ store.js     # /store, /api/checkout, /webhook/stripeGöé       Göé   Gö£GöÇGöÇ companion.js # /companion, /companion/download/*Göé       Göé   Gö£GöÇGöÇ admin.js     # /admin, /api/admin/*Göé       Göé   GööGöÇGöÇ support.js   # /support, /api/supportGöé       GööGöÇGöÇ pages/Göé           Gö£GöÇGöÇ landing.js   # LANDING_PAGE() GÇö EN/PT with IP geo-detectionGöé           Gö£GöÇGöÇ companion.js # COMPANION_PAGE()Göé           Gö£GöÇGöÇ store.js     # STORE_PAGE() GÇö product gridGöé           Gö£GöÇGöÇ support.js   # SUPPORT_PAGE()Göé           GööGöÇGöÇ success.js   # STORE_SUCCESS_PAGE()GöéGö£GöÇGöÇ tools/Göé   GööGöÇGöÇ deskbuddy_companion/ # Desktop tray app (Tauri v2 + Rust)Göé       Gö£GöÇGöÇ src-tauri/src/tray.rs  # Tray icon, mDNS, UDP beacon, TCP healthGöé       Gö£GöÇGöÇ package.jsonGöé       GööGöÇGöÇ ...GöéGö£GöÇGöÇ .github/workflows/Göé   GööGöÇGöÇ build-companion.yml  # CI: builds Win/Mac/Linux installersGöéGööGöÇGöÇ docs/                    # Documentation    Gö£GöÇGöÇ architecture.md      # This file    GööGöÇGöÇ web.md               # Cloudflare + Stripe stack guide```## ESP32 Firmware (`src/`)### Hardware- **MCU:** ESP32-C3 (RISC-V, 160MHz, 320KB RAM, 4MB Flash)- **Display:** GC9A01 240+ù240 round TFT (SPI)- **Sensor:** HLK-LD2410 mmWave radar (Serial, 256000 baud)### Key Features- **Presence detection:** mmWave radar tracks desk presence, focus sessions, breaks- **AI coaching:** Groq/Gemini/DeepSeek API calls for motivational messages- **Task manager:** Daily/monthly tasks with points, due dates, overdue tracking- **Clock faces:** 6+ presets (Default, Minimalist, HiTech, Dev, Aviator, DeskBuddy character variants)- **WiFi:** Station mode with static IP option, captive portal fallback (AP mode)- **mDNS:** Registers as `deskbuddy._http._tcp.local` on port 80- **UDP beacon:** Broadcasts `"deskbuddy"` to subnet broadcast on port 42042 every 30s- **Web server:** Arduino WebServer on port 80, all routes defined inline in `Web_EN.h`/`Web_PTBR.h`- **MQTT:** Publishes presence state to configurable broker- **OTA:** Over-the-air firmware updates via ArduinoOTA- **Telemetry:** Periodic POST to `/telemetry` with device stats### Build```bashpio run            # Compilepio run -t upload  # Compile + flash```## Desktop Companion App (`tools/deskbuddy_companion/`)### Architecture- **Framework:** Tauri v2 (Rust backend + minimal webview frontend)- **UI:** Pure system tray GÇö no main window- **Discovery:** Three parallel threads:  1. **mDNS** GÇö listens for `deskbuddy._http._tcp.local`  2. **UDP beacon** GÇö listens on port 42042  3. **TCP health check** GÇö probes port 80 on saved IP every 5s- **Config:** `%LOCALAPPDATA%\DeskBuddy Companion\settings.json`- **Logs:** `%LOCALAPPDATA%\DeskBuddy Companion\companion.log`### Build & Deploy```bashcd tools/deskbuddy_companionnpm installnpx tauri build           # Windows# Cross-platform via GitHub Actions```CI builds all platforms (Windows `.exe`, macOS `.dmg` ARM + x64, Linux `.deb`) and auto-uploads to R2.## Web Platform (`web/`)### Architecture- **Runtime:** Cloudflare Workers (serverless edge compute)- **Database:** Cloudflare D1 (SQLite at the edge)- **Storage:** Cloudflare R2 (object storage for downloads, admin.html, store.js)- **Payments:** Stripe Checkout (hosted payment page)- **Domain:** `deskbuddy.ca` (custom domain on worker)- **Secrets:** Stripe keys, admin password bound via Cloudflare SecretsSee [web.md](web.md) for full Cloudflare + Stripe documentation.## Data Flow### Purchase Flow```Customer GåÆ /store GåÆ Add to Cart GåÆ /api/checkout GåÆ Stripe Checkout                                                       GåôCustomer pays on Stripe GåÉ Stripe hosted page GåÉ redirect         GåôStripe webhook GåÆ /webhook/stripe GåÆ DB: order.status = 'paid'         Gåô                          DB: stock decrementedDB: order.status = 'abandoned' (if expired)DB: stock restored (if expired/failed)```### Telemetry Flow```ESP32 GåÆ POST /telemetry GåÆ D1 telemetry table                              GåôAdmin GåÆ GET /api/stats GåÆ aggregated stats (auth required)```### Companion Discovery Flow```ESP32 broadcasts UDP GåÆ port 42042 GåÆ Companion tray appESP32 mDNS advertises GåÆ deskbuddy.local GåÆ Companion tray appCompanion TCP probes GåÆ port 80 on saved IP GåÆ Companion tray app```## Secrets & Configuration| Secret | Where | Purpose ||---|---|---|| `ADMIN_PASSWORD` | Cloudflare Dashboard | Admin panel + telemetry API auth || `STRIPE_SECRET_KEY` | Cloudflare Dashboard | Stripe Checkout API || `STRIPE_WEBHOOK_SECRET` | Cloudflare Dashboard | Stripe webhook verification || `CLOUDFLARE_API_TOKEN` | GitHub Secrets | CI GåÆ R2 upload || `CLOUDFLARE_ACCOUNT_ID` | GitHub Secrets | CI GåÆ R2 upload |
+# DeskBuddy Architecture
+
+## Overview
+
+DeskBuddy is an ESP32-C3-based smart desk companion with a round GC9A01 display, mmWave presence sensor, AI coaching, task management, and a full e-commerce web platform.
+
+## Repository Structure
+
+```
+DeskBuddy/
+â”œâ”€â”€ src/                     # ESP32-C3 firmware (C++)
+â”‚   â”œâ”€â”€ main.cpp             # Entry point, setup(), loop()
+â”‚   â”œâ”€â”€ Constants.h          # Timing thresholds, network config
+â”‚   â”œâ”€â”€ Display.h            # TFT display rendering, RLE decoder
+â”‚   â”œâ”€â”€ Faceplates.h         # Clock face presets
+â”‚   â”œâ”€â”€ Behaviour.h          # AI prompt templates, personas
+â”‚   â”œâ”€â”€ AI.h                 # FreeRTOS background AI query task
+â”‚   â”œâ”€â”€ Radar.h              # LD2410 mmWave sensor driver
+â”‚   â”œâ”€â”€ PresenceAnalysis.h   # Occupancy history, day rollover
+â”‚   â”œâ”€â”€ Web.h / Web_EN.h     # Inline web server (English)
+â”‚   â”œâ”€â”€ Web_PTBR.h           # Inline web server (Portuguese)
+â”‚   â””â”€â”€ ...                  # MQTT, logging, stats, timer modules
+â”‚
+â”œâ”€â”€ web/                     # Cloudflare Worker (JavaScript)
+â”‚   â”œâ”€â”€ wrangler.toml        # Worker config, D1/R2 bindings
+â”‚   â”œâ”€â”€ schema.sql           # D1 database schema
+â”‚   â”œâ”€â”€ store.js             # Client-side cart JS (served from R2)
+â”‚   â”œâ”€â”€ admin.html           # Admin dashboard (served from R2)
+â”‚   â”œâ”€â”€ dashboard/
+â”‚   â”‚   â””â”€â”€ index.html       # Legacy telemetry dashboard (static)
+â”‚   â””â”€â”€ src/
+â”‚       â”œâ”€â”€ worker.js        # Main entry - route dispatch (~50 lines)
+â”‚       â”œâ”€â”€ seed.js          # Product seed data
+â”‚       â”œâ”€â”€ routes/
+â”‚       â”‚   â”œâ”€â”€ telemetry.js # POST /telemetry, GET /api/stats, /api/device
+â”‚       â”‚   â”œâ”€â”€ store.js     # /store, /api/checkout, /webhook/stripe
+â”‚       â”‚   â”œâ”€â”€ companion.js # /companion, /companion/download/*
+â”‚       â”‚   â”œâ”€â”€ admin.js     # /admin, /api/admin/*
+â”‚       â”‚   â””â”€â”€ support.js   # /support, /api/support
+â”‚       â””â”€â”€ pages/
+â”‚           â”œâ”€â”€ landing.js   # LANDING_PAGE() - EN/PT with IP geo-detection
+â”‚           â”œâ”€â”€ companion.js # COMPANION_PAGE()
+â”‚           â”œâ”€â”€ store.js     # STORE_PAGE() - product grid
+â”‚           â”œâ”€â”€ support.js   # SUPPORT_PAGE()
+â”‚           â””â”€â”€ success.js   # STORE_SUCCESS_PAGE()
+â”‚
+â”œâ”€â”€ tools/
+â”‚   â””â”€â”€ deskbuddy_companion/ # Desktop tray app (Tauri v2 + Rust)
+â”‚       â”œâ”€â”€ src-tauri/src/tray.rs  # Tray icon, mDNS, UDP beacon, TCP health
+â”‚       â”œâ”€â”€ package.json
+â”‚       â””â”€â”€ ...
+â”‚
+â”œâ”€â”€ .github/workflows/
+â”‚   â””â”€â”€ build-companion.yml  # CI: builds Win/Mac/Linux installers
+â”‚
+â””â”€â”€ doc/                     # Documentation
+    â”œâ”€â”€ architecture.md      # This file
+    â””â”€â”€ web.md               # Cloudflare + Stripe stack guide
+```
+
+## ESP32 Firmware (`src/`)
+
+### Hardware
+- **MCU:** ESP32-C3 (RISC-V, 160MHz, 320KB RAM, 4MB Flash)
+- **Display:** GC9A01 240x240 round TFT (SPI)
+- **Sensor:** HLK-LD2410 mmWave radar (Serial, 256000 baud)
+
+### Key Features
+- **Presence detection:** mmWave radar tracks desk presence, focus sessions, breaks
+- **AI coaching:** Groq/Gemini/DeepSeek API calls for motivational messages
+- **Task manager:** Daily/monthly tasks with points, due dates, overdue tracking
+- **Clock faces:** 6+ presets (Default, Minimalist, HiTech, Dev, Aviator, DeskBuddy character variants)
+- **WiFi:** Station mode with static IP option, captive portal fallback (AP mode)
+- **mDNS:** Registers as `deskbuddy._http._tcp.local` on port 80
+- **UDP beacon:** Broadcasts `"deskbuddy"` to subnet broadcast on port 42042 every 30s
+- **Web server:** Arduino WebServer on port 80, all routes defined inline in `Web_EN.h`/`Web_PTBR.h`
+- **MQTT:** Publishes presence state to configurable broker
+- **OTA:** Over-the-air firmware updates via ArduinoOTA
+- **Telemetry:** Periodic POST to `/telemetry` with device stats
+
+### Build
+```bash
+pio run            # Compile
+pio run -t upload  # Compile + flash
+```
+
+## Desktop Companion App (`tools/deskbuddy_companion/`)
+
+### Architecture
+- **Framework:** Tauri v2 (Rust backend + minimal webview frontend)
+- **UI:** Pure system tray - no main window
+- **Discovery:** Three parallel threads:
+  1. **mDNS** - listens for `deskbuddy._http._tcp.local`
+  2. **UDP beacon** - listens on port 42042
+  3. **TCP health check** - probes port 80 on saved IP every 5s
+- **Config:** `%LOCALAPPDATA%\DeskBuddy Companion\settings.json`
+- **Logs:** `%LOCALAPPDATA%\DeskBuddy Companion\companion.log`
+
+### Build & Deploy
+```bash
+cd tools/deskbuddy_companion
+npm install
+npx tauri build           # Windows
+# Cross-platform via GitHub Actions
+```
+
+CI builds all platforms (Windows `.exe`, macOS `.dmg` ARM + x64, Linux `.deb`) and auto-uploads to R2.
+
+## Web Platform (`web/`)
+
+### Architecture
+- **Runtime:** Cloudflare Workers (serverless edge compute)
+- **Database:** Cloudflare D1 (SQLite at the edge)
+- **Storage:** Cloudflare R2 (object storage for downloads, admin.html, store.js)
+- **Payments:** Stripe Checkout (hosted payment page)
+- **Domain:** `deskbuddy.ca` (custom domain on worker)
+- **Secrets:** Stripe keys, admin password bound via Cloudflare Secrets
+
+See `doc/web.md` for full Cloudflare + Stripe documentation.
+
+## Data Flows
+
+### Purchase Flow
+1. Customer visits `/store`, adds products to cart (localStorage)
+2. Customer clicks Checkout -> `POST /api/checkout` with cart items
+3. Worker validates stock, creates Stripe Checkout Session, saves order as `pending` in D1
+4. Customer pays on Stripe's hosted page
+5. Stripe sends webhook to `/webhook/stripe` -> order status updated to `paid`
+6. If payment expires: webhook -> order status `abandoned`, stock restored
+7. If payment fails: webhook -> order status `failed`, stock restored
+
+### Telemetry Flow
+1. ESP32 devices POST to `/telemetry` with device stats (open, no auth)
+2. D1 stores each report in `telemetry` table
+3. Admin panel or dashboard calls `/api/stats` (requires Bearer auth)
+4. Returns aggregated stats: device counts, version distribution, clock face usage, averages
+
+### Companion Discovery Flow
+1. ESP32 broadcasts UDP beacon on port 42042 every 30 seconds
+2. ESP32 advertises via mDNS as `deskbuddy._http._tcp.local`
+3. Companion tray app listens for both signals
+4. Companion also periodically TCP-probes port 80 on saved IP
+5. Any match -> tray icon turns green -> left-click opens browser to dashboard
+
+## URL Routes
+
+| Route | Auth | Description |
+|---|---|---|
+| `/` | No | Landing page (EN/PT with geo-detection) |
+| `/store` | No | Product catalog + cart |
+| `/store.js` | No | Client-side cart JS (served from R2) |
+| `/api/checkout` | No | Create Stripe Checkout Session |
+| `/webhook/stripe` | No | Stripe payment event receiver |
+| `/support` | No | Support ticket form |
+| `/companion` | No | Companion app download page |
+| `/companion/download/*` | No | Binary downloads (Win/Mac/Linux) |
+| `/admin` | Yes* | Admin dashboard (login page open) |
+| `/api/admin/*` | Yes | Product/order/ticket CRUD |
+| `/telemetry` | No | ESP32 data ingest |
+| `/firmware/check` | No | ESP32 OTA update check |
+| `/api/stats` | Yes | Aggregated telemetry stats |
+| `/api/device` | Yes | Per-device telemetry detail |
+
+*Admin HTML loads from R2; login requires ADMIN_PASSWORD
+
+## D1 Database Tables
+
+| Table | Purpose |
+|---|---|
+| `telemetry` | ESP32 device reports (chip_id, fw_ver, stats, timestamps) |
+| `firmware_versions` | OTA firmware versions (version, url, sha256, mandatory) |
+| `products` | Store catalog (slug, name, price_cents, stock, active) |
+| `orders` | Stripe orders (session_id, email, total, status, items_json) |
+| `support_tickets` | Customer requests (name, email, subject, message) |
+
+## Secrets
+
+| Secret | Where | Used By |
+|---|---|---|
+| `ADMIN_PASSWORD` | Cloudflare | Admin panel + telemetry API auth |
+| `STRIPE_SECRET_KEY` | Cloudflare | Stripe Checkout API calls |
+| `STRIPE_WEBHOOK_SECRET` | Cloudflare | Webhook signature verification |
+| `CLOUDFLARE_API_TOKEN` | GitHub | CI auto-upload to R2 |
+| `CLOUDFLARE_ACCOUNT_ID` | GitHub | CI auto-upload to R2 |
