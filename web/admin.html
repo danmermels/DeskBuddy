@@ -61,7 +61,7 @@ textarea{min-height:60px;resize:vertical}
 
 <div id="tab-products" class="section active">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3>Products</h3><button class="btn" onclick="editProduct()">+ Add Product</button></div>
-  <table><thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Status</th><th>Order</th><th></th></tr></thead><tbody id="productRows"></tbody></table>
+  <table><thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Status</th><th>Stock</th><th>Order</th><th></th></tr></thead><tbody id="productRows"></tbody></table>
 </div>
 
 <div id="tab-orders" class="section">
@@ -83,6 +83,7 @@ textarea{min-height:60px;resize:vertical}
   <div class="form-group"><label>Description</label><textarea id="prodDesc" placeholder="Short description"></textarea></div>
   <div class="form-group"><label>Price (cents — 9900 = $99.00)</label><input type="number" id="prodPrice" placeholder="9900" /></div>
   <div class="form-group"><label>Sort Order</label><input type="number" id="prodSort" value="0" /></div>
+  <div class="form-group"><label>Stock (blank = unlimited)</label><input type="number" id="prodStock" placeholder="Leave empty for unlimited" /></div>
   <div class="form-group"><label style="display:inline-block;margin-right:8px">Active</label><input type="checkbox" id="prodActive" checked style="width:auto;margin:0" /></div>
   <div class="form-actions"><button class="btn btn-cancel" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveProduct()">Save</button></div>
   <div class="msg" id="productMsg"></div>
@@ -150,17 +151,19 @@ function renderProducts(products){
   document.getElementById("productRows").innerHTML = products.map(function(p){
     return "<tr><td>"+p.id+"</td><td>"+p.name+"</td><td>$"+(p.price_cents/100).toFixed(2)+"</td>"
       + "<td><span class=\"badge "+(p.active?"badge-active":"badge-hidden")+"\">"+(p.active?"Active":"Hidden")+"</span></td>"
+      + "<td>"+(p.stock===null?"&#8734;":p.stock||0)+"</td>"
       + "<td>"+p.sort_order+"</td>"
-      + "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editProduct("+p.id+",'"+p.slug+"','"+p.name.replace(/'/g,"\\'")+"',"+p.price_cents+","+p.active+","+p.sort_order+")\">Edit</button>"
+      + "<td><button class=\"btn btn-sm btn-edit\" onclick=\"editProduct("+p.id+",'"+p.slug+"','"+p.name.replace(/'/g,"\\'")+"',"+p.price_cents+","+p.active+","+p.sort_order+","+(p.stock===null?"null":p.stock)+")\">Edit</button>"
       + "<button class=\"btn btn-sm btn-del\" onclick=\"deleteProduct("+p.id+")\">Del</button></td></tr>";
-  }).join("") || "<tr><td colspan=\"6\" style=\"color:#64748b\">No products yet</td></tr>";
+  }).join("") || "<tr><td colspan=\"7\" style=\"color:#64748b\">No products yet</td></tr>";
 }
-function editProduct(id,slug,name,price,active,sort){
+function editProduct(id,slug,name,price,active,sort,stock){
   document.getElementById("prodId").value = id||"";
   document.getElementById("prodName").value = name||"";
   document.getElementById("prodDesc").value = "";
   document.getElementById("prodPrice").value = price||"";
   document.getElementById("prodSort").value = sort||0;
+  document.getElementById("prodStock").value = stock===null?"":stock;
   document.getElementById("prodActive").checked = active!==0;
   document.getElementById("modalTitle").textContent = id?"Edit Product":"Add Product";
   document.getElementById("productModal").classList.add("open");
@@ -172,10 +175,12 @@ async function saveProduct(){
   var desc = document.getElementById("prodDesc").value.trim();
   var price = parseInt(document.getElementById("prodPrice").value)||0;
   var sort = parseInt(document.getElementById("prodSort").value)||0;
+  var stockVal = document.getElementById("prodStock").value.trim();
+  var stock = stockVal === "" ? null : parseInt(stockVal);
   var active = document.getElementById("prodActive").checked;
   if(!name||!price){document.getElementById("productMsg").textContent="Name and price required";return}
   try{
-    var body = {name:name,description:desc,price_cents:price,sort_order:sort,active:active};
+    var body = {name:name,description:desc,price_cents:price,sort_order:sort,active:active,stock:stock};
     if(id) body.id = parseInt(id);
     var r = await authFetch("/api/admin/products" + (id?"?id="+id:""), {method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     var d = await r.json();

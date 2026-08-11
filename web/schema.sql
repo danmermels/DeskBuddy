@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS products (
     image_key TEXT DEFAULT '',
     active INTEGER DEFAULT 1,
     sort_order INTEGER DEFAULT 0,
+    stock INTEGER DEFAULT NULL,
     created_at TEXT DEFAULT (datetime('now'))
 );
 

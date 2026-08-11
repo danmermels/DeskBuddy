@@ -33,7 +33,11 @@ export async function handleStore(request, env, path, url, corsHeaders) {
     for (const item of body.items) {
       const product = await env.DB.prepare('SELECT * FROM products WHERE slug=?1 AND active=1').bind(item.slug).first();
       if (!product) continue;
-      line_items.push({ price_data: { currency:'cad', product_data:{name:product.name}, unit_amount:product.price_cents }, quantity:Math.min(item.qty||1,99) });
+      const qty = Math.min(item.qty||1, 99);
+      if (product.stock !== null && product.stock < qty) {
+        return Response.json({ error: `Only ${product.stock} "${product.name}" available` }, { status: 400, headers:corsHeaders });
+      }
+      line_items.push({ price_data: { currency:'cad', product_data:{name:product.name}, unit_amount:product.price_cents }, quantity:qty, _slug:product.slug, _qty:qty });
     }
     if (line_items.length === 0) return Response.json({ error:'No valid items found' }, { status:400, headers:corsHeaders });
 
@@ -59,6 +63,13 @@ export async function handleStore(request, env, path, url, corsHeaders) {
     if (session.url) {
       await env.DB.prepare('INSERT INTO orders (stripe_session_id, customer_email, total_cents, items_json, status) VALUES (?1,?2,?3,?4,?)')
         .bind(session.id, body.email||'', line_items.reduce((s,i)=>s+i.price_data.unit_amount*i.quantity,0), JSON.stringify(line_items), 'pending').run();
+      // Reserve stock
+      for (const item of line_items) {
+        if (item._slug) {
+          await env.DB.prepare('UPDATE products SET stock = CASE WHEN stock IS NOT NULL THEN stock - ?1 ELSE NULL END WHERE slug=?2')
+            .bind(item._qty, item._slug).run();
+        }
+      }
       return Response.json({ url:session.url }, { headers:corsHeaders });
     }
     return Response.json({ error:session.error?.message||'Stripe error' }, { status:400, headers:corsHeaders });
@@ -77,13 +88,29 @@ export async function handleStore(request, env, path, url, corsHeaders) {
         .bind(s.id, s.customer_details?.email||'').run();
     } else if (event.type === 'checkout.session.expired') {
       await env.DB.prepare("UPDATE orders SET status='abandoned' WHERE stripe_session_id=?1").bind(s.id).run();
+      await restoreStock(env.DB, s.id);
     } else if (event.type === 'checkout.session.async_payment_failed') {
       await env.DB.prepare("UPDATE orders SET status='failed' WHERE stripe_session_id=?1").bind(s.id).run();
+      await restoreStock(env.DB, s.id);
     }
     return Response.json({ received:true }, { headers:corsHeaders });
   }
 
   return null;
+}
+
+async function restoreStock(db, sessionId) {
+  const order = await db.prepare('SELECT items_json FROM orders WHERE stripe_session_id=?1').bind(sessionId).first();
+  if (!order) return;
+  try {
+    const items = JSON.parse(order.items_json);
+    for (const item of items) {
+      if (item._slug) {
+        await db.prepare('UPDATE products SET stock = CASE WHEN stock IS NOT NULL THEN stock + ?1 ELSE NULL END WHERE slug=?2')
+          .bind(item._qty, item._slug).run();
+      }
+    }
+  } catch (e) { /* ignore parse errors */ }
 }
 
 const STORE_SUCCESS_HTML = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Order Confirmed — DeskBuddy</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.card{background:#111827;border:1px solid #1e293b;border-radius:16px;padding:48px;text-align:center;max-width:480px}.icon{font-size:3.5rem;margin-bottom:16px}h1{font-size:1.6rem;color:#38bdf8;margin-bottom:8px}p{color:#94a3b8;font-size:0.92rem;line-height:1.5;margin-bottom:24px}.btn{display:inline-block;background:#38bdf8;color:#0a0e17;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;transition:transform .2s}.btn:hover{transform:translateY(-1px)}</style></head><body><div class="card"><div class="icon">&#x2705;</div><h1>Order Confirmed!</h1><p>Your DeskBuddy is being prepared. You will receive a confirmation email with tracking details once shipped.</p><a href="/" class="btn">Back to Home</a></div></body></html>';

@@ -19,10 +19,11 @@ export async function handleAdmin(request, env, path, url, corsHeaders) {
       return Response.json({ products: p.results || [] }, { headers:corsHeaders });
     }
     if (path === '/api/admin/products' && request.method === 'POST') {
-      const { name, description, price_cents, slug } = await request.json();
+      const { name, description, price_cents, slug, stock } = await request.json();
       const s = slug || name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-      await env.DB.prepare('INSERT OR REPLACE INTO products (slug,name,description,price_cents,active,sort_order) VALUES (?1,?2,?3,?4,1,COALESCE((SELECT MAX(sort_order)+1 FROM products),0))')
-        .bind(s, name, description||'', parseInt(price_cents)||0).run();
+      const stockVal = stock !== undefined && stock !== '' ? parseInt(stock) : null;
+      await env.DB.prepare('INSERT OR REPLACE INTO products (slug,name,description,price_cents,active,sort_order,stock) VALUES (?1,?2,?3,?4,1,COALESCE((SELECT MAX(sort_order)+1 FROM products),0),?5)')
+        .bind(s, name, description||'', parseInt(price_cents)||0, stockVal).run();
       return Response.json({ ok:true }, { headers:corsHeaders });
     }
     if (path === '/api/admin/products' && request.method === 'PUT') {
@@ -34,6 +35,7 @@ export async function handleAdmin(request, env, path, url, corsHeaders) {
         if (body.price_cents !== undefined) { sets.push('price_cents=?'); vals.push(parseInt(body.price_cents)); }
         if (body.active !== undefined) { sets.push('active=?'); vals.push(body.active ? 1 : 0); }
         if (body.sort_order !== undefined) { sets.push('sort_order=?'); vals.push(parseInt(body.sort_order)); }
+        if (body.stock !== undefined) { sets.push('stock=?'); vals.push(body.stock === '' || body.stock === null ? null : parseInt(body.stock)); }
         if (sets.length > 0) { vals.push(body.id); await env.DB.prepare(`UPDATE products SET ${sets.join(',')} WHERE id=?`).bind(...vals).run(); }
       }
       return Response.json({ ok:true }, { headers:corsHeaders });
