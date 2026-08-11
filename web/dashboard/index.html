@@ -71,7 +71,8 @@
 
     <div class="endpoint-hint">
        API Endpoint: <input type="text" id="apiUrl" value="" placeholder="https://deskbuddy.ca/api/stats">
-      <button onclick="setEndpoint()">Set</button>
+       Password: <input type="password" id="apiPw" placeholder="Admin password">
+      <button onclick="setEndpoint()">Connect</button>
     </div>
 
     <div class="loading" id="loading">Loading telemetry data...</div>
@@ -151,11 +152,19 @@
   <script>
     let endpoint = localStorage.getItem('deskbuddy_endpoint') || '';
     document.getElementById('apiUrl').value = endpoint;
-    const baseUrl = endpoint.replace('/api/stats', '');
+    let token = localStorage.getItem('deskbuddy_admin') || '';
+    document.getElementById('apiPw').value = token;
+
+    function apiHeaders() {
+      return token ? { 'Authorization': 'Bearer ' + token } : {};
+    }
 
     function setEndpoint() {
       endpoint = document.getElementById('apiUrl').value.trim();
+      token = document.getElementById('apiPw').value.trim();
       localStorage.setItem('deskbuddy_endpoint', endpoint);
+      if (token) localStorage.setItem('deskbuddy_admin', token);
+      else localStorage.removeItem('deskbuddy_admin');
       loadData();
     }
 
@@ -181,7 +190,7 @@
       document.getElementById('content').style.display = 'none';
 
       try {
-        const res = await fetch(endpoint);
+        const res = await fetch(endpoint, { headers: apiHeaders() });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         statsData = await res.json();
 
@@ -256,7 +265,7 @@
       document.getElementById('deviceDetailTitle').textContent = 'Loading...';
 
       try {
-        const res = await fetch(baseUrl + '/api/device?chip_id=' + chipId);
+        const res = await fetch(endpoint.replace('/api/stats','') + '/api/device?chip_id=' + chipId, { headers: apiHeaders() });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
 

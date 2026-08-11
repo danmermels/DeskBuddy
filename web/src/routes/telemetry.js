@@ -1,4 +1,5 @@
 export async function handleTelemetry(request, env, path, url, corsHeaders) {
+  // POST /telemetry — always open (ESP32 devices push data here)
   if (request.method === 'POST' && path === '/telemetry') {
     const data = await request.json();
     const required = ['chip_id', 'fw_ver', 'ts'];
@@ -32,6 +33,7 @@ export async function handleTelemetry(request, env, path, url, corsHeaders) {
   }
 
   if (request.method === 'GET' && path === '/api/device') {
+    if (!authorize(request, env)) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     const chipId = url.searchParams.get('chip_id');
     if (!chipId) return Response.json({ error:'missing chip_id' }, { status:400, headers:corsHeaders });
     const latest = await env.DB.prepare(`SELECT * FROM telemetry WHERE chip_id = ?1 ORDER BY ts DESC LIMIT 1`).bind(chipId).first();
@@ -41,6 +43,7 @@ export async function handleTelemetry(request, env, path, url, corsHeaders) {
   }
 
   if (request.method === 'GET' && path === '/api/stats') {
+    if (!authorize(request, env)) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
     const days = parseInt(url.searchParams.get('days')||'30');
     const cutoff = Math.floor(Date.now()/1000) - days*86400;
     const [total, activeToday, versionDist, clockFaces, aiModes, avgMetrics, latestFw, deviceList, recent] = await Promise.all([
@@ -58,4 +61,9 @@ export async function handleTelemetry(request, env, path, url, corsHeaders) {
   }
 
   return null;
+}
+
+function authorize(request, env) {
+  const auth = request.headers.get('Authorization');
+  return auth && env.ADMIN_PASSWORD && auth === `Bearer ${env.ADMIN_PASSWORD}`;
 }
