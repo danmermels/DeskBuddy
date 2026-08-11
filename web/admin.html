@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Admin — DeskBuddy</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0}
@@ -44,6 +45,9 @@ textarea{min-height:60px;resize:vertical}
 .badge{display:inline-block;padding:1px 8px;border-radius:8px;font-size:0.7rem;font-weight:700}
 .badge-active{background:#38bdf830;color:#38bdf8}
 .badge-hidden{background:#ef444430;color:#ef4444}
+.kpi{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:14px;text-align:center}.kpi-val{font-size:1.5rem;font-weight:800;color:#38bdf8}.kpi-label{color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em;margin-top:2px}
+.detail-modal{display:none;position:fixed;inset:0;background:#00000080;z-index:100;align-items:center;justify-content:center}.detail-modal.open{display:flex}.detail-box{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:32px;max-width:500px;width:100%;margin:20px;max-height:80vh;overflow-y:auto}
+@media(max-width:640px){#tab-telemetry > div:first-of-type + div + div{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -56,7 +60,7 @@ textarea{min-height:60px;resize:vertical}
 
 <div id="appScreen" style="display:none">
 <nav class="nav"><h2>DeskBuddy Admin</h2><div><a href="/">Site</a> &middot; <a href="/store">Store</a> &middot; <a href="#" onclick="logout()">Logout</a></div></nav>
-<div class="tabs"><button class="tab active" onclick="showTab('products',this)">Products</button><button class="tab" onclick="showTab('orders',this)">Orders</button><button class="tab" onclick="showTab('tickets',this)">Tickets</button></div>
+<div class="tabs"><button class="tab active" onclick="showTab('products',this)">Products</button><button class="tab" onclick="showTab('orders',this)">Orders</button><button class="tab" onclick="showTab('tickets',this)">Tickets</button><button class="tab" onclick="showTab('telemetry',this)">Telemetry</button></div>
 <div class="container">
 
 <div id="tab-products" class="section active">
@@ -72,6 +76,26 @@ textarea{min-height:60px;resize:vertical}
 <div id="tab-tickets" class="section">
   <h3>Support Tickets</h3>
   <table><thead><tr><th>Name</th><th>Email</th><th>Subject</th><th>Message</th><th>Date</th></tr></thead><tbody id="ticketRows"></tbody></table>
+</div>
+
+<div id="tab-telemetry" class="section">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3>Telemetry Dashboard</h3><button class="btn btn-cancel" onclick="loadTelemetry()" style="font-size:0.82rem">Refresh</button></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px" id="kpiGrid">
+    <div class="kpi"><div class="kpi-val" id="kpiDevices">-</div><div class="kpi-label">Total Devices</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpiActive">-</div><div class="kpi-label">Active Today</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpiAvgDesk">-</div><div class="kpi-label">Avg Desk Hrs</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpiAvgScore">-</div><div class="kpi-label">Avg Prod Score</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpiAvgUptime">-</div><div class="kpi-label">Avg Uptime Hrs</div></div>
+    <div class="kpi"><div class="kpi-val" id="kpiLatestFw">-</div><div class="kpi-label">Latest Firmware</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+    <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px"><div style="color:#e2e8f0;font-size:0.82rem;margin-bottom:10px">Versions</div><canvas id="chartVersions" height="180"></canvas></div>
+    <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px"><div style="color:#e2e8f0;font-size:0.82rem;margin-bottom:10px">Clock Faces</div><canvas id="chartFaces" height="180"></canvas></div>
+  </div>
+  <div style="background:#111827;border:1px solid #1e293b;border-radius:10px;padding:16px;margin-bottom:20px">
+    <div style="color:#e2e8f0;font-size:0.82rem;margin-bottom:10px">Devices</div>
+    <table><thead><tr><th>Chip ID</th><th>FW</th><th>Last Seen</th><th></th></tr></thead><tbody id="telemetryDeviceRows"></tbody></table>
+  </div>
 </div>
 
 </div></div>
@@ -137,6 +161,7 @@ function showTab(name,btn){
   btn.classList.add("active");
   document.querySelectorAll(".section").forEach(function(s){s.classList.remove("active")});
   document.getElementById("tab-"+name).classList.add("active");
+  if (name === "telemetry") loadTelemetry();
 }
 
 // Products
@@ -213,6 +238,63 @@ async function loadTickets(){
       return "<tr><td>"+t.name+"</td><td>"+t.email+"</td><td>"+t.subject+"</td><td style=\"font-size:0.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap\">"+t.message+"</td><td>"+t.created_at+"</td></tr>";
     }).join("") || "<tr><td colspan=\"5\" style=\"color:#64748b\">No tickets</td></tr>";
   }catch(e){}
+}
+
+
+// Telemetry
+var telemetryCharts = {};
+var telemetryDeviceList = [];
+
+async function loadTelemetry(){
+  try{
+    var r = await authFetch("/api/stats");
+    var data = await r.json();
+    document.getElementById("kpiDevices").textContent = data.total_devices||0;
+    document.getElementById("kpiActive").textContent = data.active_today||0;
+    document.getElementById("kpiAvgDesk").textContent = (data.avg_metrics?.avg_desk_h||0).toFixed(1)+"h";
+    document.getElementById("kpiAvgScore").textContent = data.avg_metrics?.avg_score||"-";
+    document.getElementById("kpiAvgUptime").textContent = (data.avg_metrics?.avg_uptime||0).toFixed(1)+"h";
+    document.getElementById("kpiLatestFw").textContent = data.latest_firmware?.version||"-";
+    renderChart("chartVersions","bar",data.version_distribution||[],"fw_ver","count","Versions");
+    renderChart("chartFaces","doughnut",data.clock_faces||[],"clock_face","count","Clock Faces");
+    telemetryDeviceList = data.device_list||[];
+    renderDeviceList(telemetryDeviceList);
+  }catch(e){}
+}
+
+function renderChart(id,type,data,labelKey,countKey,title){
+  var ctx=document.getElementById(id).getContext("2d");
+  if(telemetryCharts[id])telemetryCharts[id].destroy();
+  telemetryCharts[id]=new Chart(ctx,{
+    type:type,data:{labels:data.map(function(d){return d[labelKey]||"?"}),datasets:[{label:title,data:data.map(function(d){return d[countKey]}),backgroundColor:["#38bdf8","#818cf8","#c084fc","#22d3ee","#34d399","#fbbf24"]}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:type==="bar"?{y:{ticks:{color:"#64748b"},grid:{color:"#1e293b"}},x:{ticks:{color:"#64748b"},grid:{display:false}}}:{}}
+  });
+}
+
+function renderDeviceList(list){
+  document.getElementById("telemetryDeviceRows").innerHTML=list.map(function(d){
+    return "<tr><td style=\"font-size:0.78rem\">"+d.chip_id+"</td><td>"+d.fw_ver+"</td><td>"+formatTs(d.last_seen)+"</td><td><button onclick=\"showDeviceDetail('"+d.chip_id+"')\" style=\"background:#38bdf820;color:#38bdf8;border:1px solid #38bdf840;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:0.72rem\">Detail</button></td></tr>";
+  }).join("")||"<tr><td colspan=\"4\" style=\"color:#64748b\">No devices</td></tr>";
+}
+
+function formatTs(ts){if(!ts)return"-";var d=new Date(ts*1000);return d.toLocaleDateString()+" "+d.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+
+async function showDeviceDetail(chipId){
+  var m=document.createElement("div");m.className="detail-modal open";
+  m.innerHTML="<div class=\"detail-box\"><h3 style=\"color:#38bdf8;margin-bottom:12px\">Device "+chipId+"</h3><div id=\"dc\" style=\"color:#94a3b8;font-size:0.85rem\">Loading...</div><div style=\"margin-top:16px;text-align:right\"><button class=\"btn btn-cancel\" onclick=\"this.closest('.detail-modal').remove()\">Close</button></div></div>";
+  document.body.appendChild(m);
+  try{
+    var r=await authFetch("/api/device?chip_id="+chipId),d=await r.json();
+    m.querySelector("#dc").innerHTML="<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:8px\">"
+      +"<div>FW: "+d.device.fw_ver+"</div><div>HW: "+d.device.hw_rev+"</div>"
+      +"<div>Uptime: "+d.device.uptime_h+"h</div><div>Boots: "+d.device.boot_count+"</div>"
+      +"<div>Clock: "+d.device.clock_face+"</div><div>AI: "+d.device.ai_mode+"</div>"
+      +"<div>Font: "+d.device.font_idx+"</div><div>Heap: "+d.device.heap_free_kb+"KB</div>"
+      +"<div>Desk: "+d.latest_stats.daily_desk_h+"h</div><div>Focus: "+d.latest_stats.daily_focus_h+"h</div>"
+      +"<div>Breaks: "+d.latest_stats.daily_breaks+"</div><div>Score: "+d.latest_stats.prod_score+"</div>"
+      +"<div>Done: "+d.latest_stats.daily_task_done+"</div><div>Overdue: "+d.latest_stats.daily_task_overdue+"</div>"
+      +"</div>";
+  }catch(e){m.querySelector("#dc").textContent="Failed"}
 }
 </script>
 </body>
