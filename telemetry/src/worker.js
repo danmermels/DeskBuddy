@@ -329,10 +329,14 @@ export default {
       try {
         if (!env.STRIPE_SECRET_KEY) return new Response(null, { status:200 });
         const event = await request.json();
+        const s = event.data.object;
         if (event.type === 'checkout.session.completed') {
-          const s = event.data.object;
           await env.DB.prepare("UPDATE orders SET status='paid', customer_email=?2 WHERE stripe_session_id=?1")
             .bind(s.id, s.customer_details?.email||'').run();
+        } else if (event.type === 'checkout.session.expired') {
+          await env.DB.prepare("UPDATE orders SET status='abandoned' WHERE stripe_session_id=?1").bind(s.id).run();
+        } else if (event.type === 'checkout.session.async_payment_failed') {
+          await env.DB.prepare("UPDATE orders SET status='failed' WHERE stripe_session_id=?1").bind(s.id).run();
         }
         return Response.json({ received:true }, { headers:corsHeaders });
       } catch(e) { return Response.json({ error:e.message }, { status:400, headers:corsHeaders }); }
@@ -355,7 +359,66 @@ export default {
       } catch(e) { return Response.json({ ok:false, error:e.message }, { status:500, headers:corsHeaders }); }
     }
 
-    return new Response(LANDING_PAGE('2.5 MB', 'B303AFFC9D5DFBC2053237B483BA12FB34ECC8D84487612C45BAAD2F8105E9CB'), {
+    // ─── Admin ───────────────────────────────────
+    if (request.method === 'GET' && path === '/admin') {
+      const obj = await env.FIRMWARE.get('companion/admin.html');
+      if (!obj) return new Response(ADMIN_SETUP_HTML(), { headers:{'Content-Type':'text/html;charset=utf-8',...corsHeaders}});
+      return new Response(obj.body, { headers:{ 'Content-Type':'text/html; charset=utf-8',...corsHeaders }});
+    }
+
+    if (request.method === 'POST' && path === '/admin/auth') {
+      const { password } = await request.json();
+      return Response.json({ ok: password && password === env.ADMIN_PASSWORD }, { headers:corsHeaders });
+    }
+
+    // Admin API (all auth-protected)
+    if (path.startsWith('/api/admin/')) {
+      const auth = request.headers.get('Authorization');
+      if (!auth || auth !== `Bearer ${env.ADMIN_PASSWORD}`) return Response.json({error:'Unauthorized'},{status:401,headers:corsHeaders});
+
+      if (path === '/api/admin/products' && request.method === 'GET') {
+        const p = await env.DB.prepare('SELECT * FROM products ORDER BY sort_order').all();
+        return Response.json({ products: p.results || [] }, { headers:corsHeaders });
+      }
+      if (path === '/api/admin/products' && request.method === 'POST') {
+        const { name, description, price_cents, slug } = await request.json();
+        const s = slug || name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+        await env.DB.prepare('INSERT OR REPLACE INTO products (slug,name,description,price_cents,active,sort_order) VALUES (?1,?2,?3,?4,1,COALESCE((SELECT MAX(sort_order)+1 FROM products),0))')
+          .bind(s, name, description||'', parseInt(price_cents)||0).run();
+        return Response.json({ ok:true }, { headers:corsHeaders });
+      }
+      if (path === '/api/admin/products' && request.method === 'PUT') {
+        const body = await request.json();
+        if (body.id) {
+          const sets = []; const vals = [];
+          if (body.name) { sets.push('name=?'); vals.push(body.name); }
+          if (body.description !== undefined) { sets.push('description=?'); vals.push(body.description); }
+          if (body.price_cents !== undefined) { sets.push('price_cents=?'); vals.push(parseInt(body.price_cents)); }
+          if (body.active !== undefined) { sets.push('active=?'); vals.push(body.active ? 1 : 0); }
+          if (body.sort_order !== undefined) { sets.push('sort_order=?'); vals.push(parseInt(body.sort_order)); }
+          if (sets.length > 0) { vals.push(body.id); await env.DB.prepare(`UPDATE products SET ${sets.join(',')} WHERE id=?`).bind(...vals).run(); }
+        }
+        return Response.json({ ok:true }, { headers:corsHeaders });
+      }
+      if (path === '/api/admin/products' && request.method === 'DELETE') {
+        const id = url.searchParams.get('id');
+        if (id) await env.DB.prepare('DELETE FROM products WHERE id=?1').bind(parseInt(id)).run();
+        return Response.json({ ok:true }, { headers:corsHeaders });
+      }
+      if (path === '/api/admin/orders') {
+        const o = await env.DB.prepare('SELECT * FROM orders ORDER BY created_at DESC LIMIT 50').all();
+        return Response.json({ orders: o.results || [] }, { headers:corsHeaders });
+      }
+      if (path === '/api/admin/tickets') {
+        const t = await env.DB.prepare('SELECT * FROM support_tickets ORDER BY created_at DESC LIMIT 50').all();
+        return Response.json({ tickets: t.results || [] }, { headers:corsHeaders });
+      }
+      return Response.json({ error:'Not found' }, { status:404, headers:corsHeaders });
+    }
+
+    const country = (request.cf && request.cf.country) || '';
+    const landingLang = country === 'BR' ? 'pt' : 'en';
+    return new Response(LANDING_PAGE('2.5 MB', 'B303AFFC9D5DFBC2053237B483BA12FB34ECC8D84487612C45BAAD2F8105E9CB', landingLang), {
       headers: { 'Content-Type': 'text/html; charset=utf-8', ...corsHeaders },
     });
   },
@@ -442,7 +505,44 @@ function COMPANION_PAGE(fileSize, checksum) {
 </html>`;
 }
 
-function LANDING_PAGE(fileSize, checksum) {
+function LANDING_PAGE(fileSize, checksum, lang) {
+  const t = lang === 'pt'
+    ? { hero: 'Sua Mesa. Mais Inteligente.', sub: 'O DeskBuddy monitora sua presen\u00e7a, gerencia suas tarefas e oferece coaching com IA \u2014 tudo em uma tela circular na sua mesa.', cta1: 'Baixar App', cta2: 'Como Funciona',
+        featLabel: 'Recursos', featTitle: 'Tudo para manter o foco', featSub: 'O DeskBuddy combina sensores, software inteligente e IA para criar melhores h\u00e1bitos.',
+        f1: 'Detec\u00e7\u00e3o de Presen\u00e7a', f1d: 'Radar mmWave detecta quando voc\u00ea est\u00e1 na mesa. Monitora tempo, sess\u00f5es de foco e pausas automaticamente.',
+        f2: 'Gerenciador de Tarefas', f2d: 'Listas de tarefas di\u00e1rias e mensais com prazos, pontos e controle de atrasos.',
+        f3: 'Coach de Produtividade IA', f3d: 'Conecte Groq, Gemini ou DeepSeek para mensagens motivacionais em tempo real. 4 personas.',
+        f4: 'Mostradores de Rel\u00f3gio', f4d: 'Alternar entre anal\u00f3gico, digital, minimalista, hi-tech e aviador.',
+        f5: 'Painel Web', f5d: 'Controle total pelo navegador. Estat\u00edsticas, configura\u00e7\u00f5es, arquivos e cron\u00f4metros.',
+        f6: 'MQTT & Telemetria', f6d: 'Publique dados de presen\u00e7a no seu broker MQTT. Integre com Home Assistant e Node-RED.',
+        setupLabel: 'Configura\u00e7\u00e3o', setupTitle: 'Tr\u00eas minutos para trabalhar melhor',
+        s1t: 'Coloque na Mesa', s1d: 'Posicione o DeskBuddy de frente para voc\u00ea. O sensor mmWave calibra automaticamente.',
+        s2t: 'Conecte ao WiFi', s2d: 'Conecte-se via portal cativo ou IP est\u00e1tico. mDNS torna a descoberta autom\u00e1tica.',
+        s3t: 'Abra o Painel', s3d: 'Instale o app companion ou acesse deskbuddy.local. Estat\u00edsticas e IA prontos.',
+        s4t: 'Mantenha o Foco', s4d: 'Deixe o DeskBuddy monitorar seu tempo e mant\u00ea-lo motivado durante o dia.',
+        dlLabel: 'App Desktop', dlTitle: 'Um clique para seu painel', dlSub: 'O DeskBuddy Companion fica na bandeja do sistema, descobre seu dispositivo automaticamente.',
+        priceLabel: 'Pre\u00e7os', priceTitle: 'Escolha seu DeskBuddy', priceSub: 'Frete gr\u00e1tis para todo o Brasil. 30 dias de garantia.',
+        buy: 'Comprar Agora', noship: 'Sem necessidade de cadastro. O app se conecta apenas localmente.',
+        badge: 'Agora Dispon\u00edvel'
+      }
+    : { hero: 'Your Desk. Smarter.', sub: 'DeskBuddy tracks your presence, manages your tasks, and delivers AI-powered coaching \u2014 all from a beautiful circular display on your desk. Built for focus.', cta1: 'Get the Companion App', cta2: 'See How It Works',
+        featLabel: 'Features', featTitle: 'Everything you need to stay focused', featSub: 'DeskBuddy combines hardware sensing, smart software, and AI to build better work habits.',
+        f1: 'Presence Detection', f1d: 'mmWave radar detects when you\'re at your desk. Tracks desk time, focus sessions, and breaks automatically.',
+        f2: 'Task & Agenda Manager', f2d: 'Built-in daily and monthly task lists with due dates, points, and overdue tracking.',
+        f3: 'AI Productivity Coach', f3d: 'Connect Groq, Gemini, or DeepSeek for real-time motivational messages. Choose from 4 coaching personas.',
+        f4: 'Customizable Clock Faces', f4d: 'Switch between analog, digital, minimalist, hi-tech, developer, and aviator faceplates.',
+        f5: 'Web Dashboard', f5d: 'Full control from any browser on your network. Stats, settings, files, and timers.',
+        f6: 'MQTT & Telemetry', f6d: 'Publish presence data to your MQTT broker. Integrate with Home Assistant, Node-RED.',
+        setupLabel: 'Setup', setupTitle: 'Three minutes to smarter work',
+        s1t: 'Place on Desk', s1d: 'Position the DeskBuddy facing you. The mmWave sensor calibrates automatically.',
+        s2t: 'Connect to WiFi', s2d: 'Join your network via captive portal or configure static IP. mDNS makes discovery automatic.',
+        s3t: 'Open Dashboard', s3d: 'Install the companion app or visit deskbuddy.local. Your stats, tasks, and AI coach are ready.',
+        s4t: 'Stay Focused', s4d: 'Let DeskBuddy track your time, surface overdue tasks, and keep you motivated throughout the day.',
+        dlLabel: 'Desktop App', dlTitle: 'One click to your dashboard', dlSub: 'The DeskBuddy Companion lives in your system tray, auto-discovers your device, and opens the dashboard instantly.',
+        priceLabel: 'Pricing', priceTitle: 'Choose your DeskBuddy', priceSub: 'Free shipping across Canada and the US. 30-day return policy.',
+        buy: 'Buy Now', noship: 'No registration required. Companion app connects locally only.',
+        badge: 'Now Shipping v1.0'
+      };
   const svg = (platform) => {
     if (platform === 'win') return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.5l8-1.1v6.6H3zm0 1h8v6.6l-8-1.1V13zm9-7.3L21 3v9h-9V5.7zm0 13.6V13h9v9l-9-2.7z"/></svg>';
     if (platform === 'mac') return '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>';
@@ -520,7 +620,8 @@ function LANDING_PAGE(fileSize, checksum) {
   .price-features li{color:#94a3b8;font-size:0.84rem;padding:6px 0;border-bottom:1px solid #1e293b}
   .price-features li:last-child{border:none}
   .price-features li::before{content:'\\2713';color:#38bdf8;margin-right:8px;font-weight:700}
-  .btn-buy{display:inline-block;width:100%;padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all .2s;cursor:not-allowed;opacity:0.5}
+  .btn-buy{display:inline-block;width:100%;padding:12px;border-radius:8px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all .2s;text-align:center}
+  .btn-buy:hover{transform:translateY(-1px)}
   .btn-buy.purple{background:#7c3aed;color:#fff}
   .btn-buy.frost{background:#38bdf8;color:#0a0e17}
   .coming-soon-badge{display:inline-block;background:#7c3aed20;color:#a78bfa;font-size:0.65rem;padding:2px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:0.05em}
@@ -549,50 +650,50 @@ function LANDING_PAGE(fileSize, checksum) {
 </nav>
 
 <section class="hero">
-  <div class="hero-badge">&#x2022; Now Shipping v1.0</div>
-  <h1>Your Desk. Smarter.</h1>
-  <p>DeskBuddy tracks your presence, manages your tasks, and delivers AI-powered coaching — all from a beautiful circular display on your desk. Built for focus.</p>
+  <div class="hero-badge">&#x2022; ${t.badge}</div>
+  <h1>${t.hero}</h1>
+  <p>${t.sub}</p>
   <div class="actions">
-    <a href="#download" class="btn btn-primary">Get the Companion App</a>
-    <a href="#features" class="btn btn-secondary">See How It Works</a>
+    <a href="#download" class="btn btn-primary">${t.cta1}</a>
+    <a href="#features" class="btn btn-secondary">${t.cta2}</a>
   </div>
 </section>
 
 <section id="features">
   <div class="container">
-    <div class="section-label">Features</div>
-    <h2 class="section-title">Everything you need to stay focused</h2>
-    <p class="section-sub">DeskBuddy combines hardware sensing, smart software, and AI to build better work habits.</p>
+    <div class="section-label">${t.featLabel}</div>
+    <h2 class="section-title">${t.featTitle}</h2>
+    <p class="section-sub">${t.featSub}</p>
     <div class="features">
       <div class="feature-card">
         <div class="feature-icon">&#x1F4CD;</div>
-        <h3>Presence Detection</h3>
-        <p>mmWave radar detects when you're at your desk. Tracks desk time, focus sessions, and breaks automatically — no manual input needed.</p>
+        <h3>${t.f1}</h3>
+        <p>${t.f1d}</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F4CB;</div>
-        <h3>Task & Agenda Manager</h3>
-        <p>Built-in daily and monthly task lists with due dates, points, and overdue tracking. Manage everything from the web dashboard.</p>
+        <h3>${t.f2}</h3>
+        <p>${t.f2d}</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F9E0;</div>
-        <h3>AI Productivity Coach</h3>
-        <p>Connect Groq, Gemini, or DeepSeek for real-time motivational messages tailored to your work patterns. Choose from 4 coaching personas.</p>
+        <h3>${t.f3}</h3>
+        <p>${t.f3d}</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x23F0;</div>
-        <h3>Customizable Clock Faces</h3>
-        <p>Switch between analog, digital, minimalist, hi-tech, developer, and aviator faceplates. Your desk, your style.</p>
+        <h3>${t.f4}</h3>
+        <p>${t.f4d}</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F310;</div>
-        <h3>Web Dashboard</h3>
-        <p>Full control from any browser on your network. View stats, configure settings, manage files, and run timers — all over WiFi.</p>
+        <h3>${t.f5}</h3>
+        <p>${t.f5d}</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F4E1;</div>
-        <h3>MQTT & Telemetry</h3>
-        <p>Publish presence data to your MQTT broker. Integrate with Home Assistant, Node-RED, or your own automation stack.</p>
+        <h3>${t.f6}</h3>
+        <p>${t.f6d}</p>
       </div>
     </div>
   </div>
@@ -600,28 +701,28 @@ function LANDING_PAGE(fileSize, checksum) {
 
 <section class="how">
   <div class="container">
-    <div class="section-label">Setup</div>
-    <h2 class="section-title">Three minutes to smarter work</h2>
+    <div class="section-label">${t.setupLabel}</div>
+    <h2 class="section-title">${t.setupTitle}</h2>
     <div class="steps-row">
       <div class="step">
         <div class="step-num">1</div>
-        <h4>Place on Desk</h4>
-        <p>Position the DeskBuddy facing you. The mmWave sensor calibrates automatically.</p>
+        <h4>${t.s1t}</h4>
+        <p>${t.s1d}</p>
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <h4>Connect to WiFi</h4>
-        <p>Join your network via captive portal or configure static IP. mDNS makes discovery automatic.</p>
+        <h4>${t.s2t}</h4>
+        <p>${t.s2d}</p>
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <h4>Open Dashboard</h4>
-        <p>Install the companion app or visit deskbuddy.local. Your stats, tasks, and AI coach are ready.</p>
+        <h4>${t.s3t}</h4>
+        <p>${t.s3d}</p>
       </div>
       <div class="step">
         <div class="step-num">4</div>
-        <h4>Stay Focused</h4>
-        <p>Let DeskBuddy track your time, surface overdue tasks, and keep you motivated throughout the day.</p>
+        <h4>${t.s4t}</h4>
+        <p>${t.s4d}</p>
       </div>
     </div>
   </div>
@@ -629,23 +730,23 @@ function LANDING_PAGE(fileSize, checksum) {
 
 <section id="download" class="download-section">
   <div class="container">
-    <div class="section-label">Desktop App</div>
-    <h2 class="section-title">One click to your dashboard</h2>
-    <p class="section-sub">The DeskBuddy Companion lives in your system tray, auto-discovers your device, and opens the dashboard instantly.</p>
+    <div class="section-label">${t.dlLabel}</div>
+    <h2 class="section-title">${t.dlTitle}</h2>
+    <p class="section-sub">${t.dlSub}</p>
     ${downloadSection}
-    <p style="color:#64748b;font-size:0.78rem;margin-top:12px">No registration required. Companion app connects locally only.</p>
+    <p style="color:#64748b;font-size:0.78rem;margin-top:12px">${t.noship}</p>
   </div>
 </section>
 
 <section id="pricing">
   <div class="container">
-    <div class="section-label">Pricing</div>
-    <h2 class="section-title">Choose your DeskBuddy</h2>
-    <p class="section-sub" style="margin-bottom:32px"><span class="coming-soon-badge">Coming Soon</span>&ensp;Online ordering is being built. Join the waitlist below.</p>
+    <div class="section-label">${t.priceLabel}</div>
+    <h2 class="section-title">${t.priceTitle}</h2>
+    <p class="section-sub" style="margin-bottom:32px">${t.priceSub}</p>
     <div class="pricing-grid">
       <div class="price-card">
         <div class="price-name">DeskBuddy Kit</div>
-        <div class="price-amount">$XX<span>.00</span></div>
+        <div class="price-amount">$99<span>.00</span></div>
         <div class="price-desc">ESP32-C3 + GC9A01 display + mmWave sensor</div>
         <ul class="price-features">
           <li>GC9A01 240×240 circular IPS display</li>
@@ -655,11 +756,11 @@ function LANDING_PAGE(fileSize, checksum) {
           <li>Web dashboard & WiFi provisioning</li>
           <li>DeskBuddy Companion tray app</li>
         </ul>
-        <span class="btn btn-buy frost">Available Soon</span>
+        <a href="/store" class="btn btn-buy frost" style="cursor:pointer;opacity:1">${t.buy}</a>
       </div>
       <div class="price-card popular">
         <div class="price-name">DeskBuddy + AI Bundle</div>
-        <div class="price-amount">$XX<span>.00</span></div>
+        <div class="price-amount">$149<span>.00</span></div>
         <div class="price-desc">Everything in Kit, plus AI coaching & cloud telemetry</div>
         <ul class="price-features">
           <li>Everything in DeskBuddy Kit</li>
@@ -669,11 +770,11 @@ function LANDING_PAGE(fileSize, checksum) {
           <li>Over-the-air firmware updates</li>
           <li>Priority email support</li>
         </ul>
-        <span class="btn btn-buy purple">Available Soon</span>
+        <a href="/store" class="btn btn-buy purple" style="cursor:pointer;opacity:1">${t.buy}</a>
       </div>
       <div class="price-card">
         <div class="price-name">DeskBuddy Pro</div>
-        <div class="price-amount">$XX<span>.00</span></div>
+        <div class="price-amount">$199<span>.00</span></div>
         <div class="price-desc">For teams and power users</div>
         <ul class="price-features">
           <li>Everything in AI Bundle</li>
@@ -683,7 +784,7 @@ function LANDING_PAGE(fileSize, checksum) {
           <li>Custom faceplate designer</li>
           <li>Dedicated support channel</li>
         </ul>
-        <span class="btn btn-buy purple">Available Soon</span>
+        <a href="/store" class="btn btn-buy purple" style="cursor:pointer;opacity:1">${t.buy}</a>
       </div>
     </div>
     <p style="text-align:center;color:#475569;font-size:0.78rem;margin-top:28px">Free shipping worldwide. 30-day return policy.</p>
@@ -712,7 +813,11 @@ async function seedProducts(db) {
 }
 
 function STORE_PAGE(products) {
-  const items = products.map(p => '<div class="store-card" data-slug="'+p.slug+'"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="store-price">$'+(p.price_cents/100).toFixed(2)+' CAD</div><button class="btn btn-primary store-add" data-slug="'+p.slug+'" data-name="'+p.name+'" data-price="'+p.price_cents+'">Add to Cart</button></div>').join('');
+  const items = products.map(p => {
+    const slug = JSON.stringify(p.slug);
+    const name = JSON.stringify(p.name);
+    return '<div class="store-card"><h3>'+p.name+'</h3><p>'+p.description+'</p><div class="store-price">$'+(p.price_cents/100).toFixed(2)+' CAD</div><button class="btn btn-primary" onclick="addToCart('+slug+','+name+','+p.price_cents+')">Add to Cart</button></div>';
+  }).join('');
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>DeskBuddy Store</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;min-height:100vh}.nav{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;max-width:1200px;margin:0 auto}.nav-logo{font-size:1.3rem;font-weight:800;color:#38bdf8;text-decoration:none}.nav-links{display:flex;gap:28px;align-items:center}.nav-links a{color:#94a3b8;text-decoration:none;font-size:0.88rem}.nav-links a:hover{color:#e2e8f0}.cart-badge{background:#38bdf8;color:#0a0e17;border-radius:10px;padding:2px 8px;font-size:0.72rem;font-weight:700;display:none}.container{max-width:1000px;margin:0 auto;padding:40px 20px}.store-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:30px}.store-card{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:28px;transition:border-color .2s}.store-card:hover{border-color:#38bdf840}.store-card h3{font-size:1.1rem;margin-bottom:8px;color:#f1f5f9}.store-card p{color:#64748b;font-size:0.85rem;line-height:1.5;margin-bottom:16px}.store-price{font-size:1.6rem;font-weight:800;color:#38bdf8;margin-bottom:16px}.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:8px;font-weight:700;font-size:0.9rem;text-decoration:none;transition:all .2s;cursor:pointer;border:none}.btn-primary{background:#38bdf8;color:#0a0e17}.btn-primary:hover{background:#7dd3fc;transform:translateY(-1px)}.btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}.btn-secondary:hover{background:#334155}.cart-panel{position:fixed;right:0;top:0;width:380px;height:100vh;background:#111827;border-left:1px solid #1e293b;padding:24px;transform:translateX(100%);transition:transform .2s;z-index:100;overflow-y:auto}.cart-panel.open{transform:translateX(0)}.cart-overlay{display:none;position:fixed;inset:0;background:#00000060;z-index:99}.cart-overlay.open{display:block}.cart-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #1e293b}.cart-item button{background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem}.cart-total{font-size:1.3rem;font-weight:800;margin:16px 0;text-align:right}#checkout-email{width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#f8fafc;margin-bottom:12px;font-size:0.88rem}.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#38bdf8;color:#0a0e17;padding:12px 24px;border-radius:10px;font-weight:700;font-size:0.9rem;z-index:200;opacity:0;transition:opacity .3s}.toast.show{opacity:1}.footer{text-align:center;padding:40px 20px;color:#475569;font-size:0.78rem;border-top:1px solid #1e293b;margin-top:40px}.footer a{color:#64748b}@media(max-width:640px){.nav{padding:16px 20px}.cart-panel{width:100%}}</style></head><body><nav class="nav"><a href="/" class="nav-logo">DeskBuddy</a><div class="nav-links"><a href="/store">Store</a><a href="/support">Support</a><a href="/companion">App</a><button class="btn btn-secondary" onclick="toggleCart()" style="padding:8px 14px;font-size:0.82rem">Cart <span class="cart-badge" id="cartBadge">0</span></button></div></nav><div class="container"><div style="color:#38bdf8;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;text-align:center">Store</div><h1 style="text-align:center;font-size:2rem;font-weight:800;margin:8px 0 4px">DeskBuddy Products</h1><p style="text-align:center;color:#64748b;font-size:0.9rem">Free shipping across Canada and the US.</p><div class="store-grid">'+items+'</div></div><div class="cart-overlay" id="cartOverlay" onclick="closeCart()"></div><div class="cart-panel" id="cartPanel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><h2 style="font-size:1.2rem">Your Cart</h2><button onclick="closeCart()" style="background:none;border:none;color:#94a3b8;font-size:1.3rem;cursor:pointer">&times;</button></div><div id="cartItems"><p style="color:#64748b;font-size:0.85rem">Your cart is empty.</p></div><div class="cart-total" id="cartTotal"></div><input type="email" id="checkout-email" placeholder="Email for receipt (optional)" /><button class="btn btn-primary" style="width:100%;justify-content:center" id="checkoutBtn" onclick="checkout()" disabled>Checkout</button><p style="color:#64748b;font-size:0.7rem;margin-top:8px;text-align:center">Powered by Stripe. Secure payment.</p></div><div class="toast" id="toast"></div><footer class="footer">DeskBuddy &copy; 2026 &middot; <a href="/">Home</a> &middot; <a href="/support">Support</a></footer><script>var cart=JSON.parse(localStorage.getItem("deskbuddy_cart")||"[]");function saveCart(){localStorage.setItem("deskbuddy_cart",JSON.stringify(cart));updateCartUI()}function addToCart(slug,name,price){var i=cart.findIndex(function(c){return c.slug===slug});if(i>=0){cart[i].qty++}else{cart.push({slug:slug,name:name,price:parseInt(price),qty:1})}saveCart();showToast(name+" added!")}function removeFromCart(slug){cart=cart.filter(function(c){return c.slug!==slug});saveCart()}function toggleCart(){document.getElementById("cartPanel").classList.toggle("open");document.getElementById("cartOverlay").classList.toggle("open")}function closeCart(){document.getElementById("cartPanel").classList.remove("open");document.getElementById("cartOverlay").classList.remove("open")}function updateCartUI(){var b=document.getElementById("cartBadge"),t=cart.reduce(function(s,i){return s+i.qty},0);b.textContent=t;b.style.display=t>0?"inline":"none";var e=document.getElementById("cartItems");if(cart.length===0){e.innerHTML="Your cart is empty."}else{e.innerHTML=cart.map(function(c){return "<div class=cart-item><div><strong>"+c.name+"</strong> x"+c.qty+"<br><span style=color:#64748b;font-size:0.75rem>$"+(c.price*c.qty/100).toFixed(2)+"</span></div><button onclick=removeFromCart(\""+c.slug+"\")>&times;</button></div><\/div>"}).join("")}document.getElementById("cartTotal").textContent=cart.length?"Total: $"+(cart.reduce(function(s,i){return s+i.price*i.qty},0)/100).toFixed(2):"";document.getElementById("checkoutBtn").disabled=cart.length===0}async function checkout(){var email=document.getElementById("checkout-email").value.trim(),items=cart.map(function(c){return{slug:c.slug,qty:c.qty}}),btn=document.getElementById("checkoutBtn");btn.disabled=true;btn.textContent="Redirecting...";try{var r=await fetch("/api/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:items,email:email||undefined})}),d=await r.json();if(d.url){window.location.href=d.url;return}showToast(d.error||"Checkout failed");btn.disabled=false;btn.textContent="Checkout"}catch(e){showToast("Network error");btn.disabled=false;btn.textContent="Checkout"}}function showToast(msg){var t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(function(){t.classList.remove("show")},2500)}document.querySelectorAll(".store-add").forEach(function(b){b.addEventListener("click",function(){addToCart(b.dataset.slug,b.dataset.name,b.dataset.price);toggleCart()})});updateCartUI();<\/script><\/body><\/html>';
 }
 
@@ -722,4 +827,8 @@ function STORE_SUCCESS_PAGE() {
 
 function SUPPORT_PAGE() {
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Support &mdash; DeskBuddy</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;min-height:100vh}.nav{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;max-width:1200px;margin:0 auto}.nav-logo{font-size:1.3rem;font-weight:800;color:#38bdf8;text-decoration:none}.nav-links{display:flex;gap:28px}.nav-links a{color:#94a3b8;text-decoration:none;font-size:0.88rem}.nav-links a:hover{color:#e2e8f0}.container{max-width:560px;margin:0 auto;padding:60px 20px}h1{font-size:1.8rem;color:#38bdf8;margin-bottom:8px}.sub{color:#64748b;font-size:0.92rem;margin-bottom:32px}.form-group{margin-bottom:16px}.form-group label{display:block;color:#94a3b8;font-size:0.8rem;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em}.form-group input,.form-group textarea{width:100%;padding:10px 12px;border-radius:8px;border:1px solid #334155;background:#111827;color:#f8fafc;font-size:0.9rem;outline:none}.form-group input:focus,.form-group textarea:focus{border-color:#38bdf8}.form-group textarea{min-height:120px;resize:vertical}.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 28px;border-radius:8px;font-weight:700;font-size:0.92rem;text-decoration:none;transition:all .2s;cursor:pointer;border:none}.btn-primary{background:#38bdf8;color:#0a0e17}.btn-primary:hover{background:#7dd3fc;transform:translateY(-1px)}#msg{color:#38bdf8;font-size:0.85rem;margin-top:12px;min-height:20px}.footer{text-align:center;padding:40px 20px;color:#475569;font-size:0.78rem;border-top:1px solid #1e293b}.footer a{color:#64748b}<\/style><\/head><body><nav class="nav"><a href="/" class="nav-logo">DeskBuddy<\/a><div class="nav-links"><a href="/store">Store<\/a><a href="/support">Support<\/a><a href="/companion">App<\/a><\/div><\/nav><div class="container"><h1>Contact Support<\/h1><p class="sub">Have a question or issue with your DeskBuddy? Send us a message and we will reply within 24 hours.<\/p><div class="form-group"><label>Name<\/label><input type="text" id="name" placeholder="Your name" /><\/div><div class="form-group"><label>Email<\/label><input type="email" id="email" placeholder="you@example.com" /><\/div><div class="form-group"><label>Subject<\/label><input type="text" id="subject" placeholder="What is this about?" /><\/div><div class="form-group"><label>Message<\/label><textarea id="message" placeholder="Describe your issue..."><\/textarea><\/div><button class="btn btn-primary" onclick="submitTicket()">Send Message<\/button><div id="msg"><\/div><\/div><footer class="footer">DeskBuddy &copy; 2026 &middot; <a href="/">Home<\/a> &middot; <a href="/store">Store<\/a><\/footer><script>async function submitTicket(){var n=document.getElementById("name").value.trim(),e=document.getElementById("email").value.trim(),s=document.getElementById("subject").value.trim(),m=document.getElementById("message").value.trim();if(!n||!e||!s||!m){document.getElementById("msg").textContent="All fields are required.";return}try{var r=await fetch("/api/support",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:n,email:e,subject:s,message:m})}),d=await r.json();if(d.ok){document.getElementById("msg").textContent="Message sent! We will get back to you soon.";document.querySelectorAll("input,textarea").forEach(function(el){el.value=""})}else{document.getElementById("msg").textContent=d.error||"Something went wrong."}}catch(err){document.getElementById("msg").textContent="Network error."}}<\/script><\/body><\/html>';
+}
+
+function ADMIN_SETUP_HTML() {
+  return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Admin Setup</title><style>*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.card{background:#111827;border:1px solid #1e293b;border-radius:16px;padding:40px;max-width:480px;text-align:center}h1{font-size:1.4rem;color:#38bdf8;margin-bottom:12px}p{color:#64748b;font-size:0.9rem;line-height:1.5;margin-bottom:20px}code{background:#1e293b;padding:4px 8px;border-radius:4px;font-size:0.85rem;color:#38bdf8}.footer{margin-top:24px;color:#475569;font-size:0.75rem}</style></head><body><div class="card"><h1>Admin Not Configured</h1><p>Set an admin password with:</p><code>npx wrangler secret put ADMIN_PASSWORD</code><p>Then reload this page.</p><div class="footer">DeskBuddy Admin</div></div></body></html>';
 }
