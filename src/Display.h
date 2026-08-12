@@ -29,6 +29,8 @@ struct RGBColor {
 
 #include "State.h"
 
+#include "Audio.h"
+
 // Forward declarations for faceplate sprite cleanup
 void cleanupDeskbuddySprites();
 
@@ -60,6 +62,9 @@ extern TFT_eSprite minuteHandSprite;
 extern TFT_eSprite secondHandSprite;
 extern TFT_eSprite centerBgSprite;
 
+// Forward declaration used by drawRLEImage
+inline uint16_t applyColorTint(uint16_t color, uint16_t overrideColor);
+
 // Draw custom PackBits-RLE compressed image from LittleFS to TFT
 inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t overrideColor = 0) {
   appStats.fsReadCount++;
@@ -81,25 +86,7 @@ inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t ov
       // Repeating run packet
       uint16_t color;
       if (file.read((uint8_t*)&color, 2) == 2) {
-        if (overrideColor != 0) {
-          uint16_t g_5 = (color >> 6) & 0x1F;
-          uint16_t b_5 = color & 0x1F;
-          uint16_t val = (g_5 > b_5) ? g_5 : b_5;
-          
-          uint16_t target_r = (overrideColor >> 11) & 0x1F;
-          uint16_t target_g = (overrideColor >> 5) & 0x3F;
-          uint16_t target_b = overrideColor & 0x1F;
-          
-          uint16_t out_r = (val * target_r) / 21;
-          uint16_t out_g = (val * target_g) / 21;
-          uint16_t out_b = (val * target_b) / 21;
-          
-          if (out_r > target_r) out_r = target_r;
-          if (out_g > target_g) out_g = target_g;
-          if (out_b > target_b) out_b = target_b;
-          
-          color = (out_r << 11) | (out_g << 5) | out_b;
-        }
+        color = applyColorTint(color, overrideColor);
         tft.pushColor(color, count);
       }
     } else {
@@ -107,25 +94,7 @@ inline bool drawRLEImage(const char* filename, int16_t x, int16_t y, uint16_t ov
       for (int i = 0; i < count; i++) {
         uint16_t color;
         if (file.read((uint8_t*)&color, 2) == 2) {
-          if (overrideColor != 0) {
-            uint16_t g_5 = (color >> 6) & 0x1F;
-            uint16_t b_5 = color & 0x1F;
-            uint16_t val = (g_5 > b_5) ? g_5 : b_5;
-            
-            uint16_t target_r = (overrideColor >> 11) & 0x1F;
-            uint16_t target_g = (overrideColor >> 5) & 0x3F;
-            uint16_t target_b = overrideColor & 0x1F;
-            
-            uint16_t out_r = (val * target_r) / 21;
-            uint16_t out_g = (val * target_g) / 21;
-            uint16_t out_b = (val * target_b) / 21;
-            
-            if (out_r > target_r) out_r = target_r;
-            if (out_g > target_g) out_g = target_g;
-            if (out_b > target_b) out_b = target_b;
-            
-            color = (out_r << 11) | (out_g << 5) | out_b;
-          }
+          color = applyColorTint(color, overrideColor);
           tft.pushColor(color, 1);
         }
       }
@@ -402,9 +371,11 @@ inline void updateTFTDisplay(unsigned long now) {
 #endif
     
     if (mqttClient.connected()) {
+#if DESKBUDDY_DEBUG
       char payload[64];
       snprintf(payload, sizeof(payload), "{\"freeHeap\":%u,\"minFreeHeap\":%u}", freeHeap, minFreeHeap);
       mqttClient.publish("deskbuddy/heap", payload);
+#endif
     }
   }
 
@@ -461,6 +432,7 @@ inline void updateTFTDisplay(unsigned long now) {
       activeAlertIsAi = isAi;
       appState.aiScreenEndTime = millis() + durationMs;
       newAlert = true;
+      if (audioEnabled) playKnock();
       if (appState.lastTriggeredEventType != EVENT_JOURNAL && appState.lastTriggeredEventType != EVENT_TASK_DUE) {
         tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
       }
@@ -477,6 +449,7 @@ inline void updateTFTDisplay(unsigned long now) {
     }
     appState.aiScreenEndTime = millis() + getAlertDurationMs(welcomeLines, false);
     newAlert = true;
+    if (audioEnabled) playKnock();
     if (appState.lastTriggeredEventType != EVENT_JOURNAL && appState.lastTriggeredEventType != EVENT_TASK_DUE) {
       tftMsgHistory.record(activeAlertMessage.c_str(), appState.lastTriggeredEventType, activeAlertIsAi);
     }
@@ -505,6 +478,7 @@ inline void updateTFTDisplay(unsigned long now) {
           activeAlertIsAi = false;
           appState.aiScreenEndTime = millis() + getAlertDurationMs(pLines, false);
           newAlert = true;
+          if (audioEnabled) playKnock();
 
           if (nextPages.length() > 0) {
             unsigned long dur = getAlertDurationMs(pLines, false);
@@ -527,6 +501,7 @@ inline void updateTFTDisplay(unsigned long now) {
         activeAlertIsAi = false;
         appState.aiScreenEndTime = millis() + durationMs;
         newAlert = true;
+        if (audioEnabled) playKnock();
       }
     } else {
       appState.journalSequenceActive = false;

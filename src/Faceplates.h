@@ -25,6 +25,26 @@ extern PubSubClient mqttClient;
 // SECTION 1: GRAPHICS & ASSETS INTERFACE
 // ============================================================================
 
+inline int get12hDisplayHour(int h) {
+  if (appConfig.time24h) return h;
+  int display_h = h % 12;
+  if (display_h == 0) display_h = 12;
+  return display_h;
+}
+
+inline int getDailyProductivityPct() {
+  if (appConfig.targetHours <= 0.0f) return 0;
+  int pct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
+  if (pct > 100) pct = 100;
+  return pct;
+}
+
+inline void drawMailIcon(int x, int y, uint16_t bgColor, uint16_t fgColor) {
+  tft.fillRect(x, y, 17, 12, bgColor);
+  tft.drawRect(x, y, 17, 12, fgColor);
+  tft.drawLine(x, y, x + 8, y + 6, fgColor);
+  tft.drawLine(x + 8, y + 6, x + 16, y, fgColor);
+}
 
 
 // ============================================================================
@@ -148,10 +168,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   static bool lastHasMailDefault = false;
   if (forceRedraw || (appConfig.hasMail != lastHasMailDefault)) {
     if (appConfig.hasMail) {
-      tft.fillRect(200, 46, 17, 12, TFT_BLACK); // Clear first
-      tft.drawRect(200, 46, 17, 12, TFT_YELLOW);
-      tft.drawLine(200, 46, 208, 52, TFT_YELLOW);
-      tft.drawLine(208, 52, 216, 46, TFT_YELLOW);
+      drawMailIcon(200, 46, TFT_BLACK, TFT_YELLOW);
     } else {
       tft.fillRect(200, 46, 17, 12, TFT_BLACK);
     }
@@ -161,11 +178,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   // Time section (center)
   int h = timeClient.getHours();
   int m = timeClient.getMinutes();
-  int display_h = h;
-  if (!appConfig.time24h) {
-    display_h = h % 12;
-    if (display_h == 0) display_h = 12;
-  }
+  int display_h = get12hDisplayHour(h);
   char timeStrBuf[6];
   snprintf(timeStrBuf, sizeof(timeStrBuf), "%02d:%02d", display_h, m);
   
@@ -189,11 +202,7 @@ void drawDefaultClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   String metricText = "";
   switch (metricIndex) {
     case 0: {
-      int pct = 0;
-      if (appConfig.targetHours > 0.0f) {
-        pct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
-      }
-      if (pct > 100) pct = 100;
+      int pct = getDailyProductivityPct();
       metricText = "DAY: " + String(pct) + "%";
       break;
     }
@@ -430,11 +439,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
     if (last_h != -1) {
       tft.fillRect(66, 85, 108, 62, TFT_BLACK); // Clear Hour area safely
     }
-    int display_h = h;
-    if (!appConfig.time24h) {
-      display_h = h % 12;
-      if (display_h == 0) display_h = 12;
-    }
+    int display_h = get12hDisplayHour(h);
     char hourStrBuf[3];
     snprintf(hourStrBuf, sizeof(hourStrBuf), "%02d", display_h);
     appStats.fsReadCount++;
@@ -500,10 +505,7 @@ void drawMinimalistClockFace(unsigned long now, bool forceRedraw, bool showEvent
 
     // Draw Mail envelope icon at X=152, Y=53 (width 15)
     if (appConfig.hasMail) {
-      tft.fillRect(152, 53, 15, 11, TFT_BLACK);
-      tft.drawRect(152, 55, 15, 11, TFT_WHITE);
-      tft.drawLine(152, 55, 159, 61, TFT_WHITE);
-      tft.drawLine(159, 61, 166, 55, TFT_WHITE);
+      drawMailIcon(152, 53, TFT_BLACK, TFT_WHITE);
     } else {
       tft.fillRect(152, 53, 16, 13, TFT_BLACK);
     }
@@ -626,10 +628,7 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
 
   if (mail_status != last_mail || forceRedraw) {
     if (appConfig.hasMail) {
-      tft.fillRect(112, 18, 16, 15, HITECH_BG_STATUS); // Clear area safely
-      tft.drawRect(112, 20, 15, 11, HITECH_CYAN);
-      tft.drawLine(112, 20, 119, 26, HITECH_CYAN);
-      tft.drawLine(119, 26, 126, 20, HITECH_CYAN);
+      drawMailIcon(112, 18, HITECH_BG_STATUS, HITECH_CYAN);
     } else {
       tft.fillRect(112, 18, 16, 15, HITECH_BG_STATUS);
     }
@@ -651,16 +650,11 @@ void drawHiTechClockFace(unsigned long now, bool forceRedraw, bool showEvent, co
     tft.loadFont(FONT_HITECH_TIME, LittleFS);
     tft.setTextColor(HITECH_CYAN, HITECH_BG_TIME);
     tft.setTextDatum(MC_DATUM);
-    
-    int display_h = h;
-    if (!appConfig.time24h) {
-      display_h = h % 12;
-      if (display_h == 0) display_h = 12;
-    }
+
+    int display_h = get12hDisplayHour(h);
     char timeStr[6];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
     tft.drawString(String(timeStr), 117, 56);
-    //tft.drawString("22:22", 120, 56);
     tft.unloadFont();
 
     last_hour = h;
@@ -1002,11 +996,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   }
 
   // 2. Focus progress percentage calculation
-  int pct = 0;
-  if (appConfig.targetHours > 0.0f) {
-    pct = (int)((appStats.totalDeskTime * 100.0f) / (appConfig.targetHours * 3600.0f * 1000.0f));
-  }
-  if (pct > 100) pct = 100;
+  int pct = getDailyProductivityPct();
 
   // 3. Render and cache background + all text overlays + hour/minute hands in RAM canvas on change
   bool updateCanvas = forceRedraw || (m != last_min) || (appState.temp != last_temp) || (ts.tm_mday != last_mday) || (pct != last_pct);
@@ -1020,11 +1010,6 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     centerBgSprite.setTextColor(COLOR_AVIATOR_WEATHER_FG, COLOR_AVIATOR_WEATHER_BG);
     centerBgSprite.drawString(String(appState.temp) + "C", 162, 110, 2);
 
-    // Draw Date Badge (TFT X=70, Y=68 -> relative X=60, Y=58)
-    //char dayStr[3];
-    //snprintf(dayStr, sizeof(dayStr), "%d", ts.tm_mday);
-    //centerBgSprite.drawString(dayStr, 60, 58, 2);
-
     // Draw Top Month/Day (TFT Y=74 -> relative Y=64)
     char monthDayStr[12];
 #if DESKBUDDY_LANG_PTBR
@@ -1037,11 +1022,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     centerBgSprite.drawString(monthDayStr, 86, 61, 2);
 
     // Draw Digital Time (HH:MM) centered at Y=93 (relative Y=83)
-    int display_h = h;
-    if (!appConfig.time24h) {
-      display_h = h % 12;
-      if (display_h == 0) display_h = 12;
-    }
+    int display_h = get12hDisplayHour(h);
     char timeStr[9];
     snprintf(timeStr, sizeof(timeStr), "%02d:%02d", display_h, m);
     centerBgSprite.setTextColor(COLOR_AVIATOR_TIME_FG, COLOR_AVIATOR_TIME_BG);
@@ -2103,11 +2084,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
 
     int h = timeClient.getHours();
     int m = timeClient.getMinutes();
-    int display_h = h;
-    if (!appConfig.time24h) {
-      display_h = h % 12;
-      if (display_h == 0) display_h = 12;
-    }
+    int display_h = get12hDisplayHour(h);
 
     tft.setTextDatum(MC_DATUM);
 
@@ -2129,12 +2106,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     String metricText = "";
     switch (metricIdx) {
       case 0: {
-        int pct = 0;
-        if (appConfig.targetHours > 0.0f) {
-          pct = (int)((appStats.totalDeskTime * 100.0f) /
-                      (appConfig.targetHours * 3600.0f * 1000.0f));
-          if (pct > 100) pct = 100;
-        }
+        int pct = getDailyProductivityPct();
         metricText = "DAY: " + String(pct) + "%";
         break;
       }

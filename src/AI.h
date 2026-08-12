@@ -365,6 +365,17 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
   appState.lastTriggeredEventType = eventType;
   Logger::log("BEHAVIOUR", "triggerBehaviour: event=%d detail=\"%s\" force=%d", eventType, detail.c_str(), forceMode);
 
+  auto loadFallback = [&](int evType, const String &det) {
+    String q = getLocalFallbackQuote(evType);
+    String pq = resolveLocalPlaceholders(q, det);
+    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
+    appState.lastResponseIsAi = false;
+    appState.aiResponse = pq;
+    appState.hasNewAIResponse = true;
+    xSemaphoreGive(appState.aiMutex);
+    return pq;
+  };
+
   // Nagging without an explicit task (e.g. debug TRIGGER NAGGING) resolves the
   // single most-overdue task (daily OR monthly) so the nudge references an actual
   // task by name. This mirrors the first entry the seated 35-min nag would ring.
@@ -563,41 +574,17 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
       } else {
         Logger::log("BEHAVIOUR", "ERROR: AI Query Task handle is NULL. Using local fallback.");
         appState.isAILoading = false;
-        
-        // Immediately load fallback
-        String quote = getLocalFallbackQuote(eventType);
-
-        String personalQuote = resolveLocalPlaceholders(quote, detail);
-        xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
-        appState.lastResponseIsAi = false;
-        appState.aiResponse = personalQuote;
-        appState.hasNewAIResponse = true;
-        xSemaphoreGive(appState.aiMutex);
+        String pq = loadFallback(eventType, detail);
+        Logger::log("BEHAVIOUR", "Picked local fallback (null handle): \"%s\"", pq.c_str());
       }
     } else {
       Logger::log("BEHAVIOUR", "AI query already loading; using local fallback instead of dropping event %d", eventType);
-      String quote = getLocalFallbackQuote(eventType);
-
-      String personalQuote = resolveLocalPlaceholders(quote, detail);
-      Logger::log("BEHAVIOUR", "Picked local fallback (AI busy): \"%s\"", personalQuote.c_str());
-      xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
-      appState.lastResponseIsAi = false;
-      appState.aiResponse = personalQuote;
-      appState.hasNewAIResponse = true;
-      xSemaphoreGive(appState.aiMutex);
+      String pq = loadFallback(eventType, detail);
+      Logger::log("BEHAVIOUR", "Picked local fallback (AI busy): \"%s\"", pq.c_str());
     }
   } else {
-    String quote = getLocalFallbackQuote(eventType);
-
-    String personalQuote = resolveLocalPlaceholders(quote, detail);
-    Logger::log("BEHAVIOUR", "Picked local fallback: \"%s\"", personalQuote.c_str());
-
-    // Immediately post fallback quote to display thread-safely
-    xSemaphoreTake(appState.aiMutex, portMAX_DELAY);
-    appState.lastResponseIsAi = false;
-    appState.aiResponse = personalQuote;
-    appState.hasNewAIResponse = true;
-    xSemaphoreGive(appState.aiMutex);
+    String pq = loadFallback(eventType, detail);
+    Logger::log("BEHAVIOUR", "Picked local fallback: \"%s\"", pq.c_str());
   }
 }
 

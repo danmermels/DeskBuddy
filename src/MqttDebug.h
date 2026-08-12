@@ -13,14 +13,18 @@
 #include "Logger.h"
 #include "Learning.h"
 #include "Timer.h"
+#include "Audio.h"
 
 extern PubSubClient mqttClient;
 extern Preferences preferences;
 extern NTPClient timeClient;
 extern struct tm ts;
+extern bool audioEnabled;
 extern char buf[];
 extern const char* getPresenceStateName(int state);
 extern void triggerBehaviour(int event, String detail, int forceMode);
+
+#if DESKBUDDY_DEBUG
 
 static String presenceStateName(int s) {
   const char* n = getPresenceStateName(s);
@@ -819,6 +823,44 @@ static void handleTimerDebug(const String& args) {
   }
 }
 
+// ---- AUDIO handler ----
+static void handleAudio(const String& args) {
+  if (args == "KNOCK") {
+    if (audioEnabled) playKnock();
+    publishDebug("{\"ok\":1}");
+  }
+  else if (args == "OFF") {
+    audioEnabled = false;
+    digitalWrite(AUDIO_PIN, LOW);
+    publishDebug("{\"ok\":1}");
+  }
+  else if (args == "ON") {
+    audioEnabled = true;
+    publishDebug("{\"ok\":1}");
+  }
+  else if (args.startsWith("TONE ")) {
+    int p = args.indexOf(' ', 5);
+    if (p < 0) { publishDebug("{\"ok\":0}"); return; }
+    int f = args.substring(5, p).toInt();
+    int d = args.substring(p + 1).toInt();
+    if (f >= 20 && f <= 10000 && d >= 1 && d <= 5000) {
+      int halfUs = 500000 / f; // half-period in microseconds
+      int cycles = (f * d) / 1000;
+      int pin = AUDIO_PIN;
+      for (int i = 0; i < cycles; i++) {
+        digitalWrite(pin, HIGH); delayMicroseconds(halfUs);
+        digitalWrite(pin, LOW);  delayMicroseconds(halfUs);
+      }
+      publishDebug("{\"ok\":1}");
+    } else {
+      publishDebug("{\"ok\":0}");
+    }
+  }
+  else {
+    publishDebug("{\"ok\":0}");
+  }
+}
+
 // ---- Main debug command dispatcher ----
 // Parses and dispatches plain-text MQTT commands received from the web terminal or debug broker.
 // Protocol Format: [COMMAND] [arguments...] (e.g. "GET state", "SET config.userName \"alex\"", "SIM away")
@@ -878,9 +920,14 @@ void handleDebugCommand(const String& payload) {
   else if (cmd == "TIMER") {
     handleTimerDebug(args);
   }
+  else if (cmd == "AUDIO") {
+    handleAudio(args);
+  }
   else {
-    publishDebug("{\"ok\":false,\"error\":\"Unknown command '" + cmd + "'. Use GET/SET/SIM/SYS/TRIGGER/TIMER\"}");
+    publishDebug("{\"ok\":false,\"error\":\"Unknown command '" + cmd + "'. Use GET/SET/SIM/SYS/TRIGGER/TIMER/AUDIO\"}");
   }
 }
+
+#endif // DESKBUDDY_DEBUG
 
 #endif // MQTT_DEBUG_H
