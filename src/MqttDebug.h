@@ -23,6 +23,7 @@ extern bool audioEnabled;
 extern char buf[];
 extern const char* getPresenceStateName(int state);
 extern void triggerBehaviour(int event, String detail, int forceMode);
+extern void saveDailyStats();
 
 #if DESKBUDDY_DEBUG
 
@@ -178,6 +179,11 @@ static void handleGetConfig() {
   doc["g5sSens"] = appConfig.g5sSens;
   doc["g6mSens"] = appConfig.g6mSens;
   doc["g6sSens"] = appConfig.g6sSens;
+  doc["activeOdometer"] = appStats.activeOdometer;
+  JsonArray odoLbls = doc.createNestedArray("odometerLabels");
+  for (int i = 0; i < 4; i++) {
+    odoLbls.add(appConfig.odometerLabels[i]);
+  }
   String out;
   serializeJson(doc, out);
   publishDebug(out);
@@ -258,6 +264,12 @@ static void handleGetGeneric(const String& key) {
   else if (key == "deskTime") {
     doc["ok"] = true;
     doc[key] = fmtMs(appStats.totalDeskTime);
+  }
+  else if (key == "activeOdometer" || key == "odometer") {
+    doc["ok"] = true;
+    doc["activeOdometer"] = appStats.activeOdometer;
+    doc["activeLabel"] = appConfig.odometerLabels[appStats.activeOdometer];
+    doc["activeTime"] = fmtMs(appStats.odometerTime[appStats.activeOdometer]);
   }
   else if (key == "focusTime") {
     doc["ok"] = true;
@@ -501,6 +513,29 @@ static void handleSet(const String& args) {
     appConfig.telemetryEndpoint = valStr;
     preferences.putString("telemUrl", appConfig.telemetryEndpoint.c_str());
     ok = true;
+  } else if ((cfgKey == "activeOdometer" || cfgKey == "activeOdo") && isDigitStr(valStr)) {
+    int val = valStr.toInt();
+    if (val >= 0 && val < 4) {
+      appStats.activeOdometer = val;
+      if (isConfig) preferences.putInt("activeOdo", val);
+      saveDailyStats();
+      ok = true;
+    }
+  } else if (cfgKey.startsWith("odometerLabel") && cfgKey.length() == 14) {
+    int idx = cfgKey.substring(13).toInt();
+    if (idx >= 0 && idx < 4) {
+      if (valStr.startsWith("\"") && valStr.endsWith("\"")) {
+        valStr = valStr.substring(1, valStr.length() - 1);
+      }
+      appConfig.odometerLabels[idx] = valStr;
+      if (isConfig) {
+        char k[12];
+        snprintf(k, sizeof(k), "odoLbl%d", idx);
+        preferences.putString(k, valStr.c_str());
+      }
+      saveDailyStats();
+      ok = true;
+    }
   }
 
   // Stats overrides
@@ -923,6 +958,24 @@ void handleDebugCommand(const String& payload) {
   }
   else if (cmd == "TRIGGER") {
     handleTrigger(args);
+  }
+  else if (cmd == "ODOMETER" || cmd == "SELECT_ODOMETER") {
+    args.trim();
+    if (args.length() > 0 && isDigitStr(args)) {
+      int val = args.toInt();
+      if (val >= 0 && val < 4) {
+        appStats.activeOdometer = val;
+        preferences.begin("deskbuddy", false);
+        preferences.putInt("activeOdo", val);
+        preferences.end();
+        saveDailyStats();
+        publishDebug("{\"ok\":true,\"activeOdometer\":" + String(val) + ",\"label\":\"" + appConfig.odometerLabels[val] + "\"}");
+      } else {
+        publishDebug("{\"ok\":false,\"error\":\"Odometer index must be 0-3\"}");
+      }
+    } else {
+      publishDebug("{\"ok\":false,\"error\":\"Usage: ODOMETER <0-3>\"}");
+    }
   }
   else if (cmd == "TIMER") {
     handleTimerDebug(args);

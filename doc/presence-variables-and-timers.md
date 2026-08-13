@@ -106,3 +106,13 @@ Complete reference of all firmware variables, constants, flags, and timers invol
 | `POINTS_THROTTLE_MS` | `13260000UL` | 3.7-hour (221 min) cooldown throttle between points check-ins (90 min in Chatty mode `CHATTY_POINTS_THROTTLE_MS`). |
 | `CURATION_TRIGGER_INTERVAL_MS` | `3000000UL` | 50-minute continuous sitting interval for curation nudge (40 min in Chatty `CHATTY_CURATION_TRIGGER_INTERVAL_MS`). |
 | `CURATION_THROTTLE_MS` | `7200000UL` | 120-minute cooldown throttle between curation nudges (60 min in Chatty `CHATTY_CURATION_THROTTLE_MS`). |
+
+---
+
+## 6. Activity Trip Odometers
+
+| Variable | Type | Description | Persistence & Sync |
+|----------|------|-------------|--------------------|
+| `appStats.activeOdometer` | `uint8_t` | Active trip odometer category index (`0`..`3`). Controls which odometer accumulates pure sitting time when `rawPresent` is `true`. | Persisted in NVS Preferences (`activeOdo`). Preserved across reboots. |
+| `appStats.odometerTime[4]` | `unsigned long[4]` | Monotonically accumulating sitting time (ms) for each category. Sum equals total raw sitting duration `rawPresent`. | Saved to `/stats.json` in LittleFS. Preserved across reboots; reset at daily midnight rollover. |
+| `appConfig.odometerLabels[4]` | `String[4]` | Custom user-defined string labels for the 4 trip odometers (Default EN: `"Work"`, `"Study"`, `"Meeting"`, `"Other"`; PT-BR: `"Trabalho"`, `"Estudo"`, `"Reunião"`, `"Outro"`). | Persisted in NVS Preferences (`odoLbl0`..`odoLbl3`). Editable via web UI modal or MQTT `SET config.odometerLabelX`. |

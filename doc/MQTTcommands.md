@@ -152,6 +152,13 @@ Query system state. Response format: `{"ok":true, ...}` or `{"ok":false,"error":
 {
   "ok": true,
   "deskTime": "4h32m",
+  "activeOdometer": 0,
+  "odometers": [
+    {"label": "Work", "time": "2h15m"},
+    {"label": "Study", "time": "1h10m"},
+    {"label": "Meeting", "time": "45m"},
+    {"label": "Other", "time": "22m"}
+  ],
   "focusTime": "2h15m",
   "breakTime": "45m",
   "breakCount": 3,
@@ -169,7 +176,9 @@ Query system state. Response format: `{"ok":true, ...}` or `{"ok":false,"error":
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `deskTime` | string | Total desk time (formatted `XhYm` or `Ym`) |
+| `deskTime` | string | Total raw desk time (un-debounced) |
+| `activeOdometer` | int | Active trip odometer index (0-3) |
+| `odometers` | array | Array of 4 trip odometer objects with `label` and `time` |
 | `focusTime` | string | Total focus time |
 | `breakTime` | string | Total break time |
 | `breakCount` | int | Number of breaks taken |
@@ -194,6 +203,8 @@ Query system state. Response format: `{"ok":true, ...}` or `{"ok":false,"error":
   "buddyFontIdx": 0,
   "userName": "dan",
   "targetHours": 8.0,
+  "activeOdometer": 0,
+  "odometerLabels": ["Work", "Study", "Meeting", "Other"],
   "focusDistLim": 50,
   "motionRatioLim": 15,
   "distLimit": 120,

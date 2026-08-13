@@ -275,6 +275,40 @@ The landing page serves English or Portuguese based on:
 2. `request.cf.country === 'BR'` → Portuguese, otherwise English
 3. Language switcher in nav saves preference to `localStorage`
 
+---
+
+## ESP32 Embedded Web Dashboard & REST API
+
+The ESP32 firmware hosts an embedded web server (`src/Web_EN.h` and `src/Web_PTBR.h`) served directly at `http://<device-ip>/`.
+
+### Activity Trip Odometers Panel
+
+Located directly below **Presence Metrics** on the main dashboard (`/`), displaying 4 distinct activity tracking category odometers:
+
+- **Single-Row Compact Button Bar**: Displays 4 interactive pill buttons sitting in a single horizontal row (`Work`, `Study`, `Meeting`, `Other` in EN; `Trabalho`, `Estudo`, `Reunião`, `Outro` in PT-BR).
+- **Color Identity System**:
+  - **Odometer 0**: Electric Sky Cyan (`#38bdf8`)
+  - **Odometer 1**: Emerald Mint (`#34d399`)
+  - **Odometer 2**: Amber Gold (`#fbbf24`)
+  - **Odometer 3**: Neon Orange (`#fb923c`)
+- **Active State Highlighting**: Clicking any category button instantly switches active tracking mode. The active button illuminates with its accent color border and background glow.
+- **Label Customization Modal**: Accessible via the edit pencil icon in the card header. Allows users to rename all 4 trip odometer categories (up to 16 chars each).
+
+### Web REST API Endpoints
+
+- **`POST /api/odometer?active=N`**:
+  Switches active trip odometer index (`0`..`3`).
+  - Response: `{"status":"success","active":N}`
+- **`POST /api/odometer_labels`**:
+  Saves user custom labels array.
+  - Body: `{"labels":["Work","Study","Meeting","Other"]}`
+  - Response: `{"status":"success"}`
+- **`GET /radar-data`**:
+  Polls live telemetry JSON including:
+  - `activeOdo`: Current active odometer index (0-3)
+  - `odoLbl0`..`odoLbl3`: Label strings
+  - `odoVal0`..`odoVal3`: Formatted digital clock readout strings (`HH:MM:SS`)
+
 ## Inventory Management
 
 Products have an optional `stock` column (NULL = unlimited). Stock is:
