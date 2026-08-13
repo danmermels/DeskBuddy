@@ -1199,8 +1199,6 @@ void loop(void) {
       // Transition: Away -> Present
       appState.sitDownTime = now;
       appState.sitDownEpoch = timeClient.isTimeSet() ? timeClient.getEpochTime() : 0;
-      appState.lastNagTime = now;
-      appState.lastPointsCadenceTime = now;
       currentSitDownSessionId++;
       Logger::log("STATE", "Away->Present: sit=%lu epoch=%s session=%d state=%s", 
                   now, Logger::formatEpoch(appState.sitDownEpoch).c_str(), currentSitDownSessionId, String(getPresenceStateName(targetState)).c_str());
@@ -1225,6 +1223,15 @@ void loop(void) {
                   (appState.currentBreakDurationMs + appState.totalStopByTimeMs) / 1000UL, 
                   appState.currentBreakDurationMs / 1000UL, 
                   appState.totalStopByTimeMs / 1000UL);
+
+      // Preserve break duration before resetSessionStats() clears it
+      unsigned long breakDurationMsAtSit = appState.currentBreakDurationMs;
+
+      // Only reset session-level cadence timers if returning from a real break (>= 3 min)
+      if (breakDurationMsAtSit >= BREAK_MINIMUM_MS) {
+        appState.lastNagTime = now;
+        appState.lastPointsCadenceTime = now;
+      }
 
       // Check if this is the first sit of the day
       bool isFirstSit = (currentSessionState == PRESENCE_AWAY);
@@ -1269,7 +1276,7 @@ void loop(void) {
           if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {
             appStats.overnightBreakDuration = appStats.firstSitEpoch - appStats.lastAwayEpoch;
           } else {
-            appStats.overnightBreakDuration = appState.currentBreakDurationMs / 1000UL;
+            appStats.overnightBreakDuration = breakDurationMsAtSit / 1000UL;
           }
           appStats.latestBreakDuration = 0; // Do not count overnight away time as the "latest break duration"
           
@@ -1285,20 +1292,19 @@ void loop(void) {
         }
       } else {
         // Standard break return check using pre-calculated duration from transition
-        if (appState.currentBreakDurationMs >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
+        if (breakDurationMsAtSit >= BREAK_MINIMUM_MS) { // Only count break if away > 3 minutes
           appStats.breakCount++;
           appStats.previousLatestBreakDuration = appStats.latestBreakDuration;
-          appStats.latestBreakDuration = appState.currentBreakDurationMs;
+          appStats.latestBreakDuration = breakDurationMsAtSit;
           appState.isStopByTracking = true;
           Logger::log("STATE", "Away->Present: Handled standard break return: breakCount=%d duration=%lu s", appStats.breakCount, appStats.latestBreakDuration / 1000UL);
           saveDailyStats();
           resetSessionStats();
         } else {
-          Logger::log("STATE", "Away->Present: Ignored brief return (breakMs=%lu < min=%lu)", appState.currentBreakDurationMs, BREAK_MINIMUM_MS);
+          Logger::log("STATE", "Away->Present: Ignored brief return (breakMs=%lu < min=%lu)", breakDurationMsAtSit, BREAK_MINIMUM_MS);
         }
       }
 
-      unsigned long lastAwaySliceMs = (appState.lastStateTransitionTime > 0 && now >= appState.lastStateTransitionTime) ? (now - appState.lastStateTransitionTime) : 0;
       appState.currentPresenceState = targetState;
       currentSessionState = PRESENCE_SITTING;
       appState.lastStateTransitionTime = now;
@@ -1315,19 +1321,19 @@ void loop(void) {
         // instead of the standard greetings. Brief returns under the leeway stay silent.
         // A 30 min cooldown prevents repeated evening sits from re-triggering constantly.
         static unsigned long lastLateHoursSitTime = 0;
-        if (appConfig.aiMode >= 1 && appState.currentBreakDurationMs >= BREAK_MINIMUM_MS && now - lastLateHoursSitTime >= LATEHOURS_COOLDOWN_MS) {
+        if (appConfig.aiMode >= 1 && breakDurationMsAtSit >= BREAK_MINIMUM_MS && now - lastLateHoursSitTime >= LATEHOURS_COOLDOWN_MS) {
           lastLateHoursSitTime = now;
           messageManager.scheduleGreetingMessage(EVENT_LATEHOURS_SIT, computeEarlyLateString(ts));
         }
       } else if (wasFirstSitToday || willRollover) {
         if (appConfig.aiMode >= 1) {
-          unsigned long overnightBreak = appState.currentBreakDurationMs / 1000UL;
+          unsigned long overnightBreak = breakDurationMsAtSit / 1000UL;
           String breakStr = (overnightBreak >= OVERNIGHT_THRESHOLD_S) ? formatTime(overnightBreak * 1000) : "";
           messageManager.scheduleGreetingMessage(EVENT_FIRST_SIT, breakStr);
         }
       } else {
-        if (appConfig.aiMode >= 1 && lastAwaySliceMs >= BREAK_MINIMUM_MS) {
-          String tempBreakDuration = formatTime(appState.currentBreakDurationMs);
+        if (appConfig.aiMode >= 1 && breakDurationMsAtSit >= BREAK_MINIMUM_MS) {
+          String tempBreakDuration = formatTime(breakDurationMsAtSit);
           double hoursWorked = (double)appStats.totalDeskTime / 3600000.0;
           bool excessive = false;
           if (hoursWorked > EXCESSIVE_BREAKS_MIN_WORKED_HOURS) {
@@ -1393,7 +1399,8 @@ void loop(void) {
       
     // Day-start: a held late-hours sit still active when work hours begin burns the flag
     // and promotes to a proper FIRST_SIT greeting if the user has been continuously present.
-    if (appStats.firstSitToday && appState.wasFirstSitThisSession && appState.currentPresenceState != STATE_AWAY && !isLateHoursNow()) {
+    if (appStats.firstSitToday && appState.wasFirstSitThisSession && appState.currentPresenceState != STATE_AWAY && !isLateHoursNow() &&
+        (now - appState.continuousPresenceStart) >= DEBOUNCE_PRESENCE_OVERNIGHT_MS) {
       appStats.firstSitToday = false;
       appStats.firstSitEpoch = appState.sitDownEpoch;
       if (appStats.lastAwayEpoch > 0 && appStats.firstSitEpoch >= appStats.lastAwayEpoch) {

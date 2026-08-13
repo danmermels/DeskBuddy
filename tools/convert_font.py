@@ -141,6 +141,9 @@ if __name__ == "__main__":
         print("Error: Font size must be an integer.")
         sys.exit(1)
         
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = script_dir if os.path.basename(script_dir) != 'tools' else os.path.dirname(script_dir)
+
     # Character limiter (default if not supplied)
     if len(sys.argv) == 4:
         arg_val = sys.argv[3].strip()
@@ -153,17 +156,25 @@ if __name__ == "__main__":
         elif arg_val == "3":
             char_set = "".join(chr(i) for i in range(32, 127))
             print("Using Preset 3 (Full Printable ASCII): All standard letters, numbers, and symbols.")
-        elif os.path.exists(arg_val):
-            try:
-                with open(arg_val, "r", encoding="utf-8") as f:
-                    char_set = f.read()
-                print(f"Loaded custom character limiter from file '{arg_val}' ({len(char_set)} chars)")
-            except Exception as e:
-                print(f"Error reading file '{arg_val}': {e}. Using raw argument string.")
-                char_set = arg_val
         else:
-            char_set = arg_val
-            print(f"Using custom character limiter: '{char_set}'")
+            # Check if arg_val or arg_val + ".txt" exists in current dir or project_root
+            resolved_file = None
+            for candidate in [arg_val, arg_val + ".txt", os.path.join(project_root, arg_val), os.path.join(project_root, arg_val + ".txt")]:
+                if os.path.isfile(candidate):
+                    resolved_file = candidate
+                    break
+
+            if resolved_file:
+                try:
+                    with open(resolved_file, "r", encoding="utf-8") as f:
+                        char_set = f.read()
+                    print(f"Loaded custom character limiter from file '{resolved_file}' ({len(char_set)} chars)")
+                except Exception as e:
+                    print(f"Error reading file '{resolved_file}': {e}. Using raw argument string.")
+                    char_set = arg_val
+            else:
+                char_set = arg_val
+                print(f"Using custom character limiter: '{char_set}'")
             
     else:
         char_set = " 0123456789:ACDEFHIMNORSTUW/h"

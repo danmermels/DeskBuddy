@@ -236,28 +236,27 @@ inline String resolvePromptPlaceholders(int eventType, String templateStr, Strin
   return fullPrompt;
 }
 
-void publishMqttDebugRequest(const String& url, const String& body) {
+inline void publishMqttDebugRequest(const String& url, const String& body) {
   if (appState.mqttConnected) {
-    String fullReq = "---------- AI Request ----------\n";
-    fullReq += "URL: " + url + "\n";
-    fullReq += "Body: " + body + "\n";
-    fullReq += "-------------------------------";
-    enqueueMqttPublish("deskbuddy/debug/ai/request", fullReq);
+    enqueueMqttPublish("deskbuddy/debug/ai/request", body);
   }
 }
 
-void publishMqttDebugResponse(int httpCode, const String& payload) {
+inline void publishMqttDebugResponse(int httpCode, const String& payload) {
   if (appState.mqttConnected) {
-    String fullResp = "---------- AI Response ----------\n";
-    fullResp += "HTTP Code: " + String(httpCode) + "\n";
-    fullResp += "Payload: " + payload + "\n";
-    fullResp += "--------------------------------";
-    enqueueMqttPublish("deskbuddy/debug/ai/response", fullResp);
+    enqueueMqttPublish("deskbuddy/debug/ai/response", payload);
+  }
+}
+
+inline void publishMqttDebugTrigger(int eventType, const String& detail, int forceMode) {
+  if (appState.mqttConnected) {
+    String payload = "{\"event\":" + String(eventType) + ",\"detail\":\"" + detail + "\",\"mode\":" + String(forceMode) + "}";
+    enqueueMqttPublish("deskbuddy/debug/ai/trigger", payload);
   }
 }
 
 // Asynchronous FreeRTOS Task for AI HTTPS Queries (Persistent background worker)
-void aiQueryTask(void * parameter) {
+inline void aiQueryTask(void * parameter) {
   while (true) {
     // Wait for task notification to execute a query
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -268,6 +267,7 @@ void aiQueryTask(void * parameter) {
     xSemaphoreGive(appState.aiMutex);
 
     Logger::log("BEHAVIOUR", "AI Request: session=%u promptLen=%d", querySessionId, prompt.length());
+    publishMqttDebugRequest("https://api.groq.com/openai/v1/chat/completions", prompt);
 
     bool success = false;
     int httpCode = -1;
@@ -289,6 +289,7 @@ void aiQueryTask(void * parameter) {
         }
         
         Logger::log("BEHAVIOUR", "AI Response Success: len=%d resp=\"%s\"", response.length(), response.c_str());
+        publishMqttDebugResponse(httpCode, response);
         
         bool discard = false;
       if (appState.lastTriggeredEventType == EVENT_FIRST_SIT || appState.lastTriggeredEventType == EVENT_WELCOME_BACK || appState.lastTriggeredEventType == EVENT_LATEHOURS_SIT) {
@@ -364,6 +365,7 @@ void aiQueryTask(void * parameter) {
 inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 0) {
   appState.lastTriggeredEventType = eventType;
   Logger::log("BEHAVIOUR", "triggerBehaviour: event=%d detail=\"%s\" force=%d", eventType, detail.c_str(), forceMode);
+  publishMqttDebugTrigger(eventType, detail, forceMode);
 
   auto loadFallback = [&](int evType, const String &det) {
     String q = getLocalFallbackQuote(evType);
