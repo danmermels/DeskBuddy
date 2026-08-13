@@ -1823,35 +1823,36 @@ void loop(void) {
     }
   }
 
-  // Nagging check (overdue-task queue): rings every 10 min seated (5 min in Chatty), one task per ring,
-  // most-expired-first. The cursor persists across sessions and resets at midnight.
+  // Nagging check (overdue-task queue): dynamically scales delay based on queue size (today & this month items),
+  // capped at a minimum interval floor (15m Normal / 8m Chatty). Cursor wraps at queue end.
   if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
-    unsigned long nagDelay = (appConfig.aiMode == 2) ? CHATTY_NAGGING_TRIGGER_DELAY_MS : NAGGING_TRIGGER_DELAY_MS;
-    if (now - appState.lastNagTime >= nagDelay) {
-      int currentYear = ts.tm_year + 1900;
-      int currentMonth = ts.tm_mon + 1;
-      int currentDay = ts.tm_mday;
-      char dStr[11];
-      snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
-      char mStr[8];
-      snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
-      int nowMinutes = ts.tm_hour * 60 + ts.tm_min;
+    int currentYear = ts.tm_year + 1900;
+    int currentMonth = ts.tm_mon + 1;
+    int currentDay = ts.tm_mday;
+    char dStr[11], mStr[8];
+    snprintf(dStr, sizeof(dStr), "%04d-%02d-%02d", currentYear, currentMonth, currentDay);
+    snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
+    int nowMinutes = ts.tm_hour * 60 + ts.tm_min;
 
-      std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
-      if (queue.size() > 0) {
+    std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
+    if (queue.size() > 0) {
+      unsigned long baseNagDelay = (appConfig.aiMode == 2) ? CHATTY_NAGGING_TRIGGER_DELAY_MS : NAGGING_TRIGGER_DELAY_MS;
+      unsigned long minNagDelay  = (appConfig.aiMode == 2) ? CHATTY_NAGGING_MIN_INTERVAL_MS   : NAGGING_MIN_INTERVAL_MS;
+      unsigned long effectiveNagDelay = std::max(minNagDelay, baseNagDelay / (unsigned long)queue.size());
+
+      if (now - appState.lastNagTime >= effectiveNagDelay) {
         if (appStats.nagQueueIndex >= (int)queue.size()) {
           appStats.nagQueueIndex = 0;
         }
-        if (appStats.nagQueueIndex < (int)queue.size()) {
-          appState.lastNagTime = now;
-          appStats.nagQueueIndex++;
-          saveDailyStats();
-          messageManager.scheduleMessageWithPriority(
-            EVENT_NAGGING,
-            queue[appStats.nagQueueIndex - 1].text,
-            MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
-          );
-        }
+        appState.lastNagTime = now;
+        String taskText = queue[appStats.nagQueueIndex].text;
+        appStats.nagQueueIndex++;
+        saveDailyStats();
+        messageManager.scheduleMessageWithPriority(
+          EVENT_NAGGING,
+          taskText,
+          MessageManager::P_NORMAL, 0, MessageManager::R_NORMAL
+        );
       }
     }
   }

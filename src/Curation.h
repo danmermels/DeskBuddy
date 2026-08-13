@@ -477,11 +477,8 @@ inline std::vector<OverdueTask> buildOverdueTaskQueue(String currentDayString, S
           overdue = expired > 0;
         } else if (tDate.length() == 10) {
           int diff = currentDaysCount - dateToDays(tDate);
-          if (diff > 0) {
-            overdue = true;
-            expired = diff * 1440L;
-          } else if (diff == 0) {
-            // Due today: overdue once the due time has passed.
+          if (diff == 0) {
+            // Due today: overdue once the due time has passed. Ignore previous days (diff > 0).
             expired = (long)nowMinutes - (tHour * 60 + tMin);
             overdue = expired > 0;
           }
@@ -523,16 +520,13 @@ inline std::vector<OverdueTask> buildOverdueTaskQueue(String currentDayString, S
         bool overdue = false;
         if (isRecurrent) {
           int missedMonths = recurrentMonthlyMissedMonths(task, currentMonthString);
-          if (currentDay > dueDay || missedMonths > 0) {
+          if (missedMonths == 0 && currentDay > dueDay) {
             overdue = true;
-            expired = (long)(currentDay - dueDay) * 1440L + (long)missedMonths * 30L * 1440L;
+            expired = (long)(currentDay - dueDay) * 1440L;
           }
         } else {
           int monthDiff = (currentYear - tYear) * 12 + (currentMonth - tMonth);
-          if (monthDiff > 0) {
-            overdue = true;
-            expired = monthDiff * 30 * 1440L;
-          } else if (monthDiff == 0 && currentDay > dueDay) {
+          if (monthDiff == 0 && currentDay > dueDay) {
             overdue = true;
             expired = (long)(currentDay - dueDay) * 1440L;
           }

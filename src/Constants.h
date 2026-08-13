@@ -104,12 +104,14 @@
 #define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
 #define END_OF_DAY_JOURNAL_HOURS_BEFORE       1   // Hours before workday end to trigger end-of-day journal
 #define MIDDAY_TASK_CHECK_HOUR               12   // 12:00 PM midday threshold for task check observations
-#define NAGGING_TRIGGER_DELAY_MS       3600000UL  // 60 min cadence for the overdue-task nag queue (first nag 60m into a session, then every 60m while seated)
+#define NAGGING_TRIGGER_DELAY_MS       3600000UL  // Base 60 min cadence for the overdue-task nag queue
+#define NAGGING_MIN_INTERVAL_MS         900000UL  // 15 min minimum delay ceiling/floor (Normal)
 #define POINTS_TRIGGER_DELAY_MS       1080000UL  // 18 min cadence for the seated points check-in (first ring 18m into a session, then every 18m while seated)
 #define POINTS_THROTTLE_MS           13260000UL  // 221 min cooldown between points check-ins (~3 per 10h day)
 
 // Chatty mode (aiMode == 2): increased interval cadences
-#define CHATTY_NAGGING_TRIGGER_DELAY_MS 2220000UL  // 37 min (down from 60 min)
+#define CHATTY_NAGGING_TRIGGER_DELAY_MS 2220000UL  // Base 37 min cadence (down from 60 min)
+#define CHATTY_NAGGING_MIN_INTERVAL_MS   480000UL  // 8 min minimum delay ceiling/floor (Chatty)
 #define CHATTY_POINTS_TRIGGER_DELAY_MS    540000UL  // 9 min (down from 18 min)
 #define CHATTY_POINTS_THROTTLE_MS       5400000UL  // 90 min (down from 221 min)
 
