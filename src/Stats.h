@@ -66,6 +66,9 @@ inline void resetDailyStats(uint32_t tempLastAway, int currentDay) {
   appStats.firstSitEpoch = 0;
   appStats.breakCount = 0;
   appStats.totalDeskTime = 0;
+  for (int i = 0; i < 4; i++) {
+    appStats.odometerTime[i] = 0;
+  }
   appStats.totalFocusTime = 0;
   appStats.totalBreakTime = 0;
   appStats.overnightBreakDuration = 0;

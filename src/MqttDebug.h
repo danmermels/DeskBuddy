@@ -124,6 +124,13 @@ static void handleGetStats() {
   DynamicJsonDocument doc(1024);
   doc["ok"] = true;
   doc["deskTime"] = fmtMs(appStats.totalDeskTime);
+  doc["activeOdometer"] = appStats.activeOdometer;
+  JsonArray odo = doc.createNestedArray("odometers");
+  for (int i = 0; i < 4; i++) {
+    JsonObject o = odo.createNestedObject();
+    o["label"] = appConfig.odometerLabels[i];
+    o["time"] = fmtMs(appStats.odometerTime[i]);
+  }
   doc["focusTime"] = fmtMs(appStats.totalFocusTime);
   doc["breakTime"] = fmtMs(appStats.totalBreakTime);
   doc["breakCount"] = appStats.breakCount;

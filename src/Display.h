@@ -593,8 +593,8 @@ inline void updateTFTDisplay(unsigned long now) {
     lastDisplayedPage = targetPage;
   }
 
-  // 1. If user is AWAY (and grace period has expired)
-  if (appState.currentPresenceState == STATE_AWAY && (now - appState.lastStateTransitionTime >= 60000UL)) {
+  // 1. If user is AWAY (and grace period has expired) - DEV Mode (clockFace 3) bypasses this to show continuous debug telemetry
+  if (appConfig.clockFace != 3 && appState.currentPresenceState == STATE_AWAY && (now - appState.lastStateTransitionTime >= 60000UL)) {
     if (!appState.manualTriggerOverride || !isAlertActive) {
       if (forceRedraw) {
         drawRLEImage("/away.rle", 0, 0);

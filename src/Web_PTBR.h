@@ -1,4 +1,4 @@
-﻿#ifndef WEB_PTBR_H
+#ifndef WEB_PTBR_H
 #define WEB_PTBR_H
 
 #include <Arduino.h>
@@ -93,6 +93,65 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
     <div class="metric">
       <span class="label">Distância ao Sensor</span>
       <span class="value" id="dist">0 cm</span>
+    </div>
+  </div>
+
+  <!-- Trip Odometer Card -->
+  <div class="card" id="tripOdometerCard">
+    <div style="position: relative; display: flex; justify-content: center; align-items: center; margin-bottom: 14px;">
+      <h1 style="margin: 0; text-align: center;">Odômetros de Atividade</h1>
+      <button onclick="openOdometerModal()" title="Editar Rótulos" style="position: absolute; right: 0; background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;" onmouseover="this.style.color='#38bdf8';" onmouseout="this.style.color='#94a3b8';">
+        <svg style="width: 18px; height: 18px; fill: currentColor;" viewBox="0 0 24 24">
+          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+        </svg>
+      </button>
+    </div>
+    <div style="display: flex; gap: 8px; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box;">
+      <div class="odo-btn" id="odoRow0" onclick="selectOdometer(0)" style="flex: 1; min-width: 0; padding: 8px 4px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <div class="odo-label" id="odoName0" style="color: #38bdf8; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Trabalho</div>
+        <div class="odo-time" id="odoVal0" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #f8fafc; margin-top: 2px;">00:00:00</div>
+      </div>
+      <div class="odo-btn" id="odoRow1" onclick="selectOdometer(1)" style="flex: 1; min-width: 0; padding: 8px 4px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <div class="odo-label" id="odoName1" style="color: #34d399; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Estudo</div>
+        <div class="odo-time" id="odoVal1" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #f8fafc; margin-top: 2px;">00:00:00</div>
+      </div>
+      <div class="odo-btn" id="odoRow2" onclick="selectOdometer(2)" style="flex: 1; min-width: 0; padding: 8px 4px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <div class="odo-label" id="odoName2" style="color: #fbbf24; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Reunião</div>
+        <div class="odo-time" id="odoVal2" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #f8fafc; margin-top: 2px;">00:00:00</div>
+      </div>
+      <div class="odo-btn" id="odoRow3" onclick="selectOdometer(3)" style="flex: 1; min-width: 0; padding: 8px 4px; border-radius: 8px; border: 1px solid #334155; cursor: pointer; text-align: center; transition: all 0.2s;">
+        <div class="odo-label" id="odoName3" style="color: #fb923c; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Outro</div>
+        <div class="odo-time" id="odoVal3" style="font-family: monospace; font-size: 0.85rem; font-weight: 700; color: #f8fafc; margin-top: 2px;">00:00:00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Odometer Label Edit Modal -->
+  <div id="odoModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); z-index: 9999; justify-content: center; align-items: center; padding: 20px;">
+    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; width: 100%; max-width: 420px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);">
+      <h2 style="margin: 0 0 16px 0; color: #38bdf8; font-size: 1.15rem; text-align: center;">Editar Rótulos dos Odômetros</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+        <div>
+          <label class="field-label" style="color: #38bdf8; font-weight: 700;">Odômetro 1 (Ciano)</label>
+          <input type="text" id="odoInput0" class="settings-input" style="width: 100%; box-sizing: border-box;" maxlength="16">
+        </div>
+        <div>
+          <label class="field-label" style="color: #34d399; font-weight: 700;">Odômetro 2 (Esmeralda)</label>
+          <input type="text" id="odoInput1" class="settings-input" style="width: 100%; box-sizing: border-box;" maxlength="16">
+        </div>
+        <div>
+          <label class="field-label" style="color: #fbbf24; font-weight: 700;">Odômetro 3 (Âmbar)</label>
+          <input type="text" id="odoInput2" class="settings-input" style="width: 100%; box-sizing: border-box;" maxlength="16">
+        </div>
+        <div>
+          <label class="field-label" style="color: #fb923c; font-weight: 700;">Odômetro 4 (Laranja)</label>
+          <input type="text" id="odoInput3" class="settings-input" style="width: 100%; box-sizing: border-box;" maxlength="16">
+        </div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="closeOdometerModal()" class="btn btn-secondary" style="padding: 8px 16px;">Cancelar</button>
+        <button onclick="saveOdometerLabels()" class="btn" style="padding: 8px 16px;">Salvar Rótulos</button>
+      </div>
     </div>
   </div>
 
@@ -377,6 +436,22 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
           // Indicador de carregamento da IA
           document.getElementById('aiLoading').style.display = data.aiLoading ? "flex" : "none";
 
+          if (data.activeOdometer !== undefined) {
+            updateOdometerActiveUI(data.activeOdometer);
+          }
+          if (data.odometerFmt && Array.isArray(data.odometerFmt)) {
+            for (let i = 0; i < 4; i++) {
+              const valEl = document.getElementById('odoVal' + i);
+              if (valEl && data.odometerFmt[i]) valEl.textContent = data.odometerFmt[i];
+            }
+          }
+          if (data.odometerLabels && Array.isArray(data.odometerLabels)) {
+            for (let i = 0; i < 4; i++) {
+              const nameEl = document.getElementById('odoName' + i);
+              if (nameEl && data.odometerLabels[i]) nameEl.textContent = data.odometerLabels[i];
+            }
+          }
+
           // Histórico de mensagens do TFT
           fetch('/api/tft-messages')
             .then(r => r.json())
@@ -415,6 +490,82 @@ static const char ROOT_HTML[] PROGMEM = R"rawhtml(
         });
     }
     updateMetrics();
+
+    const ODO_ROW_BG = [
+      'rgba(56, 189, 248, 0.2)',
+      'rgba(52, 211, 153, 0.2)',
+      'rgba(251, 191, 36, 0.2)',
+      'rgba(251, 146, 60, 0.2)'
+    ];
+    const ODO_BORDER_COLOR = ['#38bdf8', '#34d399', '#fbbf24', '#fb923c'];
+
+    function selectOdometer(idx) {
+      fetch('/api/odometer?active=' + idx, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+          if (d.status === 'success') {
+            updateOdometerActiveUI(idx);
+          }
+        }).catch(e => console.error(e));
+    }
+
+    function updateOdometerActiveUI(activeIdx) {
+      for (let i = 0; i < 4; i++) {
+        const row = document.getElementById('odoRow' + i);
+        if (row) {
+          if (i === activeIdx) {
+            row.style.background = ODO_ROW_BG[i];
+            row.style.borderColor = ODO_BORDER_COLOR[i];
+            row.style.boxShadow = '0 0 10px ' + ODO_ROW_BG[i];
+          } else {
+            row.style.background = 'transparent';
+            row.style.borderColor = '#334155';
+            row.style.boxShadow = 'none';
+          }
+        }
+      }
+    }
+
+    function openOdometerModal() {
+      for (let i = 0; i < 4; i++) {
+        const nameEl = document.getElementById('odoName' + i);
+        const inputEl = document.getElementById('odoInput' + i);
+        if (nameEl && inputEl) {
+          inputEl.value = nameEl.textContent;
+        }
+      }
+      document.getElementById('odoModal').style.display = 'flex';
+    }
+
+    function closeOdometerModal() {
+      document.getElementById('odoModal').style.display = 'none';
+    }
+
+    function saveOdometerLabels() {
+      const payload = {
+        labels: [
+          document.getElementById('odoInput0').value,
+          document.getElementById('odoInput1').value,
+          document.getElementById('odoInput2').value,
+          document.getElementById('odoInput3').value
+        ]
+      };
+      fetch('/api/odometer_labels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json()).then(d => {
+        if (d.status === 'success') {
+          for (let i = 0; i < 4; i++) {
+            const nameEl = document.getElementById('odoName' + i);
+            if (nameEl && payload.labels[i]) {
+              nameEl.textContent = payload.labels[i];
+            }
+          }
+          closeOdometerModal();
+        }
+      }).catch(e => console.error(e));
+    }
 
     let tftExpanded = false;
     function toggleTftLog() {
@@ -1578,6 +1729,80 @@ inline void handleTimerApi() {
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
+inline void handleSetOdometer() {
+  if (server.hasArg("active")) {
+    int val = server.arg("active").toInt();
+    if (val >= 0 && val < 4) {
+      appStats.activeOdometer = val;
+      preferences.putInt("activeOdo", val);
+      saveDailyStats();
+      Logger::log("WEB", "Active odometer set to %d", val);
+      server.send(200, "application/json", "{\"status\":\"success\",\"active\":" + String(val) + "}");
+      return;
+    }
+  } else if (server.hasArg("plain")) {
+    StaticJsonDocument<128> doc;
+    if (deserializeJson(doc, server.arg("plain")) == DeserializationError::Ok) {
+      int val = doc["active"] | -1;
+      if (val >= 0 && val < 4) {
+        appStats.activeOdometer = val;
+        preferences.putInt("activeOdo", val);
+        saveDailyStats();
+        Logger::log("WEB", "Active odometer set to %d via JSON", val);
+        server.send(200, "application/json", "{\"status\":\"success\",\"active\":" + String(val) + "}");
+        return;
+      }
+    }
+  }
+  server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"invalid active param\"}");
+}
+
+inline void handleSetOdometerLabels() {
+  bool updated = false;
+  if (server.hasArg("plain")) {
+    DynamicJsonDocument doc(512);
+    if (deserializeJson(doc, server.arg("plain")) == DeserializationError::Ok) {
+      if (doc.containsKey("labels")) {
+        JsonArray arr = doc["labels"];
+        for (int i = 0; i < 4 && i < (int)arr.size(); i++) {
+          String lbl = arr[i].as<String>();
+          lbl.trim();
+          if (lbl.length() > 0 && lbl.length() <= 16) {
+            appConfig.odometerLabels[i] = lbl;
+            char key[12];
+            snprintf(key, sizeof(key), "odoLbl%d", i);
+            preferences.putString(key, lbl);
+            updated = true;
+          }
+        }
+      }
+    }
+  } else {
+    for (int i = 0; i < 4; i++) {
+      char param[12];
+      snprintf(param, sizeof(param), "label%d", i);
+      if (server.hasArg(param)) {
+        String lbl = server.arg(param);
+        lbl.trim();
+        if (lbl.length() > 0 && lbl.length() <= 16) {
+          appConfig.odometerLabels[i] = lbl;
+          char key[12];
+          snprintf(key, sizeof(key), "odoLbl%d", i);
+          preferences.putString(key, lbl);
+          updated = true;
+        }
+      }
+    }
+  }
+  if (updated) {
+    saveDailyStats();
+    Logger::log("WEB", "Odometer labels updated");
+    server.send(200, "application/json", "{\"status\":\"success\"}");
+  } else {
+    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"no valid labels provided\"}");
+  }
+}
+
 static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
 <!DOCTYPE html>
 <html>
@@ -1623,13 +1848,7 @@ static const char SETTINGS_HTML[] PROGMEM = R"rawhtml(
           <option value="0">Digital Padrão</option>
           <option value="1">Minimalista</option>
           <option value="2">HiTech</option>
-  )rawhtml"
-#if DESKBUDDY_DEBUG
-  R"rawhtml(
           <option value="3">Modo DEV</option>
-  )rawhtml"
-#endif
-  R"rawhtml(
           <option value="4">Aviador</option>
           <option value="5">Deskbuddy</option>
           <option value="6">DeskAura</option>
@@ -2513,6 +2732,7 @@ inline void handleRadarData() {
   doc["presence"] = (appState.currentPresenceState != STATE_AWAY);
   doc["state"] = getPresenceStateName(appState.currentPresenceState);
   doc["presenceDetected"] = appState.sensorPresenceDetected;
+  doc["rawPresent"] = appState.rawPresent;
   doc["movingTargetDetected"] = appState.sensorMovingTargetDetected;
   doc["mqttConnected"] = mqttClient.connected();
   doc["mqttBroker"] = appConfig.mqttBroker;
@@ -2563,6 +2783,16 @@ inline void handleRadarData() {
   doc["motionWindow"] = appConfig.motionWindow;
   doc["pointsPoorMax"] = appConfig.pointsPoorMax;
   doc["pointsExcellentMin"] = appConfig.pointsExcellentMin;
+
+  doc["activeOdometer"] = appStats.activeOdometer;
+  JsonArray odoMs = doc.createNestedArray("odometerMs");
+  JsonArray odoFmt = doc.createNestedArray("odometerFmt");
+  JsonArray odoLbl = doc.createNestedArray("odometerLabels");
+  for (int i = 0; i < 4; i++) {
+    odoMs.add(appStats.odometerTime[i]);
+    odoFmt.add(formatTime(appStats.odometerTime[i]));
+    odoLbl.add(appConfig.odometerLabels[i]);
+  }
 
   int currentDay = timeClient.isTimeSet() ? timeClient.getDay() : 1;
   int targetDay = currentDay;
@@ -3352,6 +3582,8 @@ inline void setupWebServer() {
   server.on("/api/tasks/save", HTTP_POST, handleSaveTasks);
   server.on("/api/points", HTTP_GET, handleGetPoints);
   server.on("/api/timer", HTTP_ANY, handleTimerApi);
+  server.on("/api/odometer", HTTP_ANY, handleSetOdometer);
+  server.on("/api/odometer_labels", HTTP_ANY, handleSetOdometerLabels);
   server.on("/settings", handleSettings);
   server.on("/radar-data", handleRadarData);
   server.on("/api/tft-messages", handleTftMessages);

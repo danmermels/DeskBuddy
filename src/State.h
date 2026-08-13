@@ -89,6 +89,13 @@ struct ConfigState {
   String openWeatherKey = "";
   float openWeatherLat = -23.11;
   float openWeatherLon = -46.53;
+
+  // Trip Odometer Labels
+#if DESKBUDDY_LANG_PTBR
+  String odometerLabels[4] = {"Trabalho", "Estudo", "Reunião", "Outro"};
+#else
+  String odometerLabels[4] = {"Work", "Study", "Meeting", "Other"};
+#endif
 };
 
 struct StatsState {
@@ -96,6 +103,8 @@ struct StatsState {
   uint32_t firstSitEpoch = 0;
   int breakCount = 0;
   unsigned long totalDeskTime = 0;
+  int activeOdometer = 0;
+  unsigned long odometerTime[4] = {0, 0, 0, 0};
   unsigned long totalFocusTime = 0;
   unsigned long totalBreakTime = 0;
   unsigned long overnightBreakDuration = 0;
@@ -175,6 +184,7 @@ struct RuntimeState {
   bool sensorPresenceDetected = false;
   bool sensorMovingTargetDetected = false;
   bool sensorStaticPresenceDetected = false;
+  bool rawPresent = false;
 
   unsigned long sessionDeskTime = 0;
   unsigned long sessionMotionTime = 0;

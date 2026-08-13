@@ -217,6 +217,11 @@ void saveDailyStats() {
   doc["firstSitEpoch"] = appStats.firstSitEpoch;
   doc["breakCount"] = appStats.breakCount;
   doc["totalDeskTime"] = appStats.totalDeskTime;
+  doc["activeOdometer"] = appStats.activeOdometer;
+  JsonArray odoArr = doc.createNestedArray("odometerTime");
+  for (int i = 0; i < 4; i++) {
+    odoArr.add(appStats.odometerTime[i]);
+  }
   doc["totalFocusTime"] = appStats.totalFocusTime;
   doc["totalBreakTime"] = appStats.totalBreakTime;
   doc["overnightBreakDuration"] = appStats.overnightBreakDuration;
@@ -364,6 +369,13 @@ void loadDailyStats() {
     appStats.firstSitEpoch = doc["firstSitEpoch"] | 0;
     appStats.breakCount = doc["breakCount"] | 0;
     appStats.totalDeskTime = doc["totalDeskTime"] | 0UL;
+    appStats.activeOdometer = doc["activeOdometer"] | 0;
+    if (doc.containsKey("odometerTime")) {
+      JsonArray odoArr = doc["odometerTime"];
+      for (int i = 0; i < 4 && i < (int)odoArr.size(); i++) {
+        appStats.odometerTime[i] = odoArr[i] | 0UL;
+      }
+    }
     appStats.totalFocusTime = doc["totalFocusTime"] | 0UL;
     appStats.totalBreakTime = doc["totalBreakTime"] | 0UL;
     appStats.overnightBreakDuration = doc["overnightBreakDuration"] | 0UL;
@@ -563,6 +575,11 @@ void setup(void) {
   appConfig.g6sSens = preferences.getInt("g6sSens", 40);
   appConfig.pointsPoorMax = preferences.getInt("pointsPoorMax", 30);
   appConfig.pointsExcellentMin = preferences.getInt("pointsExcellentMin", 120);
+  appStats.activeOdometer = preferences.getInt("activeOdo", 0);
+  appConfig.odometerLabels[0] = preferences.getString("odoLbl0", appConfig.odometerLabels[0]);
+  appConfig.odometerLabels[1] = preferences.getString("odoLbl1", appConfig.odometerLabels[1]);
+  appConfig.odometerLabels[2] = preferences.getString("odoLbl2", appConfig.odometerLabels[2]);
+  appConfig.odometerLabels[3] = preferences.getString("odoLbl3", appConfig.odometerLabels[3]);
 
   // Load WiFi credentials
   appConfig.wifiSsid = preferences.getString("wifiSsid", DEFAULT_SSID);
@@ -1069,6 +1086,7 @@ void loop(void) {
   } // end else (non-simulation)
 
   rawPresent = appState.sensorPresenceDetected && (appState.rawDetectionDist == 0 || appState.rawDetectionDist <= appConfig.deskDistanceLimit);
+  appState.rawPresent = rawPresent;
   if (rawPresent) {
     // Advance 1-second rolling window bucket
     if (now - lastBucketAdvanceTime >= 1000) {
@@ -1166,12 +1184,18 @@ void loop(void) {
   bool targetPresent = stablePresence;
   int targetState = stablePresence ? ((rawState != STATE_AWAY) ? rawState : STATE_REGULAR) : STATE_AWAY;
 
+  // Pure un-debounced sitting time during the workday journey (starting at first sit)
+  if (rawPresent && !appStats.firstSitToday) {
+    appStats.totalDeskTime += elapsed;
+    appState.sessionDeskTime += elapsed;
+    if (appStats.activeOdometer >= 0 && appStats.activeOdometer < 4) {
+      appStats.odometerTime[appStats.activeOdometer] += elapsed;
+    }
+  }
+
   // Handle Presence State Machine Transitions
   if (targetPresent) {
     accumulatePresence(ts.tm_hour, elapsed);
-    // Accumulate desk time if present
-    appStats.totalDeskTime += elapsed;
-    appState.sessionDeskTime += elapsed;
     
     // Accumulate focus time
     if (appState.currentPresenceState == STATE_FOCUS) {
@@ -1308,8 +1332,10 @@ void loop(void) {
       appState.currentPresenceState = targetState;
       currentSessionState = PRESENCE_SITTING;
       appState.lastStateTransitionTime = now;
-      appState.continuousPresenceStart = now;
-      appState.lastStretchReminderTime = now;
+      if (appState.continuousPresenceStart == 0 || breakDurationMsAtSit >= BREAK_MINIMUM_MS) {
+        appState.continuousPresenceStart = now;
+        appState.lastStretchReminderTime = now;
+      }
       if (targetState == STATE_FOCUS) {
         appState.continuousStillStart = now;
       }
