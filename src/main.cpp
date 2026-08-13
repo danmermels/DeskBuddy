@@ -44,6 +44,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 #include "AI.h"
 #include "Web.h"
 #include "Faceplates.h"
+#include "Audio.h"
 
 // ============================================================
 // State management definitions
@@ -70,6 +71,9 @@ ld2410 radar;
 WebServer server(80);
 DNSServer dnsServer;
 WiFiUDP beaconUDP;
+
+// Audio: passive speaker on GPIO21, see Audio.h
+bool audioEnabled = true;
 
 // MessageManager instance
 MessageManager messageManager;
@@ -715,6 +719,8 @@ void setup(void) {
   gBootLastAwayEpoch = appStats.lastAwayEpoch;
   gBootDistLimit = appConfig.deskDistanceLimit;
   gBootRadarOk = radar.isConnected();
+
+  audioInit();
 }
 
 extern int dateToDays(String dateStr);

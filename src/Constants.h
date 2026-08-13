@@ -49,6 +49,10 @@
 #define BEACON_PORT                    42042  // UDP beacon port for companion app discovery
 #define BEACON_INTERVAL_MS             30000UL // 30s between beacon broadcasts
 #define LOOP_DELAY_MS                  10UL // 10ms main loop delay
+
+// --- Audio Constants ---
+#define AUDIO_PIN                         21
+
 #define METRIC_CYCLE_MS             15000UL // 15s cycle for dashboard bottom metric
 #define SCORE_INITIAL_PERIOD_S        300   // 300s (5 min): productivity = 100% initially
 #define DISTRACTED_FAR_MIN_MS      300000UL // 5 min: present-but-far before the relaxed (Distracted) mood fires
