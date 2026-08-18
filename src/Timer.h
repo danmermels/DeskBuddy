@@ -108,6 +108,23 @@ inline bool timerShouldDraw(unsigned long now) {
   return now < timerState.holdUntil;
 }
 
+// Reused 48KB overlay sprite: created once while the timer owns the screen and
+// freed when it releases it (was a create/delete on every redraw, up to 20 Hz
+// on the hundredths strip = the worst alloc/free churn in the firmware).
+static TFT_eSprite timerOverlaySpr(&tft);
+static bool timerOverlayReady = false;
+static bool timerOverlayFontLoaded = false;
+
+// Free the timer overlay sprite once the timer no longer owns the screen.
+inline void freeTimerOverlaySprite() {
+  if (timerOverlayReady) {
+    if (timerOverlayFontLoaded) timerOverlaySpr.unloadFont();
+    timerOverlaySpr.deleteSprite();
+    timerOverlayReady = false;
+    timerOverlayFontLoaded = false;
+  }
+}
+
 // Full-screen metered overlay: centered readout with no title. Stopwatch (mode 1)
 // shows M:SS:hh (hundredths), countdown (mode 2) and reset-hold show M:SS. The
 // number is rendered into an off-screen sprite and pushed in atomic window writes:
@@ -122,6 +139,12 @@ inline void drawTimerOverlay(unsigned long now, bool force = false) {
   static unsigned long lastPush = 0;
   static String lastSig = "";
   static String lastMain = "";
+
+  // Timer released the screen (done/paused past hold): release the sprite.
+  if (!timerShouldDraw(now)) {
+    freeTimerOverlaySprite();
+    return;
+  }
 
   unsigned long ms = timerCurrentMs(now);
   bool sw = (timerState.mode == 1);
@@ -154,31 +177,34 @@ inline void drawTimerOverlay(unsigned long now, bool force = false) {
   if (force) tft.fillScreen(TFT_BLACK); // blank the round screen once on entry
 
   // Sprite is full-screen wide so the widest stopwatch string "999:59:99" fits.
-  TFT_eSprite ov(&tft);
-  if (ov.createSprite(240, 100)) {
-    ov.fillSprite(TFT_BLACK);
-    if (fontReady == 1) ov.loadFont(TIMER_FONT, LittleFS);
-    else ov.setTextFont(6);
-    ov.setTextDatum(MC_DATUM);
-    ov.setTextColor(TFT_SKYBLUE, TFT_BLACK);
-    ov.drawString(sig, 120, (fontReady == 1) ? 33 : 76);
+  // Created once and reused (font loaded once) while the timer owns the screen.
+  if (!timerOverlayReady) {
+    timerOverlayReady = (timerOverlaySpr.createSprite(240, 100) != nullptr);
+    if (timerOverlayReady) {
+      if (fontReady == 1) { timerOverlaySpr.loadFont(TIMER_FONT, LittleFS); timerOverlayFontLoaded = true; }
+      else timerOverlaySpr.setTextFont(6);
+    }
+  }
+  if (timerOverlayReady) {
+    timerOverlaySpr.fillSprite(TFT_BLACK);
+    timerOverlaySpr.setTextDatum(MC_DATUM);
+    timerOverlaySpr.setTextColor(TFT_SKYBLUE, TFT_BLACK);
+    timerOverlaySpr.drawString(sig, 120, (fontReady == 1) ? 33 : 76);
     if (fullRedraw || hhRedraw) {
       if (sw) {
-        int fullW = ov.textWidth(sig);
+        int fullW = timerOverlaySpr.textWidth(sig);
         String hh = sig.substring(sig.lastIndexOf(':'));
-        int hhW = ov.textWidth(hh);
+        int hhW = timerOverlaySpr.textWidth(hh);
         int hhX = 120 + fullW / 2 - hhW;
         if (fullRedraw) {
-          ov.pushSprite(0, 44);
+          timerOverlaySpr.pushSprite(0, 44);
         } else {
-          ov.pushSprite(hhX, 44, hhX, 0, hhW, 100); // hundredths strip only
+          timerOverlaySpr.pushSprite(hhX, 44, hhX, 0, hhW, 100); // hundredths strip only
         }
       } else {
-        ov.pushSprite(0, 44);
+        timerOverlaySpr.pushSprite(0, 44);
       }
     }
-    if (fontReady == 1) ov.unloadFont();
-    ov.deleteSprite();
   } else {
     // Sprite buffer unavailable (low heap) - fall back to a direct draw
     tft.fillRect(0, 100, 240, 40, TFT_BLACK);

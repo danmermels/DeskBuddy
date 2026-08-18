@@ -67,15 +67,15 @@ struct ConfigState {
   // WiFi credentials
   String wifiSsid = "";
   String wifiPass = "";
-  bool wifiStaticEnabled = true;
-  String wifiIp = "192.168.15.160";
-  String wifiGw = "192.168.15.1";
+  bool wifiStaticEnabled = false; // first boot defaults to DHCP
+  String wifiIp = ""; // provisioned via captive portal; no LAN defaults baked in
+  String wifiGw = "";
   String wifiSubnet = "255.255.255.0";
   String wifiDns1 = "1.1.1.1";
   String wifiDns2 = "8.8.8.8";
 
   // MQTT broker
-  String mqttBroker = "192.168.15.18";
+  String mqttBroker = ""; // provisioned via captive portal
   int mqttPort = 1883;
 
   // Telemetry
@@ -209,7 +209,7 @@ struct RuntimeState {
   String lastTriggeredEventDetail = "";
   String currentUserName = "human";
   int temp = 21;
-  String weatherDesc = "Clear";
+  char weatherDesc[24] = "Clear";
   
   unsigned long aiScreenEndTime = 0;
   RGBColor currentRingColor = {80, 80, 80};
@@ -283,5 +283,17 @@ extern RuntimeState appState;
 extern TodoState appTodo;
 extern TftMessageHistory tftMsgHistory;
 extern TimerState timerState;
+
+// Serializes LittleFS write access across tasks (loop/web vs network task).
+extern SemaphoreHandle_t fsMutex;
+
+// Emergency low-heap flag: suppresses non-essential allocations (AI TLS,
+// weather, telemetry, firmware, nag queue, curation, journals) until the
+// largest free block recovers. Set by loop() with hysteresis.
+extern volatile bool lowHeapMode;
+
+// Set while an AI query is in flight: the faceplate sprites are released to
+// give the TLS handshake contiguous heap, and the display keeps the last frame.
+extern volatile bool aiTlsInProgress;
 
 #endif // STATE_H

@@ -57,6 +57,9 @@ void MessageManager::scheduleMessage(int eventType, const String& content,
                    eventType, nextSeq++);
   messageQueue.push_back(msg);
   sortQueue();
+  if (messageQueue.size() > MESSAGE_QUEUE_MAX) {
+    messageQueue.pop_back(); // bound memory: drop lowest-priority queued message
+  }
 }
 
 void MessageManager::scheduleMessageWithPriority(int eventType, const String& content,

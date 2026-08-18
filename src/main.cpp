@@ -32,7 +32,6 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 #include "Learning.h"
 #include "PresenceAnalysis.h"
 #include "MessageManager.h"
-#include "../Credentials.h"
 #include "MqttService.h"
 #if DESKBUDDY_DEBUG
 #include "MqttDebug.h"
@@ -53,6 +52,7 @@ extern const int DISPLAY_CHARS_PER_LINE = 19;
 #include "Points.h"
 #include "Logger.h"
 #include "Telemetry.h"
+#include "NetworkTask.h"
 
 ConfigState appConfig;
 StatsState appStats;
@@ -107,6 +107,9 @@ PubSubClient mqttClient;
 #include <queue>
 std::queue<MqttQueueMessage> mqttPublishQueue;
 SemaphoreHandle_t mqttPublishQueueMutex = NULL;
+SemaphoreHandle_t fsMutex = NULL;
+volatile bool lowHeapMode = false;
+volatile bool aiTlsInProgress = false;
 
 // Boot snapshot captured at the end of setup() and emitted from loop() once
 // MQTT is connected (enqueueMqttPublish drops messages while disconnected).
@@ -145,7 +148,6 @@ const RGBColor stateColors[] = {
 // NTP Client & Weather Data
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
-unsigned long lastHourlyUpdate = 0;
 struct tm ts;
 char buf[80];
 
@@ -202,6 +204,7 @@ String personalizeQuote(String quote, String name) {
 
 // Save daily statistics to LittleFS using an atomic rename pattern
 void saveDailyStats() {
+  if (fsMutex) xSemaphoreTake(fsMutex, portMAX_DELAY);
 #if DESKBUDDY_DEBUG
   Serial.println("[STATS] saveDailyStats: Opening stats.json.tmp for writing...");
 #endif
@@ -210,6 +213,7 @@ void saveDailyStats() {
 #if DESKBUDDY_DEBUG
     Serial.println("[STATS] ERROR: saveDailyStats failed to open /stats.json.tmp!");
 #endif
+    if (fsMutex) xSemaphoreGive(fsMutex);
     return;
   }
   DynamicJsonDocument doc(8192);
@@ -303,6 +307,7 @@ void saveDailyStats() {
     Serial.println("[STATS] ERROR: saveDailyStats failed to serialize JSON!");
 #endif
     file.close();
+    if (fsMutex) xSemaphoreGive(fsMutex);
     return;
   }
   file.close();
@@ -328,6 +333,7 @@ void saveDailyStats() {
     Serial.println("[STATS] ERROR: saveDailyStats rename failed!");
 #endif
   }
+  if (fsMutex) xSemaphoreGive(fsMutex);
 }
 
 // Load daily statistics from LittleFS
@@ -492,7 +498,17 @@ void checkWiFiConnection() {
   static unsigned long lastWiFiCheck = 0;
   if (millis() - lastWiFiCheck > WIFI_CHECK_MS) {
     lastWiFiCheck = millis();
+    static int failStreak = 0;
     if (WiFi.status() != WL_CONNECTED) {
+      // Full radio reset every 6th retry (~60s): recovers a wedged PHY/driver
+      // that no longer associates even though the AP is reachable.
+      failStreak++;
+      if (failStreak >= 6) {
+        failStreak = 0;
+        WiFi.mode(WIFI_OFF);
+        delay(100);
+        WiFi.mode(WIFI_STA);
+      }
       WiFi.disconnect();
       if (appConfig.wifiStaticEnabled) {
         WiFi.config(parseIP(appConfig.wifiIp), parseIP(appConfig.wifiGw), 
@@ -500,6 +516,9 @@ void checkWiFiConnection() {
                     parseIP(appConfig.wifiDns2));
       }
       WiFi.begin(appConfig.wifiSsid.c_str(), appConfig.wifiPass.c_str());
+      WiFi.setSleep(false);
+    } else {
+      failStreak = 0;
     }
   }
 }
@@ -526,6 +545,9 @@ void setup(void) {
   // Setup Mutex for MQTT Publish Queue Thread Safety
   mqttPublishQueueMutex = xSemaphoreCreateMutex();
 
+  // Setup Mutex for LittleFS write serialization (loop vs network task)
+  fsMutex = xSemaphoreCreateMutex();
+
   // Setup persistent background task for AI HTTPS Queries
   xTaskCreate(
     aiQueryTask,
@@ -545,12 +567,12 @@ void setup(void) {
   appConfig.aiMode = preferences.getInt("aiMode", 1);
   appConfig.aiPersona = preferences.getInt("aiPersona", 0);
   appConfig.clockFace = preferences.getInt("clockFace", 0);
-  appConfig.targetHours = preferences.getFloat("targetHours", 8.0);
-  appConfig.userName = preferences.getString("userName", "human");
+  if (preferences.isKey("targetHours")) appConfig.targetHours = preferences.getFloat("targetHours", 8.0);
+  if (preferences.isKey("userName")) appConfig.userName = preferences.getString("userName", "human");
   appConfig.focusDistanceLimit = preferences.getInt("focusDistLim", 50);
   appConfig.motionRatioLimit = preferences.getInt("motionRatioLim", 15);
   appConfig.deskDistanceLimit = preferences.getInt("distLimit", 120);
-  appConfig.filterWindow = preferences.getFloat("filterWindow", 2.0);
+  if (preferences.isKey("filterWindow")) appConfig.filterWindow = preferences.getFloat("filterWindow", 2.0);
   int motionWindow = preferences.getInt("motionWindow", RECENT_MOTION_WINDOW_S);
   if (motionWindow < 1) motionWindow = 1;
   if (motionWindow > RECENT_MOTION_WINDOW_S) motionWindow = RECENT_MOTION_WINDOW_S;
@@ -576,36 +598,39 @@ void setup(void) {
   appConfig.pointsPoorMax = preferences.getInt("pointsPoorMax", 30);
   appConfig.pointsExcellentMin = preferences.getInt("pointsExcellentMin", 120);
   appStats.activeOdometer = preferences.getInt("activeOdo", 0);
-  appConfig.odometerLabels[0] = preferences.getString("odoLbl0", appConfig.odometerLabels[0]);
-  appConfig.odometerLabels[1] = preferences.getString("odoLbl1", appConfig.odometerLabels[1]);
-  appConfig.odometerLabels[2] = preferences.getString("odoLbl2", appConfig.odometerLabels[2]);
-  appConfig.odometerLabels[3] = preferences.getString("odoLbl3", appConfig.odometerLabels[3]);
+  if (preferences.isKey("odoLbl0")) appConfig.odometerLabels[0] = preferences.getString("odoLbl0", appConfig.odometerLabels[0]);
+  if (preferences.isKey("odoLbl1")) appConfig.odometerLabels[1] = preferences.getString("odoLbl1", appConfig.odometerLabels[1]);
+  if (preferences.isKey("odoLbl2")) appConfig.odometerLabels[2] = preferences.getString("odoLbl2", appConfig.odometerLabels[2]);
+  if (preferences.isKey("odoLbl3")) appConfig.odometerLabels[3] = preferences.getString("odoLbl3", appConfig.odometerLabels[3]);
 
-  // Load WiFi credentials
-  appConfig.wifiSsid = preferences.getString("wifiSsid", DEFAULT_SSID);
-  appConfig.wifiPass = preferences.getString("wifiPass", DEFAULT_PASS);
-  appConfig.wifiStaticEnabled = preferences.getBool("wifiStatic", true);
-  appConfig.wifiIp = preferences.getString("wifiIp", "192.168.15.160");
-  appConfig.wifiGw = preferences.getString("wifiGw", "192.168.15.1");
-  appConfig.wifiSubnet = preferences.getString("wifiSubnet", "255.255.255.0");
-  appConfig.wifiDns1 = preferences.getString("wifiDns1", "1.1.1.1");
-  appConfig.wifiDns2 = preferences.getString("wifiDns2", "8.8.8.8");
+  // Load WiFi credentials from NVS. Empty until provisioned via the captive
+  // portal; the firmware ships with no hardcoded credentials.
+  if (preferences.isKey("wifiSsid")) appConfig.wifiSsid = preferences.getString("wifiSsid", "");
+  if (preferences.isKey("wifiPass")) appConfig.wifiPass = preferences.getString("wifiPass", "");
+  appConfig.wifiStaticEnabled = preferences.getBool("wifiStatic", false);
+  if (preferences.isKey("wifiIp")) appConfig.wifiIp = preferences.getString("wifiIp", "");
+  if (preferences.isKey("wifiGw")) appConfig.wifiGw = preferences.getString("wifiGw", "");
+  if (preferences.isKey("wifiSubnet")) appConfig.wifiSubnet = preferences.getString("wifiSubnet", "255.255.255.0");
+  if (preferences.isKey("wifiDns1")) appConfig.wifiDns1 = preferences.getString("wifiDns1", "1.1.1.1");
+  if (preferences.isKey("wifiDns2")) appConfig.wifiDns2 = preferences.getString("wifiDns2", "8.8.8.8");
 
   // Load MQTT broker
-  appConfig.mqttBroker = preferences.getString("mqttBroker", MQTT_BROKER_IP);
+  appConfig.mqttBroker = MQTT_BROKER_IP;
+  if (preferences.isKey("mqttBroker")) appConfig.mqttBroker = preferences.getString("mqttBroker", MQTT_BROKER_IP);
   appConfig.mqttPort = preferences.getInt("mqttPort", MQTT_BROKER_PORT);
 
-  // Load API keys
-  appConfig.groqApiKey = preferences.getString("groqKey", GroqApiKey);
-  appConfig.geminiApiKey = preferences.getString("geminiKey", GeminiApiKey);
-  appConfig.deepseekApiKey = preferences.getString("deepseekKey", DeepSeekApiKey);
-  appConfig.openWeatherKey = preferences.getString("owKey", OpenWeatherKey);
-  appConfig.openWeatherLat = preferences.getFloat("owLat", -23.11);
-  appConfig.openWeatherLon = preferences.getFloat("owLon", -46.53);
+  // Load API keys from NVS (no hardcoded keys ship with the firmware)
+  if (preferences.isKey("groqKey")) appConfig.groqApiKey = preferences.getString("groqKey", "");
+  if (preferences.isKey("geminiKey")) appConfig.geminiApiKey = preferences.getString("geminiKey", "");
+  if (preferences.isKey("deepseekKey")) appConfig.deepseekApiKey = preferences.getString("deepseekKey", "");
+  if (preferences.isKey("owKey")) appConfig.openWeatherKey = preferences.getString("owKey", "");
+  if (preferences.isKey("owLat")) appConfig.openWeatherLat = preferences.getFloat("owLat", -23.11);
+  if (preferences.isKey("owLon")) appConfig.openWeatherLon = preferences.getFloat("owLon", -46.53);
 
   // Load telemetry config
   appConfig.telemetryEnabled = preferences.getBool("telemEn", false);
-  appConfig.telemetryEndpoint = preferences.getString("telemUrl", TELEMETRY_ENDPOINT_DEFAULT);
+  appConfig.telemetryEndpoint = TELEMETRY_ENDPOINT_DEFAULT;
+  if (preferences.isKey("telemUrl")) appConfig.telemetryEndpoint = preferences.getString("telemUrl", TELEMETRY_ENDPOINT_DEFAULT);
 
   preferences.end();
 
@@ -630,7 +655,7 @@ void setup(void) {
 
   // Initialize TFT Display & show splash screen
   tft.init();
-  tft.setRotation(0);
+  tft.setRotation(1);
   drawRLEImage("/away.rle", 0, 0);
   
   unsigned long bootStartTime = millis();
@@ -640,21 +665,27 @@ void setup(void) {
 
   // Set Hostname & Configure WiFi
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false); // modem-sleep causes high latency/packet loss on TCP (HTTP/MQTT) - keep radio awake
   if (appConfig.wifiStaticEnabled) {
     WiFi.config(parseIP(appConfig.wifiIp), parseIP(appConfig.wifiGw), 
                 parseIP(appConfig.wifiSubnet), parseIP(appConfig.wifiDns1), 
                 parseIP(appConfig.wifiDns2));
   }
   WiFi.setHostname("deskbuddy");
-  WiFi.begin(appConfig.wifiSsid.c_str(), appConfig.wifiPass.c_str());
 
-  unsigned long wifiStart = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < WIFI_TIMEOUT_MS) {
-    delay(100);
+  // First boot / unprovisioned: no SSID saved -> start the captive-portal AP
+  // immediately instead of burning the connect timeout on an empty SSID.
+  bool needProvisioning = (appConfig.wifiSsid.length() == 0);
+  if (!needProvisioning) {
+    WiFi.begin(appConfig.wifiSsid.c_str(), appConfig.wifiPass.c_str());
+    unsigned long wifiStart = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < WIFI_TIMEOUT_MS) {
+      delay(100);
+    }
   }
 
-  // WiFi failed â€” start captive portal AP mode
-  if (WiFi.status() != WL_CONNECTED) {
+  // WiFi failed or unprovisioned — start captive portal AP mode
+  if (needProvisioning || WiFi.status() != WL_CONNECTED) {
 #if DESKBUDDY_DEBUG
     Serial.println("[WIFI] Connection failed â€” starting captive portal AP mode");
 #endif
@@ -701,11 +732,12 @@ void setup(void) {
     });
   ArduinoOTA.begin();
 
+  // Background network task owns NTP/weather/telemetry/firmware so blocking
+  // DNS/HTTPS calls never freeze the main loop.
+  startNetworkTask();
+
   appState.lastLoopTime = millis();
   appState.lastStateTransitionTime = millis();
-  
-  // Force NTP and Weather update on the very first loop execution
-  lastHourlyUpdate = millis() - NTP_INTERVAL_MS - 1000;
 
   // Ensure splash screen displays for at least 4 seconds total at boot
   unsigned long elapsedBoot = millis() - bootStartTime;
@@ -923,6 +955,26 @@ void loop(void) {
   }
 
   unsigned long now = millis();
+
+  // Stage-0 diagnostic: low-heap tripwire (logs at most once per 60 s while engaged)
+  static unsigned long lastHeapSafeLog = 0;
+  static unsigned long lastHeapSafeCheck = 0;
+  if (now - lastHeapSafeCheck >= 5000UL) {
+    lastHeapSafeCheck = now;
+    uint32_t maxAlloc = ESP.getMaxAllocHeap();
+    // Emergency low-heap mode with hysteresis. Thresholds must be reachable
+    // with the faceplate sprites resident (~45KB maxAlloc): engage only in a
+    // genuine crisis, recover well below the normal steady-state level.
+    if (maxAlloc < 20000UL) {
+      lowHeapMode = true;
+    } else if (maxAlloc > 30000UL) {
+      lowHeapMode = false;
+    }
+    if (lowHeapMode && now - lastHeapSafeLog >= 60000UL) {
+      lastHeapSafeLog = now;
+      Logger::log("HEAPSAFE", "low heap window free=%u max=%u", (uint32_t)ESP.getFreeHeap(), maxAlloc);
+    }
+  }
   
   // Safety timeout for AI Query (reset isAILoading if it hangs for > 45s)
   if (appState.isAILoading && (now - appState.lastAiQueryStartTime > 45000)) {
@@ -1639,42 +1691,8 @@ void loop(void) {
     appStats.productivityScore = (int)constrain(raw_score, 0.0f, 100.0f);
   }
 
-  // Handle NTP Time & Weather Fetch Updates (every 1 hour or until initial NTP sync succeeds)
-  unsigned long ntpUpdateInterval = timeClient.isTimeSet() ? NTP_INTERVAL_MS : NTP_RETRY_MS;
-  if (WiFi.status() == WL_CONNECTED && now - lastHourlyUpdate > ntpUpdateInterval) {
-    timeClient.update();
-    HTTPClient http;
-    String weatherUrl = "https://api.openweathermap.org/data/2.5/weather?lat=" + 
-                        String(appConfig.openWeatherLat, 4) + "&units=metric&lon=" + 
-                        String(appConfig.openWeatherLon, 4) + "&lang=fr&appid=" + 
-                        appConfig.openWeatherKey;
-    http.begin(weatherUrl);
-    int httpCode = http.GET();
-    if (httpCode > 0) {
-      String payload = http.getString();
-      DynamicJsonDocument jsonBuffer(1024);
-      DeserializationError error = deserializeJson(jsonBuffer, payload);
-      if (!error) {
-        appState.temp = (float)(jsonBuffer["main"]["temp"]);
-        if (jsonBuffer["weather"].is<JsonArray>() && jsonBuffer["weather"].as<JsonArray>().size() > 0) {
-          appState.weatherDesc = jsonBuffer["weather"][0]["main"].as<String>();
-        }
-        time_t rawtime = jsonBuffer["dt"];
-        rawtime = rawtime + NTP_TIME_OFFSET; // offset is negative -> subtracts 3h
-        ts = *localtime(&rawtime);
-        strftime(buf, sizeof(buf), "%a %d/%m", &ts);
-      }
-    }
-    http.end();
-    
-    // Only register update success if time is verified set
-    if (timeClient.isTimeSet()) {
-      lastHourlyUpdate = now;
-    } else {
-      // Retry in 15 seconds
-      lastHourlyUpdate = now - ntpUpdateInterval + NTP_RETRY_MS;
-    }
-  }
+  // NTP sync + weather fetch now run on the network task (NetworkTask.h) so
+  // blocking DNS/HTTPS calls cannot freeze the main loop.
 
   // Periodically save stats to LittleFS (every 10 minutes) if anything has changed
   static unsigned long lastStatsSave = 0;
@@ -1753,7 +1771,7 @@ void loop(void) {
   // Goal Completion check
   if (appConfig.targetHours > 0.0f) {
     unsigned long targetMs = (unsigned long)(appConfig.targetHours * 3600.0f * 1000.0f);
-    if (appConfig.aiMode >= 1 && appStats.totalDeskTime >= targetMs && !appStats.goalCompletedTriggered) {
+    if (appConfig.aiMode >= 1 && !lowHeapMode && appStats.totalDeskTime >= targetMs && !appStats.goalCompletedTriggered) {
       appStats.goalCompletedTriggered = true;
       saveDailyStats();
       messageManager.scheduleMessageWithPriority(
@@ -1765,7 +1783,7 @@ void loop(void) {
   }
 
   // Morning Kickoff Journal check (5 mins sitting delay)
-  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && !appStats.morningJournalTriggered) {
+  if (appConfig.aiMode >= 1 && !lowHeapMode && appState.currentPresenceState != STATE_AWAY && !appStats.morningJournalTriggered) {
     unsigned long sitDuration = now - appState.sitDownTime;
     if (sitDuration >= MORNING_JOURNAL_DELAY_MS) {
       appStats.morningJournalTriggered = true;
@@ -1792,7 +1810,7 @@ void loop(void) {
     
     if (currentMinsFromMidnight >= lunchThresholdMins && currentMinsFromMidnight < refLunch * 60) {
       // F10 (T4): schedule even while away -- MM lines it up for display once present
-      if (appConfig.aiMode >= 1 && !appStats.preLunchJournalTriggered) {
+      if (appConfig.aiMode >= 1 && !lowHeapMode && !appStats.preLunchJournalTriggered) {
         appStats.preLunchJournalTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1818,7 +1836,7 @@ void loop(void) {
     
     if (currentMinsFromMidnight >= endThresholdMins && currentMinsFromMidnight < refEnd * 60) {
       // F10 (T4): schedule even while away -- MM lines it up for display once present
-      if (appConfig.aiMode >= 1 && !appStats.endOfDayJournalTriggered) {
+      if (appConfig.aiMode >= 1 && !lowHeapMode && !appStats.endOfDayJournalTriggered) {
         appStats.endOfDayJournalTriggered = true;
         saveDailyStats();
         messageManager.scheduleMessageWithPriority(
@@ -1832,7 +1850,7 @@ void loop(void) {
 
   // Task Due check (granular checking at the start of each minute)
   static int lastCheckedDueMinute = -1;
-  if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+  if (WiFi.status() == WL_CONNECTED && timeClient.isTimeSet() && !lowHeapMode) {
     int currentHour = ts.tm_hour;
     int currentMin = ts.tm_min;
     if (currentMin != lastCheckedDueMinute) {
@@ -1851,7 +1869,7 @@ void loop(void) {
 
   // Nagging check (overdue-task queue): dynamically scales delay based on queue size (today & this month items),
   // capped at a minimum interval floor (15m Normal / 8m Chatty). Cursor wraps at queue end.
-  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+  if (appConfig.aiMode >= 1 && !lowHeapMode && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     int currentYear = ts.tm_year + 1900;
     int currentMonth = ts.tm_mon + 1;
     int currentDay = ts.tm_mday;
@@ -1860,7 +1878,16 @@ void loop(void) {
     snprintf(mStr, sizeof(mStr), "%04d-%02d", currentYear, currentMonth);
     int nowMinutes = ts.tm_hour * 60 + ts.tm_min;
 
-    std::vector<OverdueTask> queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
+    // The overdue queue only changes at minute granularity; rebuild it at most
+    // once per minute (was rebuilt every loop iteration = ~100Hz of a 4KB JSON
+    // doc + vector alloc/free, the top heap-churn driver). The static queue
+    // persists between rebuilds so nag timing is unaffected.
+    static unsigned long lastNagQueueBuild = 0;
+    static std::vector<OverdueTask> queue;
+    if (now - lastNagQueueBuild >= 60000UL || queue.empty()) {
+      lastNagQueueBuild = now;
+      queue = buildOverdueTaskQueue(String(dStr), String(mStr), dateToDays(String(dStr)), currentYear, currentMonth, currentDay, nowMinutes);
+    }
     if (queue.size() > 0) {
       unsigned long baseNagDelay = (appConfig.aiMode == 2) ? CHATTY_NAGGING_TRIGGER_DELAY_MS : NAGGING_TRIGGER_DELAY_MS;
       unsigned long minNagDelay  = (appConfig.aiMode == 2) ? CHATTY_NAGGING_MIN_INTERVAL_MS   : NAGGING_MIN_INTERVAL_MS;
@@ -1885,7 +1912,7 @@ void loop(void) {
 
   // Points check-in: rings every 18 min seated (9 min in Chatty) with the live running total.
   // Throttled to at most one ring per 3 h (1 h in Chatty) so a long session doesn't get spammed.
-  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
+  if (appConfig.aiMode >= 1 && !lowHeapMode && appState.currentPresenceState != STATE_AWAY && WiFi.status() == WL_CONNECTED && timeClient.isTimeSet()) {
     unsigned long pointsThrottle = (appConfig.aiMode == 2) ? CHATTY_POINTS_THROTTLE_MS : POINTS_THROTTLE_MS;
     unsigned long pointsCadence = (appConfig.aiMode == 2) ? CHATTY_POINTS_TRIGGER_DELAY_MS : POINTS_TRIGGER_DELAY_MS;
     if (now - appState.lastPointsTime >= pointsThrottle &&
@@ -1902,13 +1929,16 @@ void loop(void) {
 
   // Curation nudge: observation-driven trigger that fires only when getCurationNudge()
   // finds a noteworthy pattern in the live state. Normal and Chatty intervals differ.
-  if (appConfig.aiMode >= 1 && appState.currentPresenceState != STATE_AWAY) {
+  if (appConfig.aiMode >= 1 && !lowHeapMode && appState.currentPresenceState != STATE_AWAY) {
     static unsigned long lastCurationNudgeTime = 0;
+    static unsigned long lastCurationCheckTime = 0; // caps the (often-empty) scan to 1/min
     unsigned long curationInterval = (appConfig.aiMode == 2) ? CHATTY_CURATION_TRIGGER_INTERVAL_MS : CURATION_TRIGGER_INTERVAL_MS;
     unsigned long curationThrottle = (appConfig.aiMode == 2) ? CHATTY_CURATION_THROTTLE_MS : CURATION_THROTTLE_MS;
     unsigned long continuousSittingTime = now - appState.continuousPresenceStart;
     if (continuousSittingTime > curationInterval &&
-        now - lastCurationNudgeTime >= curationThrottle) {
+        now - lastCurationNudgeTime >= curationThrottle &&
+        now - lastCurationCheckTime >= 60000UL) {
+      lastCurationCheckTime = now;
       String nudge = getCurationNudge();
       if (nudge.length() > 0) {
         lastCurationNudgeTime = now;
@@ -1936,8 +1966,7 @@ void loop(void) {
     Logger::log("SYSTEM", "%s", gBootStateMsg.c_str());
   }
 
-  // Telemetry and firmware update handling
-  handleTelemetryUpdate(now);
+  // Telemetry + firmware handling now runs on the network task (NetworkTask.h).
 
   // UDP beacon for companion app discovery
   static unsigned long lastBeaconSent = 0;

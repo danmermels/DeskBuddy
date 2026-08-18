@@ -99,6 +99,9 @@
 // Max chars a standard message screen holds before it spills to a 2nd screen (F12)
 #define MSG_PAGE_MAX_CHARS                 110
 
+// Max pending behaviour messages kept in the MessageManager queue (bounds heap)
+#define MESSAGE_QUEUE_MAX                    16
+
 // --- Journal & Curation Constants ---
 #define MORNING_JOURNAL_DELAY_MS        300000UL  // 5 minutes sitting delay for morning kickoff
 #define PRE_LUNCH_JOURNAL_MINS_BEFORE        15   // Minutes before lunch to trigger pre-lunch journal
@@ -126,7 +129,7 @@
 #define TASK_LIST_MAX_PAGE_LINES              8   // Total lines per page (1 title + 6 items). Lower for larger fonts.
 
 // --- MQTT Service Constants ---
-#define MQTT_BROKER_IP             "192.168.15.18"
+#define MQTT_BROKER_IP             ""
 #define MQTT_BROKER_PORT                  1883
 #define MQTT_RECONNECT_INTERVAL_MS       10000UL
 #define MQTT_CLIENT_ID          "DeskBuddyClient"

@@ -22,8 +22,22 @@ extern volatile uint32_t currentSitDownSessionId;
 extern uint32_t aiQuerySessionId;
 extern TaskHandle_t aiQueryTaskHandle;
 
+// Defined in Faceplates.h: releases the current faceplate's RAM sprites so the
+// TLS handshake has contiguous heap during an AI query.
+void releaseFaceplateSprites();
+
 extern String formatTime(unsigned long ms);
 extern const int AI_RESPONSE_MAX_CHARS;
+
+// Stage-0 diagnostic: log current free-heap and largest-free-block under the
+// HEAPAI category. Tag strings must avoid the words "error"/"fail" so the
+// control_center observer does not miscount them as AI errors.
+inline void logHeapTrace(const char* tag) {
+  uint32_t freeHeap = ESP.getFreeHeap();
+  uint32_t maxAlloc = ESP.getMaxAllocHeap();
+  Logger::log("HEAPAI", "%s free=%u max=%u", tag, freeHeap, maxAlloc);
+}
+
 inline String resolveLocalPlaceholders(String templateStr, String detail) {
   templateStr.replace("{name}", appConfig.userName);
   if (detail == "") {
@@ -94,8 +108,16 @@ inline String getLocalFallbackQuote(int eventType) {
   if (LittleFS.exists(fileToOpen)) {
     fs::File file = LittleFS.open(fileToOpen, "r");
     if (file) {
-      DynamicJsonDocument doc(32768); // 32KB buffer (JSON file is ~20.5KB)
-      DeserializationError err = deserializeJson(doc, file);
+      logHeapTrace("fallback-start");
+      // Filter: only the [event][persona] array is parsed. The full 20KB file
+      // previously needed a 32KB doc whose parse collapsed maxAlloc to ~17KB
+      // (measured via [HEAPAI]) and triggered allocation aborts on the next
+      // AI TLS attempt. The filtered array needs <8KB of pool.
+      StaticJsonDocument<128> filter;
+      filter[keyName][personaKey] = true;
+      DynamicJsonDocument doc(8192);
+      DeserializationError err = deserializeJson(doc, file, DeserializationOption::Filter(filter));
+      logHeapTrace("fallback-parse-done");
       file.close();
       if (!err) {
         JsonArray arr = doc[keyName][personaKey].as<JsonArray>();
@@ -271,18 +293,30 @@ inline void aiQueryTask(void * parameter) {
 
     bool success = false;
     int httpCode = -1;
-    
-    // Create the AI connect client on the task stack only during active query
+    String aiLastError;
+    String aiRawResp;
+
+    // Release the faceplate sprites so the TLS handshake has contiguous heap.
+    // The display keeps the last frame while aiTlsInProgress is set and
+    // re-initializes the sprites once the query completes.
+    aiTlsInProgress = true;
+    vTaskDelay(pdMS_TO_TICKS(60)); // let the display finish the current frame
+    releaseFaceplateSprites();
+    logHeapTrace("query-start");
     {
-      ESP32_AI_Connect ai("openai-compatible", appConfig.groqApiKey.c_str(), "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions");
+      ESP32_AI_Connect ai("openai-compatible", appConfig.groqApiKey.c_str(), "openai/gpt-oss-20b", "https://api.groq.com/openai/v1/chat/completions");
       ai.setChatTemperature(0.5);
-      ai.setChatMaxTokens(AI_RESPONSE_MAX_CHARS * 2 + 10);
+      ai.setChatMaxTokens(1024); // gpt-oss reasons first; needs budget for chain-of-thought + answer
+      ai.setChatParameters("{\"reasoning_effort\":\"low\"}"); // keep reasoning short for a one-liner
       
       String response = ai.chat(prompt);
       httpCode = ai.getChatResponseCode();
+      aiLastError = ai.getLastError();
+      aiRawResp = ai.getChatRawResponse();
 
       if (httpCode == 200 && response.length() > 0) {
         response.trim();
+        if (response.length() > 2000) response = response.substring(0, 2000); // hard cap for heap/MQTT safety
         
         if (response.startsWith("\"") && response.endsWith("\"")) {
           response = response.substring(1, response.length() - 1);
@@ -311,6 +345,8 @@ inline void aiQueryTask(void * parameter) {
         success = true;
       }
     }
+    logHeapTrace("query-end");
+    aiTlsInProgress = false; // display re-inits the faceplate sprites on its next frame
 
     // Graceful fallback: If AI query fails, load a local fallback quote immediately
     if (!success) {
@@ -325,9 +361,10 @@ inline void aiQueryTask(void * parameter) {
         case WL_CONNECTION_LOST: wifiStatusStr = "CONNECTION_LOST"; break;
         case WL_DISCONNECTED:    wifiStatusStr = "DISCONNECTED"; break;
       }
-      Logger::log("BEHAVIOUR", "AI Request Failed: http=%d (%s) WiFi=%s IP=%s RSSI=%d. Loading local fallback.",
-                  httpCode, HTTPClient::errorToString(httpCode).c_str(),
+      Logger::log("BEHAVIOUR", "AI Request Failed: http=%d (%s) err=[%s] raw=[%.250s] WiFi=%s IP=%s RSSI=%d. Loading local fallback.",
+                  httpCode, HTTPClient::errorToString(httpCode).c_str(), aiLastError.c_str(), aiRawResp.c_str(),
                   wifiStatusStr.c_str(), WiFi.localIP().toString().c_str(), WiFi.RSSI());
+      publishMqttDebugResponse(httpCode, "RAW:" + aiRawResp.substring(0, 3000)); // full body for diagnosis
       
       String quote = getLocalFallbackQuote(appState.lastTriggeredEventType);
 
@@ -356,7 +393,14 @@ inline void aiQueryTask(void * parameter) {
       }
       xSemaphoreGive(appState.aiMutex);
     }
-    
+
+    // Stage-0 diagnostic: log AI task stack high-water mark once after the first query
+    static bool hwmLogged = false;
+    if (!hwmLogged) {
+      hwmLogged = true;
+      Logger::log("HWM", "aiQueryTask stack high-water=%u bytes", (unsigned)uxTaskGetStackHighWaterMark(NULL));
+    }
+
     appState.isAILoading = false;
   }
 }
@@ -538,6 +582,16 @@ inline void triggerBehaviour(int eventType, String detail = "", int forceMode = 
     if (!useAI) {
       Logger::log("BEHAVIOUR", "WiFi not connected, using local fallback.");
     }
+  }
+
+  // Emergency low-heap guard: only skip the TLS attempt when there is
+  // genuinely no contiguous room for the handshake. LIVE check, never latched —
+  // with the faceplate sprites resident maxAlloc hovers ~45KB, so a latched
+  // flag would permanently block AI. A failed handshake is non-fatal and the
+  // auto-retry + local fallback handle it.
+  if (useAI && ESP.getMaxAllocHeap() < 20000UL) {
+    Logger::log("BEHAVIOUR", "Heap critically low, using local fallback.");
+    useAI = false;
   }
 
   if (useAI) {

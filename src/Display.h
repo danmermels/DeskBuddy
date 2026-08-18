@@ -379,6 +379,10 @@ inline void updateTFTDisplay(unsigned long now) {
     }
   }
 
+  // AI query in flight: faceplate sprites were released for the TLS handshake,
+  // so keep the last rendered frame until the query completes.
+  if (aiTlsInProgress) return;
+
   static int lastDisplayedPage = -1; // -1 = Away, 0 = Clock, -2 = Alert
   static int lastClockFace = -1;
   static String activeAlertMessage = "";
@@ -526,10 +530,11 @@ inline void updateTFTDisplay(unsigned long now) {
   }
   if (timerWasDrawn) {
     timerWasDrawn = false;
+    freeTimerOverlaySprite(); // release the 48KB overlay sprite when the timer ends
     lastDisplayedPage = -99; // force a full redraw of the normal page next iteration
   }
 
-  int targetPage = -1;
+  int targetPage = 0;
   if (appState.currentPresenceState == STATE_AWAY) {
     appState.pendingWelcomeAlert = false;
     welcomeAlertMessage = "";
@@ -538,13 +543,9 @@ inline void updateTFTDisplay(unsigned long now) {
         appState.hasNewAIResponse = false;
       }
     }
-    if (appState.manualTriggerOverride && isAlertActive) {
-      targetPage = -2; // Manual MQTT trigger: force the alert even while away
-    } else if (now - appState.lastStateTransitionTime < 60000UL) {
-      targetPage = 0; // Show Clock page during the 1-minute grace period
-    } else {
-      targetPage = -1; // Away page
-    }
+    // away.rle is only the boot splash: keep the active faceplate on screen
+    // while away (avoids away/return page transitions and sprite churn).
+    targetPage = (appState.manualTriggerOverride && isAlertActive) ? -2 : 0;
   } else if (isAlertActive) {
     targetPage = -2; // Alert page
   } else {
@@ -593,17 +594,8 @@ inline void updateTFTDisplay(unsigned long now) {
     lastDisplayedPage = targetPage;
   }
 
-  // 1. If user is AWAY (and grace period has expired) - DEV Mode (clockFace 3) bypasses this to show continuous debug telemetry
-  if (appConfig.clockFace != 3 && appState.currentPresenceState == STATE_AWAY && (now - appState.lastStateTransitionTime >= 60000UL)) {
-    if (!appState.manualTriggerOverride || !isAlertActive) {
-      if (forceRedraw) {
-        drawRLEImage("/away.rle", 0, 0);
-      }
-      return;
-    }
-  }
-
-
+  // away.rle is shown only as the boot splash in setup(); the active faceplate
+  // renders continuously (present or away) to avoid page-transition churn.
 
   // 2. Call active faceplate
   bool wifiAvailable = (WiFi.status() == WL_CONNECTED);

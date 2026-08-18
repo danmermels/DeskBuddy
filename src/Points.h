@@ -57,8 +57,13 @@ inline String buildPointsDetail() {
   if (LittleFS.exists("/todo.json")) {
     fs::File file = LittleFS.open("/todo.json", "r");
     if (file) {
-      DynamicJsonDocument doc(8192);
-      if (deserializeJson(doc, file) == DeserializationError::Ok && doc.containsKey("points")) {
+      // Only the "points" subtree is needed; the filter keeps this parse to a
+      // ~512B doc instead of an 8KB one (runs on every points check-in).
+      StaticJsonDocument<128> filter;
+      filter["points"]["running"] = true;
+      filter["points"]["currentMonth"] = true;
+      DynamicJsonDocument doc(512);
+      if (deserializeJson(doc, file, DeserializationOption::Filter(filter)) == DeserializationError::Ok && doc.containsKey("points")) {
         JsonObject p = doc["points"];
         running = p["running"] | 0L;
         curMonth = p["currentMonth"] | "";
@@ -358,18 +363,27 @@ inline bool pointsApplyOverdue(JsonObject root, int nowMins, const String& curre
 }
 
 inline bool pointsSaveDoc(DynamicJsonDocument& doc) {
+  if (fsMutex) xSemaphoreTake(fsMutex, portMAX_DELAY);
   String tmp = String(TODO_PATH) + ".tmp";
   {
     fs::File f = LittleFS.open(tmp, "w");
-    if (!f) return false;
+    if (!f) {
+      if (fsMutex) xSemaphoreGive(fsMutex);
+      return false;
+    }
     serializeJson(doc, f);
     f.close();
   }
-  if (LittleFS.rename(tmp, TODO_PATH)) return true;
-  if (LittleFS.exists(TODO_PATH)) LittleFS.remove(TODO_PATH);
-  if (LittleFS.rename(tmp, TODO_PATH)) return true;
-  if (LittleFS.exists(tmp)) LittleFS.remove(tmp);
-  return false;
+  bool ok = false;
+  if (LittleFS.rename(tmp, TODO_PATH)) {
+    ok = true;
+  } else {
+    if (LittleFS.exists(TODO_PATH)) LittleFS.remove(TODO_PATH);
+    if (LittleFS.rename(tmp, TODO_PATH)) ok = true;
+    if (LittleFS.exists(tmp)) LittleFS.remove(tmp);
+  }
+  if (fsMutex) xSemaphoreGive(fsMutex);
+  return ok;
 }
 
 #endif // POINTS_H

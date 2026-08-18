@@ -907,34 +907,46 @@ void drawDevClockFace(unsigned long now, bool forceRedraw, bool showEvent, const
 #define COLOR_AVIATOR_FOCUS_BG    tft.color565(235, 94, 40)
 #define MSG_FONT_AVIATOR        "GoodTiming15"
 
+static bool aviatorSpritesFailed = false;
+
 void initWatchHandSprites() {
 #if DESKBUDDY_DEBUG
   Serial.println("[SPRITES] Allocating Aviator watch hands and center canvas sprite...");
 #endif
+  aviatorSpritesFailed = false;
 
   // 1. Hour Hand Sprite (27x100)
   if (hourHandSprite.created()) hourHandSprite.deleteSprite();
   hourHandSprite.setColorDepth(16);
-  hourHandSprite.createSprite(27, 100);
-  hourHandSprite.fillSprite(COLOR_TRANSPARENT);
-  drawFullRLEToSprite(hourHandSprite, "/aviator_hour.rle");
-  hourHandSprite.setPivot(13, 85);
+  if (hourHandSprite.createSprite(27, 100) == nullptr) {
+    aviatorSpritesFailed = true;
+  } else {
+    hourHandSprite.fillSprite(COLOR_TRANSPARENT);
+    drawFullRLEToSprite(hourHandSprite, "/aviator_hour.rle");
+    hourHandSprite.setPivot(13, 85);
+  }
 
   // 2. Minute Hand Sprite (21x120)
   if (minuteHandSprite.created()) minuteHandSprite.deleteSprite();
   minuteHandSprite.setColorDepth(16);
-  minuteHandSprite.createSprite(21, 120);
-  minuteHandSprite.fillSprite(COLOR_TRANSPARENT);
-  drawFullRLEToSprite(minuteHandSprite, "/aviator_minute.rle");
-  minuteHandSprite.setPivot(10, 109);
+  if (minuteHandSprite.createSprite(21, 120) == nullptr) {
+    aviatorSpritesFailed = true;
+  } else {
+    minuteHandSprite.fillSprite(COLOR_TRANSPARENT);
+    drawFullRLEToSprite(minuteHandSprite, "/aviator_minute.rle");
+    minuteHandSprite.setPivot(10, 109);
+  }
 
   // 3. Second Hand Sprite (9x127)
   if (secondHandSprite.created()) secondHandSprite.deleteSprite();
   secondHandSprite.setColorDepth(16);
-  secondHandSprite.createSprite(9, 127);
-  secondHandSprite.fillSprite(COLOR_TRANSPARENT);
-  drawFullRLEToSprite(secondHandSprite, "/aviator_second.rle");
-  secondHandSprite.setPivot(4, 110);
+  if (secondHandSprite.createSprite(9, 127) == nullptr) {
+    aviatorSpritesFailed = true;
+  } else {
+    secondHandSprite.fillSprite(COLOR_TRANSPARENT);
+    drawFullRLEToSprite(secondHandSprite, "/aviator_second.rle");
+    secondHandSprite.setPivot(4, 110);
+  }
 
   // 4. Center Canvas Patch Sprite (220x220)
   if (centerBgSprite.created() && (centerBgSprite.width() != 220 || centerBgSprite.height() != 220)) {
@@ -942,9 +954,23 @@ void initWatchHandSprites() {
   }
   if (!centerBgSprite.created()) {
     centerBgSprite.setColorDepth(16);
-    centerBgSprite.createSprite(220, 220);
+    if (centerBgSprite.createSprite(220, 220) == nullptr) {
+      aviatorSpritesFailed = true;
+    }
   }
-  centerBgSprite.fillSprite(TFT_BLACK);
+  if (centerBgSprite.created()) {
+    centerBgSprite.fillSprite(TFT_BLACK);
+  }
+
+  if (aviatorSpritesFailed) {
+    if (hourHandSprite.created()) hourHandSprite.deleteSprite();
+    if (minuteHandSprite.created()) minuteHandSprite.deleteSprite();
+    if (secondHandSprite.created()) secondHandSprite.deleteSprite();
+    if (centerBgSprite.created()) centerBgSprite.deleteSprite();
+#if DESKBUDDY_DEBUG
+    Serial.println("[SPRITES] Aviator sprite alloc failed - analog rendering disabled until heap recovers.");
+#endif
+  }
 }
 
 void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, const String &message, bool isAi, bool wifiAvailable, bool internetAvailable, bool hasMail) {
@@ -965,7 +991,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   }
 
   // Lazy loading of sprites from flash on faceplate select
-  if (!hourHandSprite.created() || !centerBgSprite.created()) {
+  if ((!hourHandSprite.created() || !centerBgSprite.created()) && !aviatorSpritesFailed) {
     initWatchHandSprites();
   }
 
@@ -1001,7 +1027,7 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   // 3. Render and cache background + all text overlays + hour/minute hands in RAM canvas on change
   bool updateCanvas = forceRedraw || (m != last_min) || (appState.temp != last_temp) || (ts.tm_mday != last_mday) || (pct != last_pct);
 
-  if (updateCanvas) {
+  if (updateCanvas && centerBgSprite.created()) {
     // Refresh center background slice in RAM (220x220 centered at 10,10)
     drawRLEImageToSprite(centerBgSprite, "/aviator_bg.rle", 10, 10, 220, 220);
     
@@ -1040,8 +1066,8 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
     // Pre-rotate and draw Hour and Minute hands directly onto centerBgSprite in RAM
     float hourAngle = ((h % 12) * 30.0f) + (m * 0.5f);
     float minAngle = m * 6.0f;
-    hourHandSprite.pushRotated(&centerBgSprite, hourAngle, COLOR_TRANSPARENT);
-    minuteHandSprite.pushRotated(&centerBgSprite, minAngle, COLOR_TRANSPARENT);
+    if (hourHandSprite.created()) hourHandSprite.pushRotated(&centerBgSprite, hourAngle, COLOR_TRANSPARENT);
+    if (minuteHandSprite.created()) minuteHandSprite.pushRotated(&centerBgSprite, minAngle, COLOR_TRANSPARENT);
 
     // Update cached states
     last_min = m;
@@ -1051,17 +1077,21 @@ void drawAviatorClockFace(unsigned long now, bool forceRedraw, bool showEvent, c
   }
 
   // 4. Every second: Push center background RAM patch (<1ms, contains dial, text, and Hour+Minute hands!)
-  centerBgSprite.pushSprite(10, 10);
+  if (centerBgSprite.created()) {
+    centerBgSprite.pushSprite(10, 10);
 
-  // 5. Draw ONLY the second hand on top of TFT
-  tft.setPivot(120, 120);
+    // 5. Draw ONLY the second hand on top of TFT
+    tft.setPivot(120, 120);
 
-  float secAngle = s * 6.0f;
-  secondHandSprite.pushRotated(secAngle, COLOR_TRANSPARENT);
+    float secAngle = s * 6.0f;
+    if (secondHandSprite.created()) {
+      secondHandSprite.pushRotated(secAngle, COLOR_TRANSPARENT);
+    }
 
-  // Center hub pin
-  tft.drawSmoothCircle(120, 120, 5, COLOR_AVIATOR_FOCUS_FG, COLOR_AVIATOR_FOCUS_FG);
-  tft.drawSmoothCircle(120, 120, 2, TFT_BLACK, TFT_BLACK);
+    // Center hub pin
+    tft.drawSmoothCircle(120, 120, 5, COLOR_AVIATOR_FOCUS_FG, COLOR_AVIATOR_FOCUS_FG);
+    tft.drawSmoothCircle(120, 120, 2, TFT_BLACK, TFT_BLACK);
+  }
 }
 
 // ============================================================================
@@ -1635,6 +1665,23 @@ void cleanupDeskbuddySprites() {
 }
 
 /**
+ * Release the current faceplate's RAM sprites so a large transient allocation
+ * (e.g. the AI TLS handshake) has contiguous heap. The display self-heals by
+ * re-initializing the sprites on the next frame after aiTlsInProgress clears.
+ */
+void releaseFaceplateSprites() {
+  tft.unloadFont();
+  if (appConfig.clockFace == 4) {
+    if (hourHandSprite.created())    hourHandSprite.deleteSprite();
+    if (minuteHandSprite.created())  minuteHandSprite.deleteSprite();
+    if (secondHandSprite.created())  secondHandSprite.deleteSprite();
+    if (centerBgSprite.created())    centerBgSprite.deleteSprite();
+  } else if (appConfig.clockFace >= 5 && appConfig.clockFace <= 9) {
+    cleanupDeskbuddySprites();
+  }
+}
+
+/**
  * Allocate the visor canvas sprite (220x105), eye sprite (90x90) and split background cache strips.
  */
 void initDeskbuddySprite(const DeskbuddyThemeConfig &cfg) {
@@ -2122,7 +2169,7 @@ void drawDeskbuddyFaceplate(unsigned long now, bool forceRedraw,
     bool timeChanged   = forceRedraw || h != last_h   || m != last_m;
     bool dateChanged   = forceRedraw || currentDate   != last_date;
     bool metricChanged = forceRedraw || metricText    != last_metric || metricColor != lastMetricColor;
-    bool weatherChanged = forceRedraw || (appState.temp != last_temp) || (appState.weatherDesc != last_weatherDesc);
+    bool weatherChanged = forceRedraw || (appState.temp != last_temp) || (last_weatherDesc != appState.weatherDesc);
 
     if (hasDeskbuddyBgImage && (timeChanged || dateChanged || metricChanged || weatherChanged)) {
 

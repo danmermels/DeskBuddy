@@ -16,8 +16,6 @@
 
 extern NTPClient timeClient;
 
-static unsigned long lastTelemetrySend = 0;
-static unsigned long lastFirmwareCheck = 0;
 static bool firmwareUpdatePending = false;
 static String pendingFirmwareUrl = "";
 static size_t pendingFirmwareSize = 0;
@@ -220,47 +218,6 @@ static bool downloadAndApplyFirmware() {
   delay(2000);
   ESP.restart();
   return true;
-}
-
-static void handleTelemetryUpdate(unsigned long now) {
-  if (!appConfig.telemetryEnabled) return;
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  static bool firstSend = true;
-  unsigned long sendInterval = firstSend ? 30000UL : TELEMETRY_SEND_INTERVAL_MS;
-
-  if (now - lastTelemetrySend > sendInterval) {
-    if (timeClient.isTimeSet()) {
-      String response = sendTelemetry();
-      lastTelemetrySend = now;
-      if (firstSend) firstSend = false;
-
-      if (response.length() > 0) {
-        DynamicJsonDocument doc(256);
-        if (deserializeJson(doc, response) == DeserializationError::Ok) {
-          if (doc["update_available"].as<bool>()) {
-            JsonObject fw = doc["firmware"].as<JsonObject>();
-            if (!fw.isNull()) {
-              pendingFirmwareUrl = fw["url"].as<String>();
-              pendingFirmwareSize = fw["size"].as<size_t>();
-              firmwareUpdatePending = true;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Check for firmware updates separately (less frequent)
-  if (now - lastFirmwareCheck > TELEMETRY_FW_CHECK_INTERVAL_MS) {
-    lastFirmwareCheck = now;
-    checkForFirmwareUpdate();
-  }
-
-  // Apply pending firmware update when safe (not in AI query, not in OTA, device away)
-  if (firmwareUpdatePending && !appState.isAILoading && !appState.otaInProgress) {
-    downloadAndApplyFirmware();
-  }
 }
 
 #endif // TELEMETRY_H

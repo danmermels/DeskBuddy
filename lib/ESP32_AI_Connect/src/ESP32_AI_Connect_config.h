@@ -22,10 +22,17 @@
 
 // --- Advanced Configuration ---
 #define AI_API_REQ_JSON_DOC_SIZE 5120
-#define AI_API_RESP_JSON_DOC_SIZE 2048
+#define AI_API_RESP_JSON_DOC_SIZE 16384
 #define AI_API_HTTP_TIMEOUT_MS 30000
 
 // --- Connection Resilience ---
-// #define ENABLE_AUTO_RETRY
+// Retries transient network/TLS failures (connection refused, 5xx) with
+// exponential backoff. Needed because the TLS handshake can intermittently hit
+// out-of-memory (-32512) when the faceplate sprites fragment the heap.
+#define ENABLE_AUTO_RETRY
+#define AUTO_RETRY_MAX_ATTEMPTS 2
+#define AUTO_RETRY_INITIAL_DELAY_MS 1500
+#define AUTO_RETRY_MAX_DELAY_MS 8000
+#define AUTO_RETRY_STALE_CONNECTION_THRESHOLD_MS 30000
 
 #endif // ESP32_AI_CONNECT_CONFIG_H

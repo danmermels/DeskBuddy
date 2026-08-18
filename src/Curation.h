@@ -563,7 +563,7 @@ inline JournalDashboardViewData getJournalDashboardData() {
   fs::File file = LittleFS.open("/todo.json", "r");
   if (!file) return data;
 
-  DynamicJsonDocument doc(12288);
+  DynamicJsonDocument doc(8192);
   DeserializationError err = deserializeJson(doc, file);
   file.close();
   if (err) return data;
@@ -1147,7 +1147,7 @@ inline String getCurationNudge() {
     add("weather_hot", "it's " + String(appState.temp) + "C outside — good call staying in");
 
   // --- E2: Weather nice ---
-  if (appState.temp >= 20 && appState.temp <= 26 && appState.weatherDesc == "Clear")
+  if (appState.temp >= 20 && appState.temp <= 26 && strcmp(appState.weatherDesc, "Clear") == 0)
     add("weather_nice", "beautiful " + String(appState.temp) + "C outside — step out for a walk?");
 
   // --- Variety: avoid repeating last key ---
