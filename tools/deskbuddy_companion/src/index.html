@@ -494,13 +494,30 @@
 </div>
 
 <script>
-const invoke = window.__TAURI_INTERNALS__
-  ? (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {})
-  : null;
+function getInvoke() {
+  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+    return (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {});
+  }
+  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+    return (cmd, args) => window.__TAURI__.core.invoke(cmd, args || {});
+  }
+  return null;
+}
 
-const eventListen = window.__TAURI_INTERNALS__
-  ? (ev, cb) => window.__TAURI_INTERNALS__.listen(ev, cb)
-  : () => {};
+const invoke = (cmd, args) => {
+  const fn = getInvoke();
+  return fn ? fn(cmd, args) : Promise.reject('No Tauri IPC');
+};
+
+const eventListen = (ev, cb) => {
+  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.listen === 'function') {
+    return window.__TAURI_INTERNALS__.listen(ev, cb);
+  }
+  if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
+    return window.__TAURI__.event.listen(ev, cb);
+  }
+  return () => {};
+};
 
 let isHovering = false;
 let dismissTimer = null;

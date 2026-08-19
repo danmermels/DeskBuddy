@@ -754,7 +754,9 @@ fn open_dashboard(device: Option<&DeviceInfo>, subpath: Option<&str>) {
 
 fn open_settings_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
-        let _ = w.destroy();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
     }
     let Ok(w) = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("DeskBuddy IP Address")
@@ -765,7 +767,7 @@ fn open_settings_window(app: &tauri::AppHandle) {
         .build() else { return };
 
     let win = w.clone();
-    let _ = w.on_window_event(move |event| {
+    w.on_window_event(move |event| {
         if let WindowEvent::CloseRequested { .. } = event {
             let _ = win.destroy();
         }
@@ -972,9 +974,12 @@ pub fn run() {
     let device_state: Arc<Mutex<Option<DeviceInfo>>> = Arc::new(Mutex::new(None));
     let live_state: Arc<Mutex<LiveBuddyState>> = Arc::new(Mutex::new(LiveBuddyState::default()));
 
+    let device_state_for_setup = device_state.clone();
+    let live_state_for_setup = live_state.clone();
+
     let app = tauri::Builder::default()
-        .manage(device_state.clone())
-        .manage(live_state.clone())
+        .manage(device_state)
+        .manage(live_state)
         .invoke_handler(tauri::generate_handler![
             get_state_cmd,
             set_odometer_cmd,
@@ -990,8 +995,8 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            let device_state: Arc<Mutex<Option<DeviceInfo>>> = Arc::new(Mutex::new(None));
-            let live_state: Arc<Mutex<LiveBuddyState>> = Arc::new(Mutex::new(LiveBuddyState::default()));
+            let device_state = device_state_for_setup;
+            let live_state = live_state_for_setup;
 
             let green_icon = load_icon(ICON_GREEN).expect("Failed to load green icon");
             let gray_icon = load_icon(ICON_GRAY).expect("Failed to load gray icon");
@@ -1001,12 +1006,19 @@ pub fn run() {
             let handle3 = handle.clone();
             let handle_poller = handle.clone();
             let handle_refresh = handle.clone();
-            let device_state2 = device_state.clone();
+            let device_state_found = device_state.clone();
+            let device_state_lost = device_state.clone();
+            let device_state_updated = device_state.clone();
+            let device_state_refresh = device_state.clone();
             let device_state_poller = device_state.clone();
+            let live_state_found = live_state.clone();
+            let live_state_lost = live_state.clone();
+            let live_state_updated = live_state.clone();
+            let live_state_refresh = live_state.clone();
+            let live_state_poller = live_state.clone();
             let green_icon2 = green_icon.clone();
             let gray_icon2 = gray_icon.clone();
             let saved_ip2 = saved_ip.clone();
-            let live_state2 = live_state.clone();
 
             let tray = TrayIconBuilder::with_id("deskbuddy-tray")
                 .icon(gray_icon.clone())
@@ -1054,10 +1066,10 @@ pub fn run() {
 
             app.listen("device-found", {
                 let tray = tray.clone();
-                let device_state = device_state2.clone();
+                let device_state = device_state_found;
                 let green_icon = green_icon2.clone();
                 let handle = handle2.clone();
-                let live_state = live_state2.clone();
+                let live_state = live_state_found;
 
                 move |event| {
                     if let Ok(payload) =
@@ -1082,14 +1094,37 @@ pub fn run() {
                             };
                             *device_state.lock().unwrap() = Some(info.clone());
 
-                            let live = live_state.lock().unwrap().clone();
-                            if let Ok(menu) = build_menu(&handle, Some(&info), &live) {
-                                let _ = tray.set_menu(Some(menu));
-                            }
-                            let _ = tray.set_icon(Some(green_icon.clone()));
-                            let _ = tray.set_tooltip(Some(
-                                format!("DeskBuddy at {}:{}", info.ip, info.port).as_str(),
-                            ));
+                            // Fetch immediate data
+                            let dev_ip = info.ip.clone();
+                            let dev_port = info.port;
+                            let app_h = handle.clone();
+                            let live_st = live_state.clone();
+                            let dev_st = device_state.clone();
+                            let tray_h = tray.clone();
+                            let g_icon = green_icon.clone();
+                            thread::spawn(move || {
+                                if let Some(radar) = fetch_radar_data(&dev_ip, dev_port) {
+                                    let todo = fetch_tasks_data(&dev_ip, dev_port).unwrap_or_default();
+                                    let due_tasks = compute_due_tasks(&todo);
+                                    {
+                                        let mut state = live_st.lock().unwrap();
+                                        state.radar = radar;
+                                        state.todo = todo;
+                                        state.due_tasks = due_tasks;
+                                    }
+                                }
+                                let dev = dev_st.lock().unwrap().clone();
+                                let live = live_st.lock().unwrap().clone();
+                                if let Ok(menu) = build_menu(&app_h, dev.as_ref(), &live) {
+                                    let _ = tray_h.set_menu(Some(menu));
+                                }
+                                let _ = tray_h.set_icon(Some(g_icon));
+                                let _ = tray_h.set_tooltip(Some(
+                                    format!("DeskBuddy at {}:{}", dev_ip, dev_port).as_str(),
+                                ));
+                                let _ = app_h.emit("data-updated", ());
+                                let _ = app_h.emit("device-found-ui", ());
+                            });
                         }
                     }
                 }
@@ -1097,10 +1132,10 @@ pub fn run() {
 
             app.listen("device-lost", {
                 let tray = tray2.clone();
-                let device_state = device_state.clone();
+                let device_state = device_state_lost;
                 let gray_icon = gray_icon2.clone();
                 let handle = handle2.clone();
-                let live_state = live_state.clone();
+                let live_state = live_state_lost;
 
                 move |_event| {
                     app_log("Device lost");
@@ -1111,13 +1146,14 @@ pub fn run() {
                     }
                     let _ = tray.set_icon(Some(gray_icon.clone()));
                     let _ = tray.set_tooltip(Some("DeskBuddy not found"));
+                    let _ = handle.emit("data-updated", ());
                 }
             });
 
             app.listen("data-updated", {
                 let tray = tray_poller.clone();
-                let device_state = device_state.clone();
-                let live_state = live_state.clone();
+                let device_state = device_state_updated;
+                let live_state = live_state_updated;
                 let handle = handle_refresh.clone();
 
                 move |_event| {
@@ -1131,19 +1167,42 @@ pub fn run() {
 
             app.listen("do-refresh", {
                 let tray = tray2.clone();
-                let device_state = device_state.clone();
+                let device_state = device_state_refresh;
                 let gray_icon = gray_icon2.clone();
                 let handle = handle2.clone();
-                let live_state = live_state.clone();
+                let live_state = live_state_refresh;
 
                 move |_event| {
                     app_log("Manual refresh triggered");
-                    let dev = device_state.lock().unwrap().clone();
-                    let live = live_state.lock().unwrap().clone();
-                    if let Ok(menu) = build_menu(&handle, dev.as_ref(), &live) {
-                        let _ = tray.set_menu(Some(menu));
-                    }
-                    if dev.is_none() {
+                    let dev_opt = device_state.lock().unwrap().clone();
+                    if let Some(dev) = dev_opt {
+                        let app_h = handle.clone();
+                        let live_st = live_state.clone();
+                        let dev_st = device_state.clone();
+                        let tray_h = tray.clone();
+                        thread::spawn(move || {
+                            if let Some(radar) = fetch_radar_data(&dev.ip, dev.port) {
+                                let todo = fetch_tasks_data(&dev.ip, dev.port).unwrap_or_default();
+                                let due_tasks = compute_due_tasks(&todo);
+                                {
+                                    let mut state = live_st.lock().unwrap();
+                                    state.radar = radar;
+                                    state.todo = todo;
+                                    state.due_tasks = due_tasks;
+                                }
+                            }
+                            let dev_cur = dev_st.lock().unwrap().clone();
+                            let live_cur = live_st.lock().unwrap().clone();
+                            if let Ok(menu) = build_menu(&app_h, dev_cur.as_ref(), &live_cur) {
+                                let _ = tray_h.set_menu(Some(menu));
+                            }
+                            let _ = app_h.emit("data-updated", ());
+                        });
+                    } else {
+                        let live = live_state.lock().unwrap().clone();
+                        if let Ok(menu) = build_menu(&handle, None, &live) {
+                            let _ = tray.set_menu(Some(menu));
+                        }
                         let _ = tray.set_icon(Some(gray_icon.clone()));
                         let _ = tray.set_tooltip(Some("Refreshing..."));
                     }
@@ -1176,7 +1235,7 @@ pub fn run() {
             start_mdns(handle2);
             start_health_check(handle, saved_ip2);
             start_beacon_listener(handle3);
-            start_status_poller(handle_poller, device_state_poller, live_state);
+            start_status_poller(handle_poller, device_state_poller, live_state_poller);
 
             Ok(())
         })
