@@ -8,7 +8,22 @@
     "beforeBuildCommand": ""
   },
   "app": {
-    "windows": [],
+    "windows": [
+      {
+        "title": "DeskBuddy Companion",
+        "label": "main",
+        "url": "index.html",
+        "width": 380,
+        "height": 620,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "resizable": false
+      }
+    ],
     "security": {
       "csp": null
     }

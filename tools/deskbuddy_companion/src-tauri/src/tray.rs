@@ -38,13 +38,13 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct DeviceInfo {
     ip: String,
     port: u16,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct RadarData {
     #[serde(default)]
     lang: Option<String>,
@@ -126,7 +126,7 @@ struct TodoDoc {
     extra: serde_json::Value,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct DisplayTask {
     is_daily: bool,
     orig_index: usize,
@@ -134,7 +134,7 @@ struct DisplayTask {
     display_label: String,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct LiveBuddyState {
     radar: RadarData,
     todo: TodoDoc,
@@ -772,6 +772,132 @@ fn open_settings_window(app: &tauri::AppHandle) {
     });
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct AppFullState {
+    device: Option<DeviceInfo>,
+    live: LiveBuddyState,
+}
+
+#[tauri::command]
+fn get_state_cmd(
+    device_state: tauri::State<'_, Arc<Mutex<Option<DeviceInfo>>>>,
+    live_state: tauri::State<'_, Arc<Mutex<LiveBuddyState>>>,
+) -> Result<AppFullState, String> {
+    let device = device_state.lock().unwrap().clone();
+    let live = live_state.lock().unwrap().clone();
+    Ok(AppFullState { device, live })
+}
+
+#[tauri::command]
+fn set_odometer_cmd(
+    idx: usize,
+    app: tauri::AppHandle,
+    device_state: tauri::State<'_, Arc<Mutex<Option<DeviceInfo>>>>,
+    live_state: tauri::State<'_, Arc<Mutex<LiveBuddyState>>>,
+) -> Result<(), String> {
+    // 1. Optimistic update
+    {
+        let mut state = live_state.lock().unwrap();
+        state.radar.active_odometer = Some(idx);
+    }
+    let _ = app.emit("data-updated", ());
+
+    // 2. Perform HTTP request in background
+    let device_opt = device_state.lock().unwrap().clone();
+    if let Some(dev) = device_opt {
+        let app_h = app.clone();
+        let live_st = live_state.inner().clone();
+        thread::spawn(move || {
+            if set_active_odometer(&dev.ip, dev.port, idx) {
+                if let Some(radar) = fetch_radar_data(&dev.ip, dev.port) {
+                    let mut state = live_st.lock().unwrap();
+                    state.radar = radar;
+                }
+                let _ = app_h.emit("data-updated", ());
+            }
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn complete_task_cmd(
+    disp_idx: usize,
+    is_daily: bool,
+    orig_index: usize,
+    app: tauri::AppHandle,
+    device_state: tauri::State<'_, Arc<Mutex<Option<DeviceInfo>>>>,
+    live_state: tauri::State<'_, Arc<Mutex<LiveBuddyState>>>,
+) -> Result<(), String> {
+    // 1. Optimistic removal from due tasks
+    {
+        let mut state = live_state.lock().unwrap();
+        if disp_idx < state.due_tasks.len() {
+            state.due_tasks.remove(disp_idx);
+        }
+    }
+    let _ = app.emit("data-updated", ());
+
+    // 2. Background HTTP request
+    let device_opt = device_state.lock().unwrap().clone();
+    if let Some(dev) = device_opt {
+        let app_h = app.clone();
+        let live_st = live_state.inner().clone();
+        thread::spawn(move || {
+            if toggle_task_completion(&dev.ip, dev.port, is_daily, orig_index) {
+                if let Some(todo) = fetch_tasks_data(&dev.ip, dev.port) {
+                    let due_tasks = compute_due_tasks(&todo);
+                    let mut state = live_st.lock().unwrap();
+                    state.todo = todo;
+                    state.due_tasks = due_tasks;
+                }
+                let _ = app_h.emit("data-updated", ());
+            }
+        });
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_url_cmd(
+    subpath: Option<String>,
+    app: tauri::AppHandle,
+    device_state: tauri::State<'_, Arc<Mutex<Option<DeviceInfo>>>>,
+) -> Result<(), String> {
+    let device = device_state.lock().unwrap().clone();
+    open_dashboard(device.as_ref(), subpath.as_deref());
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn open_settings_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    open_settings_window(&app);
+    Ok(())
+}
+
+#[tauri::command]
+fn refresh_data_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    let _ = app.emit("do-refresh", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_popup_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn quit_app_cmd(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
+    Ok(())
+}
+
 #[tauri::command]
 fn save_ip_cmd(ip: String, app: tauri::AppHandle) -> Result<(), String> {
     let mut s = load_settings();
@@ -795,6 +921,37 @@ fn close_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn position_flyout_window(win: &tauri::WebviewWindow, position: Option<tauri::PhysicalPosition<f64>>) {
+    if let Ok(monitor) = win.primary_monitor() {
+        if let Some(mon) = monitor {
+            let screen_size = mon.size();
+            let win_width = 380;
+            let win_height = 620;
+
+            let (target_x, target_y) = if let Some(pos) = position {
+                // Tray position known
+                let x = (pos.x as i32 - win_width / 2).max(10).min(screen_size.width as i32 - win_width - 10);
+                let y = if (pos.y as i32) > (screen_size.height as i32 / 2) {
+                    pos.y as i32 - win_height - 10
+                } else {
+                    pos.y as i32 + 10
+                };
+                (x, y)
+            } else {
+                // Bottom-right corner fallback (typical for Windows taskbar)
+                let x = screen_size.width as i32 - win_width - 16;
+                let y = screen_size.height as i32 - win_height - 48;
+                (x, y)
+            };
+
+            let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                x: target_x,
+                y: target_y,
+            }));
+        }
+    }
+}
+
 pub fn run() {
     env_logger::init();
     app_log("DeskBuddy Companion starting");
@@ -810,11 +967,27 @@ pub fn run() {
     }
 
     let quit_requested = Arc::new(AtomicBool::new(false));
-    let quit_for_setup = quit_requested.clone();
     let quit_for_run = quit_requested.clone();
 
+    let device_state: Arc<Mutex<Option<DeviceInfo>>> = Arc::new(Mutex::new(None));
+    let live_state: Arc<Mutex<LiveBuddyState>> = Arc::new(Mutex::new(LiveBuddyState::default()));
+
     let app = tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![save_ip_cmd, get_saved_ip_cmd, close_settings_window])
+        .manage(device_state.clone())
+        .manage(live_state.clone())
+        .invoke_handler(tauri::generate_handler![
+            get_state_cmd,
+            set_odometer_cmd,
+            complete_task_cmd,
+            open_url_cmd,
+            open_settings_cmd,
+            refresh_data_cmd,
+            hide_popup_cmd,
+            quit_app_cmd,
+            save_ip_cmd,
+            get_saved_ip_cmd,
+            close_settings_window
+        ])
         .setup(move |app| {
             let handle = app.handle().clone();
             let device_state: Arc<Mutex<Option<DeviceInfo>>> = Arc::new(Mutex::new(None));
@@ -839,90 +1012,24 @@ pub fn run() {
                 .icon(gray_icon.clone())
                 .menu(&initial_menu)
                 .tooltip("DeskBuddy Companion")
-                .on_menu_event({
-                    let device_state = device_state.clone();
-                    let live_state = live_state.clone();
+                .on_tray_icon_event({
                     let handle = handle.clone();
-                    let quit = quit_for_setup.clone();
-                    move |app, event| {
-                        let event_id = event.id().as_ref();
-                        match event_id {
-                            "open" => {
-                                let device = device_state.lock().unwrap();
-                                open_dashboard(device.as_ref(), None);
-                            }
-                            "open-todo" => {
-                                let device = device_state.lock().unwrap();
-                                open_dashboard(device.as_ref(), Some("todo"));
-                            }
-                            "set-ip" => {
-                                open_settings_window(&handle);
-                            }
-                            "refresh" => {
-                                let _ = app.emit("do-refresh", ());
-                            }
-                            "quit" => {
-                                quit.store(true, Ordering::SeqCst);
-                                app.exit(0);
-                            }
-                            id if id.starts_with("odo-") => {
-                                if let Ok(idx) = id.trim_start_matches("odo-").parse::<usize>() {
-                                    // 1. Optimistic local state update
-                                    {
-                                        let mut state = live_state.lock().unwrap();
-                                        state.radar.active_odometer = Some(idx);
-                                    }
-                                    let _ = app.emit("data-updated", ());
-
-                                    // 2. Perform HTTP request in background
-                                    let device_opt = device_state.lock().unwrap().clone();
-                                    if let Some(dev) = device_opt {
-                                        let app_h = app.clone();
-                                        let live_st = live_state.clone();
-                                        thread::spawn(move || {
-                                            if set_active_odometer(&dev.ip, dev.port, idx) {
-                                                if let Some(radar) = fetch_radar_data(&dev.ip, dev.port) {
-                                                    let mut state = live_st.lock().unwrap();
-                                                    state.radar = radar;
-                                                }
-                                                let _ = app_h.emit("data-updated", ());
-                                            }
-                                        });
-                                    }
-                                }
-                            }
-                            id if id.starts_with("task-toggle-") => {
-                                if let Ok(disp_idx) = id.trim_start_matches("task-toggle-").parse::<usize>() {
-                                    let task_info = {
-                                        let state = live_state.lock().unwrap();
-                                        state.due_tasks.get(disp_idx).cloned()
-                                    };
-
-                                    // 1. Optimistic removal from due tasks
-                                    {
-                                        let mut state = live_state.lock().unwrap();
-                                        if disp_idx < state.due_tasks.len() {
-                                            state.due_tasks.remove(disp_idx);
-                                        }
-                                    }
-                                    let _ = app.emit("data-updated", ());
-
-                                    // 2. Perform HTTP request in background
-                                    let device_opt = device_state.lock().unwrap().clone();
-                                    if let (Some(dev), Some(task)) = (device_opt, task_info) {
-                                        let app_h = app.clone();
-                                        let live_st = live_state.clone();
-                                        thread::spawn(move || {
-                                            if toggle_task_completion(&dev.ip, dev.port, task.is_daily, task.orig_index) {
-                                                if let Some(todo) = fetch_tasks_data(&dev.ip, dev.port) {
-                                                    let due_tasks = compute_due_tasks(&todo);
-                                                    let mut state = live_st.lock().unwrap();
-                                                    state.todo = todo;
-                                                    state.due_tasks = due_tasks;
-                                                }
-                                                let _ = app_h.emit("data-updated", ());
-                                            }
-                                        });
+                    move |_tray, event| {
+                        match event {
+                            TrayIconEvent::Click {
+                                button: MouseButton::Left | MouseButton::Right,
+                                button_state: MouseButtonState::Up,
+                                position,
+                                ..
+                            } => {
+                                if let Some(w) = handle.get_webview_window("main") {
+                                    if w.is_visible().unwrap_or(false) {
+                                        let _ = w.hide();
+                                    } else {
+                                        position_flyout_window(&w, Some(position));
+                                        let _ = w.show();
+                                        let _ = w.set_focus();
+                                        let _ = handle.emit("popup-opened", ());
                                     }
                                 }
                             }
@@ -930,21 +1037,17 @@ pub fn run() {
                         }
                     }
                 })
-                .on_tray_icon_event({
-                    let device_state = device_state.clone();
-                    move |_tray, event| {
-                        if let TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            button_state: MouseButtonState::Up,
-                            ..
-                        } = event
-                        {
-                            let device = device_state.lock().unwrap();
-                            open_dashboard(device.as_ref(), None);
-                        }
-                    }
-                })
                 .build(app)?;
+
+            // Register auto-hide when main flyout window loses focus
+            if let Some(main_win) = handle.get_webview_window("main") {
+                let win_clone = main_win.clone();
+                main_win.on_window_event(move |event| {
+                    if let WindowEvent::Focused(false) = event {
+                        let _ = win_clone.hide();
+                    }
+                });
+            }
 
             let tray2 = tray.clone();
             let tray_poller = tray.clone();

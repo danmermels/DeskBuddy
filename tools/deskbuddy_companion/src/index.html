@@ -1,22 +1,767 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeskBuddy Companion</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; overflow: hidden; }
-        body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #1a1a2e;
-            color: #eee;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeskBuddy Companion</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+  
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: transparent;
+    color: #f8fafc;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 8px;
+  }
+
+  .container {
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 16px;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 15px rgba(56, 189, 248, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: popupIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes popupIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: rgba(30, 41, 59, 0.7);
+    border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .brand-title {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: #f8fafc;
+    letter-spacing: -0.01em;
+  }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    transition: all 0.25s;
+  }
+  .status-badge.online {
+    background: rgba(16, 185, 129, 0.18);
+    color: #6ee7b7;
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .icon-btn {
+    background: rgba(51, 65, 85, 0.4);
+    border: 1px solid rgba(71, 85, 105, 0.5);
+    color: #94a3b8;
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s;
+  }
+  .icon-btn:hover {
+    background: rgba(56, 189, 248, 0.2);
+    color: #38bdf8;
+    border-color: #38bdf8;
+  }
+
+  /* Quick link buttons */
+  .quick-links {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 10px 12px 6px 12px;
+  }
+  .link-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    color: #e2e8f0;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .link-btn:hover {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(14, 165, 233, 0.35));
+    border-color: #38bdf8;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+  }
+
+  /* Scrollable Content */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 12px 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .content::-webkit-scrollbar {
+    width: 4px;
+  }
+  .content::-webkit-scrollbar-thumb {
+    background: rgba(51, 65, 85, 0.8);
+    border-radius: 4px;
+  }
+
+  .section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* Telemetry Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .metric-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 8px;
+    padding: 7px 9px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s;
+  }
+  .metric-card:hover {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: rgba(30, 41, 59, 0.85);
+  }
+  .metric-header {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.68rem;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+  .metric-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    margin-top: 2px;
+  }
+  .metric-score {
+    color: #38bdf8;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+  .metric-focus {
+    color: #34d399;
+  }
+
+  /* Odometer Cards */
+  .odo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .odo-btn {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(51, 65, 85, 0.6);
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .odo-btn:hover {
+    border-color: #38bdf8;
+    background: rgba(30, 41, 59, 0.85);
+    transform: translateY(-1px);
+  }
+  .odo-btn.active {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(15, 23, 42, 0.8));
+    border-color: #38bdf8;
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+  }
+  .odo-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .odo-name {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
+  }
+  .odo-btn.active .odo-name {
+    color: #38bdf8;
+  }
+  .odo-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #475569;
+    transition: all 0.2s;
+  }
+  .odo-btn.active .odo-dot {
+    background: #10b981;
+    box-shadow: 0 0 8px #10b981;
+  }
+  .odo-time {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #f8fafc;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  /* Due Tasks Checklist */
+  .tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .task-item {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 8px;
+    padding: 7px 10px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .task-item:hover {
+    background: rgba(51, 65, 85, 0.7);
+    border-color: #34d399;
+    transform: translateX(2px);
+  }
+  .task-checkbox {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    color: transparent;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .task-item:hover .task-checkbox {
+    border-color: #34d399;
+    color: #34d399;
+  }
+  .task-item.completing {
+    opacity: 0.3;
+    transform: translateX(10px) scale(0.96);
+    pointer-events: none;
+  }
+  .task-item.completing .task-checkbox {
+    background: #10b981;
+    border-color: #10b981;
+    color: #fff;
+  }
+  .task-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .task-title {
+    font-size: 0.77rem;
+    font-weight: 500;
+    color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .no-tasks {
+    text-align: center;
+    font-size: 0.74rem;
+    color: #64748b;
+    padding: 12px;
+    background: rgba(30, 41, 59, 0.3);
+    border-radius: 8px;
+    border: 1px dashed rgba(51, 65, 85, 0.6);
+  }
+
+  /* Footer */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.9);
+    border-top: 1px solid rgba(51, 65, 85, 0.6);
+    font-size: 0.72rem;
+  }
+  .footer-timer {
+    color: #64748b;
+    font-size: 0.68rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .footer-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .footer-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .footer-btn:hover {
+    color: #f8fafc;
+    background: rgba(51, 65, 85, 0.5);
+  }
+  .footer-btn.quit:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.15);
+  }
+</style>
 </head>
 <body>
+
+<div class="container" id="appContainer">
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <span style="font-size:1rem;">🤖</span>
+      <span class="brand-title">DeskBuddy</span>
+      <span class="status-badge" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">Offline</span>
+      </span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="refreshBtn" title="Refresh data">🔄</button>
+      <button class="icon-btn" id="settingsBtn" title="Configure IP">⚙️</button>
+    </div>
+  </div>
+
+  <!-- Quick Link Buttons -->
+  <div class="quick-links">
+    <button class="link-btn" id="btnOpenDash">
+      <span>📊</span>
+      <span>Dashboard</span>
+    </button>
+    <button class="link-btn" id="btnOpenTodo">
+      <span>📝</span>
+      <span>TODO Page</span>
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <!-- Telemetry Metrics -->
+    <div>
+      <div class="section-title">
+        <span id="labelPerf">Performance Today</span>
+        <span id="badgeLang" style="font-size:0.6rem; color:#38bdf8;"></span>
+      </div>
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-header"><span>🪑</span><span id="lDesk">At Desk</span></div>
+          <div class="metric-value" id="valDesk">0m</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-header"><span>🎯</span><span id="lFocus">Focus</span></div>
+          <div class="metric-value metric-focus" id="valFocus">0m</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-header"><span>☕</span><span id="lBreak">Breaks</span></div>
+          <div class="metric-value" id="valBreak">0m (<span id="valBreaksCnt">0</span>)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-header"><span>⭐</span><span id="lScore">Score</span></div>
+          <div class="metric-value metric-score" id="valScore">0%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-header"><span>🔥</span><span id="lStreak">Max Streak</span></div>
+          <div class="metric-value" id="valStreak">0m</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-header"><span>🌅</span><span id="lFirstSit">First Sit</span></div>
+          <div class="metric-value" id="valFirstSit" style="font-size:0.85rem;">--:--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trip Odometers -->
+    <div>
+      <div class="section-title">
+        <span id="labelOdo">Trip Odometers</span>
+        <span style="font-size:0.6rem; color:#64748b;">Click to Switch</span>
+      </div>
+      <div class="odo-grid" id="odoGrid">
+        <!-- Odometer items dynamically injected -->
+      </div>
+    </div>
+
+    <!-- Due Tasks -->
+    <div>
+      <div class="section-title">
+        <span id="labelTasks">Due Tasks</span>
+        <span id="taskCount" style="color:#38bdf8; font-weight:700;">0</span>
+      </div>
+      <div class="tasks-list" id="tasksList">
+        <div class="no-tasks" id="noTasksMsg">No pending tasks today/month</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-timer">
+      <span>⏳</span>
+      <span id="timerCountdown">Auto-closing in 2s</span>
+    </div>
+    <div class="footer-btns">
+      <button class="footer-btn quit" id="btnQuit">Quit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const invoke = window.__TAURI_INTERNALS__
+  ? (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {})
+  : null;
+
+const eventListen = window.__TAURI_INTERNALS__
+  ? (ev, cb) => window.__TAURI_INTERNALS__.listen(ev, cb)
+  : () => {};
+
+let isHovering = false;
+let dismissTimer = null;
+let countdownInterval = null;
+let remainingMs = 2000;
+let currentLanguage = "pt";
+
+// DOM Elements
+const statusBadge = document.getElementById("statusBadge");
+const statusText = document.getElementById("statusText");
+const badgeLang = document.getElementById("badgeLang");
+const timerCountdown = document.getElementById("timerCountdown");
+const odoGrid = document.getElementById("odoGrid");
+const tasksList = document.getElementById("tasksList");
+const noTasksMsg = document.getElementById("noTasksMsg");
+const taskCount = document.getElementById("taskCount");
+
+// Telemetry Elements
+const valDesk = document.getElementById("valDesk");
+const valFocus = document.getElementById("valFocus");
+const valBreak = document.getElementById("valBreak");
+const valBreaksCnt = document.getElementById("valBreaksCnt");
+const valScore = document.getElementById("valScore");
+const valStreak = document.getElementById("valStreak");
+const valFirstSit = document.getElementById("valFirstSit");
+
+// Localized strings
+const i18n = {
+  pt: {
+    online: "Online",
+    offline: "Procurando...",
+    desk: "Na Mesa",
+    focus: "Foco",
+    break: "Pausas",
+    score: "Produtividade",
+    streak: "Maior Sequência",
+    firstSit: "1ª Sessão",
+    noTasks: "Nenhuma tarefa pendente hoje/mês",
+    perf: "Desempenho de Hoje",
+    odo: "Odômetros de Tempo",
+    due: "Tarefas Pendentes",
+    autoClose: "Fecha em"
+  },
+  en: {
+    online: "Online",
+    offline: "Searching...",
+    desk: "At Desk",
+    focus: "Focus",
+    break: "Breaks",
+    score: "Productivity",
+    streak: "Longest Streak",
+    firstSit: "First Sit",
+    noTasks: "No pending tasks today/month",
+    perf: "Today's Performance",
+    odo: "Trip Odometers",
+    due: "Due Tasks",
+    autoClose: "Auto-closing in"
+  }
+};
+
+function resetAutoDismissTimer() {
+  clearTimeout(dismissTimer);
+  clearInterval(countdownInterval);
+
+  remainingMs = isHovering ? 10000 : 2000;
+  const updateLabel = () => {
+    const s = Math.ceil(remainingMs / 1000);
+    const text = isHovering
+      ? `Hovering (${s}s)`
+      : `${i18n[currentLanguage].autoClose} ${s}s`;
+    timerCountdown.textContent = text;
+  };
+
+  updateLabel();
+  countdownInterval = setInterval(() => {
+    remainingMs -= 500;
+    if (remainingMs <= 0) {
+      clearInterval(countdownInterval);
+      if (invoke) invoke("hide_popup_cmd");
+    } else {
+      updateLabel();
+    }
+  }, 500);
+}
+
+// Mouse hover detection
+document.body.addEventListener("mouseenter", () => {
+  isHovering = true;
+  resetAutoDismissTimer();
+});
+
+document.body.addEventListener("mouseleave", () => {
+  isHovering = false;
+  resetAutoDismissTimer();
+});
+
+async function refreshData() {
+  if (!invoke) return;
+  try {
+    const data = await invoke("get_state_cmd");
+    if (data) {
+      renderState(data);
+    }
+  } catch (e) {
+    console.error("Failed to load state", e);
+  }
+}
+
+function renderState(data) {
+  const isOnline = !!data.device;
+  const lang = (data.live?.radar?.lang === "en" || data.live?.radar?.language === "en-US") ? "en" : "pt";
+  currentLanguage = lang;
+  const t = i18n[lang];
+
+  // Header Status
+  if (isOnline) {
+    statusBadge.className = "status-badge online";
+    statusText.textContent = `${t.online} (${data.device.ip})`;
+  } else {
+    statusBadge.className = "status-badge";
+    statusText.textContent = t.offline;
+  }
+  badgeLang.textContent = lang.toUpperCase();
+
+  // Telemetry
+  valDesk.textContent = data.live?.radar?.deskTime || "0m";
+  valFocus.textContent = data.live?.radar?.focusTime || "0m";
+  valBreak.textContent = data.live?.radar?.breakTime || "0m";
+  valBreaksCnt.textContent = data.live?.radar?.breaks || "0";
+  valScore.textContent = `${data.live?.radar?.score || 0}%`;
+  valStreak.textContent = data.live?.radar?.longestStreak || "0m";
+  valFirstSit.textContent = data.live?.radar?.firstSitTime || (lang === "pt" ? "Não reg." : "Not reg.");
+
+  // Section Titles
+  document.getElementById("labelPerf").textContent = t.perf;
+  document.getElementById("labelOdo").textContent = t.odo;
+  document.getElementById("labelTasks").textContent = t.due;
+  document.getElementById("lDesk").textContent = t.desk;
+  document.getElementById("lFocus").textContent = t.focus;
+  document.getElementById("lBreak").textContent = t.break;
+  document.getElementById("lScore").textContent = t.score;
+  document.getElementById("lStreak").textContent = t.streak;
+  document.getElementById("lFirstSit").textContent = t.firstSit;
+
+  // Odometers
+  renderOdometers(data.live?.radar, lang);
+
+  // Due Tasks
+  renderTasks(data.live?.due_tasks || [], t);
+}
+
+function renderOdometers(radar, lang) {
+  odoGrid.innerHTML = "";
+  const activeIdx = radar?.activeOdometer ?? 0;
+  const defaultLabels = lang === "pt"
+    ? ["Trabalho", "Estudo", "Odômetro 3", "Odômetro 4"]
+    : ["Work", "Study", "Odometer 3", "Odometer 4"];
+  const labels = radar?.odometerLabels || defaultLabels;
+  const fmts = radar?.odometerFmt || ["00:00:00", "00:00:00", "00:00:00", "00:00:00"];
+
+  for (let i = 0; i < 4; i++) {
+    const name = labels[i] || `Odo ${i+1}`;
+    const time = fmts[i] || "00:00:00";
+    const isActive = (i === activeIdx);
+
+    const btn = document.createElement("div");
+    btn.className = `odo-btn ${isActive ? "active" : ""}`;
+    btn.innerHTML = `
+      <div class="odo-top">
+        <span class="odo-name">${name}</span>
+        <span class="odo-dot"></span>
+      </div>
+      <div class="odo-time">${time}</div>
+    `;
+
+    btn.addEventListener("click", async () => {
+      // Optimistic highlight
+      document.querySelectorAll(".odo-btn").forEach((b, idx) => {
+        b.classList.toggle("active", idx === i);
+      });
+      if (invoke) {
+        await invoke("set_odometer_cmd", { idx: i });
+      }
+    });
+
+    odoGrid.appendChild(btn);
+  }
+}
+
+function renderTasks(tasks, t) {
+  tasksList.innerHTML = "";
+  taskCount.textContent = tasks.length;
+
+  if (!tasks || tasks.length === 0) {
+    tasksList.innerHTML = `<div class="no-tasks">${t.noTasks}</div>`;
+    return;
+  }
+
+  tasks.forEach((task, dispIdx) => {
+    const item = document.createElement("div");
+    item.className = "task-item";
+    item.innerHTML = `
+      <div class="task-checkbox">✓</div>
+      <div class="task-details">
+        <span class="task-title">${task.display_label.replace(/^☐\s*/, '')}</span>
+      </div>
+    `;
+
+    item.addEventListener("click", async () => {
+      // Optimistic complete animation
+      item.classList.add("completing");
+      setTimeout(() => item.remove(), 250);
+
+      if (invoke) {
+        await invoke("complete_task_cmd", {
+          dispIdx: dispIdx,
+          isDaily: task.is_daily,
+          origIndex: task.orig_index
+        });
+      }
+    });
+
+    tasksList.appendChild(item);
+  });
+}
+
+// Button actions
+document.getElementById("btnOpenDash").addEventListener("click", () => {
+  if (invoke) invoke("open_url_cmd", { subpath: "" });
+});
+
+document.getElementById("btnOpenTodo").addEventListener("click", () => {
+  if (invoke) invoke("open_url_cmd", { subpath: "todo" });
+});
+
+document.getElementById("settingsBtn").addEventListener("click", () => {
+  if (invoke) invoke("open_settings_cmd");
+});
+
+document.getElementById("refreshBtn").addEventListener("click", () => {
+  if (invoke) invoke("refresh_data_cmd");
+});
+
+document.getElementById("btnQuit").addEventListener("click", () => {
+  if (invoke) invoke("quit_app_cmd");
+});
+
+// Tauri listeners
+if (eventListen) {
+  eventListen("data-updated", () => refreshData());
+  eventListen("device-found", () => refreshData());
+  eventListen("device-lost", () => refreshData());
+  eventListen("popup-opened", () => {
+    resetAutoDismissTimer();
+    refreshData();
+  });
+}
+
+// Initial fetch
+refreshData();
+resetAutoDismissTimer();
+</script>
 </body>
 </html>
