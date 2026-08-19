@@ -80,43 +80,32 @@
 <p class="hint">Log: <code>%LOCALAPPDATA%\DeskBuddy Companion\companion.log</code></p>
 
 <script>
-function getInvoke() {
-  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-    return window.__TAURI_INTERNALS__.invoke;
+function invoke(cmd, args) {
+  if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+    return window.__TAURI_INTERNALS__.invoke(cmd, args || {});
   }
-  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-    return window.__TAURI__.core.invoke;
-  }
-  return null;
+  return Promise.reject('No Tauri IPC');
 }
 
 const statusEl = document.getElementById('status');
 const ipInput = document.getElementById('ip');
 
 async function closeWindow() {
-  const invoke = getInvoke();
-  if (invoke) {
-    try {
-      await invoke('close_settings_window');
-    } catch(e) {
-      window.close();
-    }
-  } else {
+  try {
+    await invoke('close_settings_window');
+  } catch(e) {
     window.close();
   }
 }
 
 async function init() {
-  const invoke = getInvoke();
-  if (!invoke) {
-    statusEl.textContent = 'Ready (Tauri IPC active)';
-    return;
-  }
   try {
     const saved = await invoke('get_saved_ip_cmd');
     if (saved) {
       ipInput.value = saved;
       statusEl.textContent = 'Configured: ' + saved;
+    } else {
+      statusEl.textContent = 'Ready to set IP';
     }
   } catch (e) {
     statusEl.textContent = 'Ready to set IP';
@@ -126,8 +115,6 @@ async function init() {
 document.getElementById('saveBtn').addEventListener('click', async () => {
   const ip = ipInput.value.trim();
   if (!ip) { statusEl.textContent = 'Please enter an IP address'; return; }
-  const invoke = getInvoke();
-  if (!invoke) { statusEl.textContent = 'IPC not ready'; return; }
   try {
     statusEl.textContent = 'Saving...';
     await invoke('save_ip_cmd', { ip });

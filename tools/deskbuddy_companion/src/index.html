@@ -495,30 +495,30 @@
 </div>
 
 <script>
-function getInvoke() {
-  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-    return (cmd, args) => window.__TAURI_INTERNALS__.invoke(cmd, args || {});
+// Tauri v2 IPC: __TAURI_INTERNALS__ has .invoke and .transformCallback but NOT .listen
+function invoke(cmd, args) {
+  if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+    return window.__TAURI_INTERNALS__.invoke(cmd, args || {});
   }
-  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-    return (cmd, args) => window.__TAURI__.core.invoke(cmd, args || {});
-  }
-  return null;
+  return Promise.reject('No Tauri IPC available');
 }
 
-const invoke = (cmd, args) => {
-  const fn = getInvoke();
-  return fn ? fn(cmd, args) : Promise.reject('No Tauri IPC');
-};
-
-const eventListen = (ev, cb) => {
-  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.listen === 'function') {
-    return window.__TAURI_INTERNALS__.listen(ev, cb);
+// Tauri v2 event listening via plugin:event|listen internal command
+async function tauriListen(event, handler) {
+  if (!window.__TAURI_INTERNALS__) return;
+  try {
+    const id = window.__TAURI_INTERNALS__.transformCallback((evt) => {
+      handler(evt);
+    }, false);
+    await invoke('plugin:event|listen', {
+      event: event,
+      target: { kind: 'Any' },
+      handler: id
+    });
+  } catch (e) {
+    console.warn('Event listen failed for ' + event, e);
   }
-  if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
-    return window.__TAURI__.event.listen(ev, cb);
-  }
-  return () => {};
-};
+}
 
 let isHovering = false;
 let dismissTimer = null;
@@ -616,15 +616,13 @@ document.body.addEventListener("mouseleave", () => {
 });
 
 async function refreshData() {
-  const fn = getInvoke();
-  if (!fn) return;
   try {
-    const data = await fn("get_state_cmd");
+    const data = await invoke("get_state_cmd");
     if (data) {
       renderState(data);
     }
   } catch (e) {
-    console.error("Failed to load state", e);
+    // Silently ignore - IPC may not be ready yet
   }
 }
 
@@ -783,16 +781,23 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// Tauri listeners
-if (eventListen) {
-  eventListen("data-updated", () => refreshData());
-  eventListen("device-found", () => refreshData());
-  eventListen("device-lost", () => refreshData());
-  eventListen("popup-opened", () => {
-    resetAutoDismissTimer();
-    refreshData();
-  });
-}
+// Set up Tauri v2 event listeners
+tauriListen("data-updated", () => refreshData());
+tauriListen("device-found", () => refreshData());
+tauriListen("device-lost", () => refreshData());
+tauriListen("popup-opened", () => {
+  resetAutoDismissTimer();
+  refreshData();
+});
+
+// Expose a global refresh function that Rust can call via eval_js
+window.__deskbuddy_refresh = () => {
+  resetAutoDismissTimer();
+  refreshData();
+};
+
+// Polling fallback: re-fetch state every 3 seconds while visible
+setInterval(() => refreshData(), 3000);
 
 // Initial fetch
 refreshData();

@@ -808,6 +808,9 @@ fn get_state_cmd(
 ) -> Result<AppFullState, String> {
     let device = device_state.lock().unwrap().clone();
     let live = live_state.lock().unwrap().clone();
+    let online = device.is_some();
+    let tasks = live.due_tasks.len();
+    app_log(&format!("get_state_cmd called: online={}, due_tasks={}", online, tasks));
     Ok(AppFullState { device, live })
 }
 
@@ -1055,16 +1058,18 @@ pub fn run() {
                                 position,
                                 ..
                             } => {
-                                if let Some(w) = handle.get_webview_window("main") {
-                                    if w.is_visible().unwrap_or(false) {
-                                        let _ = w.hide();
-                                    } else {
-                                        position_flyout_window(&w, Some(position));
-                                        let _ = w.show();
-                                        let _ = w.set_focus();
-                                        let _ = handle.emit("popup-opened", ());
+                                    if let Some(w) = handle.get_webview_window("main") {
+                                        if w.is_visible().unwrap_or(false) {
+                                            let _ = w.hide();
+                                        } else {
+                                            position_flyout_window(&w, Some(position));
+                                            let _ = w.show();
+                                            let _ = w.set_focus();
+                                            let _ = handle.emit("popup-opened", ());
+                                            // Also force-refresh via eval_js as a belt-and-suspenders approach
+                                            let _ = w.eval("if(window.__deskbuddy_refresh) window.__deskbuddy_refresh();");
+                                        }
                                     }
-                                }
                             }
                             _ => {}
                         }
