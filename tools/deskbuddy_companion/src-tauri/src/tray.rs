@@ -132,7 +132,6 @@ struct DisplayTask {
     orig_index: usize,
     time_sort_key: u32,
     display_label: String,
-    is_completed: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -252,19 +251,20 @@ fn compute_due_tasks(todo: &TodoDoc) -> Vec<DisplayTask> {
                 task.completed.unwrap_or(false)
             };
 
-            let h = task.hour.unwrap_or(0);
-            let m = task.minute.unwrap_or(0);
-            let sort_key = h * 60 + m;
-            let check_char = if is_completed { "[✓]" } else { "[  ]" };
-            let display_label = format!("{} {:02}:{:02} - {}", check_char, h, m, task.text);
+            // Only show uncompleted tasks in the tray menu
+            if !is_completed {
+                let h = task.hour.unwrap_or(0);
+                let m = task.minute.unwrap_or(0);
+                let sort_key = h * 60 + m;
+                let display_label = format!("☐ {:02}:{:02} - {}", h, m, task.text);
 
-            list.push(DisplayTask {
-                is_daily: true,
-                orig_index: idx,
-                time_sort_key: sort_key,
-                display_label,
-                is_completed,
-            });
+                list.push(DisplayTask {
+                    is_daily: true,
+                    orig_index: idx,
+                    time_sort_key: sort_key,
+                    display_label,
+                });
+            }
         }
     }
 
@@ -294,19 +294,20 @@ fn compute_due_tasks(todo: &TodoDoc) -> Vec<DisplayTask> {
                 task.completed.unwrap_or(false)
             };
 
-            let d = task.day.unwrap_or(1);
-            // Monthly tasks sort after daily (offset by 24h = 1440 min + d * 60)
-            let sort_key = 1440 + d * 60;
-            let check_char = if is_completed { "[✓]" } else { "[  ]" };
-            let display_label = format!("{} Dia {:02} - {}", check_char, d, task.text);
+            // Only show uncompleted tasks in the tray menu
+            if !is_completed {
+                let d = task.day.unwrap_or(1);
+                // Monthly tasks sort after daily (offset by 24h = 1440 min + d * 60)
+                let sort_key = 1440 + d * 60;
+                let display_label = format!("☐ Dia {:02} - {}", d, task.text);
 
-            list.push(DisplayTask {
-                is_daily: false,
-                orig_index: idx,
-                time_sort_key: sort_key,
-                display_label,
-                is_completed,
-            });
+                list.push(DisplayTask {
+                    is_daily: false,
+                    orig_index: idx,
+                    time_sort_key: sort_key,
+                    display_label,
+                });
+            }
         }
     }
 
@@ -596,25 +597,25 @@ fn build_menu(
             l_score,
         ) = if is_pt {
             (
-                format!("Tempo na Mesa: {}", desk_time_val),
-                format!("Tempo de Foco Profundo: {}", focus_time_val),
-                format!("Tempo em Pausas: {}", break_time_val),
-                format!("Total de Pausas: {}", breaks_val),
-                format!("Duração da Última Pausa: {}", latest_break_val),
-                format!("Horário da Primeira Sessão: {}", first_sit_val),
-                format!("Maior Sequência Sentado: {}", longest_streak_val),
-                format!("Pontuação de Produtividade: {}%", score_val),
+                format!("🪑 Tempo na Mesa: {}", desk_time_val),
+                format!("🎯 Foco Profundo: {}", focus_time_val),
+                format!("☕ Tempo em Pausas: {}", break_time_val),
+                format!("📊 Total de Pausas: {}", breaks_val),
+                format!("⏳ Duração Última Pausa: {}", latest_break_val),
+                format!("🌅 Primeira Sessão: {}", first_sit_val),
+                format!("🔥 Maior Sequência: {}", longest_streak_val),
+                format!("⭐ Produtividade: {}%", score_val),
             )
         } else {
             (
-                format!("Time at Desk: {}", desk_time_val),
-                format!("Deep Focus Time: {}", focus_time_val),
-                format!("Time on Breaks: {}", break_time_val),
-                format!("Total Breaks: {}", breaks_val),
-                format!("Latest Break Duration: {}", latest_break_val),
-                format!("First Sitting Time: {}", first_sit_val),
-                format!("Longest Sitting Streak: {}", longest_streak_val),
-                format!("Productivity Score: {}%", score_val),
+                format!("🪑 Time at Desk: {}", desk_time_val),
+                format!("🎯 Deep Focus: {}", focus_time_val),
+                format!("☕ Time on Breaks: {}", break_time_val),
+                format!("📊 Total Breaks: {}", breaks_val),
+                format!("⏳ Latest Break Duration: {}", latest_break_val),
+                format!("🌅 First Sitting Time: {}", first_sit_val),
+                format!("🔥 Longest Streak: {}", longest_streak_val),
+                format!("⭐ Productivity Score: {}%", score_val),
             )
         };
 
@@ -650,7 +651,7 @@ fn build_menu(
         for i in 0..4 {
             let label = labels.get(i).cloned().unwrap_or_else(|| format!("Odo {}", i + 1));
             let time_str = fmts.get(i).cloned().unwrap_or_else(|| "00:00:00".into());
-            let marker = if i == active_odo { "●" } else { "○" };
+            let marker = if i == active_odo { "▶ 🟢" } else { "   ⚪" };
             let menu_text = format!("{} {}: {}", marker, label, time_str);
 
             let odo_item = MenuItemBuilder::with_id(format!("odo-{}", i), menu_text).build(app)?;
@@ -866,11 +867,24 @@ pub fn run() {
                             }
                             id if id.starts_with("odo-") => {
                                 if let Ok(idx) = id.trim_start_matches("odo-").parse::<usize>() {
+                                    // 1. Optimistic local state update
+                                    {
+                                        let mut state = live_state.lock().unwrap();
+                                        state.radar.active_odometer = Some(idx);
+                                    }
+                                    let _ = app.emit("data-updated", ());
+
+                                    // 2. Perform HTTP request in background
                                     let device_opt = device_state.lock().unwrap().clone();
                                     if let Some(dev) = device_opt {
                                         let app_h = app.clone();
+                                        let live_st = live_state.clone();
                                         thread::spawn(move || {
                                             if set_active_odometer(&dev.ip, dev.port, idx) {
+                                                if let Some(radar) = fetch_radar_data(&dev.ip, dev.port) {
+                                                    let mut state = live_st.lock().unwrap();
+                                                    state.radar = radar;
+                                                }
                                                 let _ = app_h.emit("data-updated", ());
                                             }
                                         });
@@ -884,11 +898,28 @@ pub fn run() {
                                         state.due_tasks.get(disp_idx).cloned()
                                     };
 
+                                    // 1. Optimistic removal from due tasks
+                                    {
+                                        let mut state = live_state.lock().unwrap();
+                                        if disp_idx < state.due_tasks.len() {
+                                            state.due_tasks.remove(disp_idx);
+                                        }
+                                    }
+                                    let _ = app.emit("data-updated", ());
+
+                                    // 2. Perform HTTP request in background
                                     let device_opt = device_state.lock().unwrap().clone();
                                     if let (Some(dev), Some(task)) = (device_opt, task_info) {
                                         let app_h = app.clone();
+                                        let live_st = live_state.clone();
                                         thread::spawn(move || {
                                             if toggle_task_completion(&dev.ip, dev.port, task.is_daily, task.orig_index) {
+                                                if let Some(todo) = fetch_tasks_data(&dev.ip, dev.port) {
+                                                    let due_tasks = compute_due_tasks(&todo);
+                                                    let mut state = live_st.lock().unwrap();
+                                                    state.todo = todo;
+                                                    state.due_tasks = due_tasks;
+                                                }
                                                 let _ = app_h.emit("data-updated", ());
                                             }
                                         });
