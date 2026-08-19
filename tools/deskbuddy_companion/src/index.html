@@ -407,6 +407,7 @@
     <div class="header-actions">
       <button class="icon-btn" id="refreshBtn" title="Refresh data">🔄</button>
       <button class="icon-btn" id="settingsBtn" title="Configure IP">⚙️</button>
+      <button class="icon-btn" id="closeWidgetBtn" title="Close Panel" style="color:#94a3b8; font-weight:bold;">✕</button>
     </div>
   </div>
 
@@ -615,9 +616,10 @@ document.body.addEventListener("mouseleave", () => {
 });
 
 async function refreshData() {
-  if (!invoke) return;
+  const fn = getInvoke();
+  if (!fn) return;
   try {
-    const data = await invoke("get_state_cmd");
+    const data = await fn("get_state_cmd");
     if (data) {
       renderState(data);
     }
@@ -627,29 +629,34 @@ async function refreshData() {
 }
 
 function renderState(data) {
-  const isOnline = !!data.device;
-  const lang = (data.live?.radar?.lang === "en" || data.live?.radar?.language === "en-US") ? "en" : "pt";
+  if (!data) return;
+  const dev = data.device;
+  const isOnline = !!(dev && (dev.ip || dev.ip_addr));
+  const devIp = dev ? (dev.ip || dev.ip_addr || "") : "";
+
+  const radar = data.live?.radar || {};
+  const lang = (radar.lang === "en" || radar.language === "en-US") ? "en" : "pt";
   currentLanguage = lang;
-  const t = i18n[lang];
+  const t = i18n[lang] || i18n.pt;
 
   // Header Status
   if (isOnline) {
     statusBadge.className = "status-badge online";
-    statusText.textContent = `${t.online} (${data.device.ip})`;
+    statusText.textContent = `${t.online} (${devIp})`;
   } else {
     statusBadge.className = "status-badge";
     statusText.textContent = t.offline;
   }
   badgeLang.textContent = lang.toUpperCase();
 
-  // Telemetry
-  valDesk.textContent = data.live?.radar?.deskTime || "0m";
-  valFocus.textContent = data.live?.radar?.focusTime || "0m";
-  valBreak.textContent = data.live?.radar?.breakTime || "0m";
-  valBreaksCnt.textContent = data.live?.radar?.breaks || "0";
-  valScore.textContent = `${data.live?.radar?.score || 0}%`;
-  valStreak.textContent = data.live?.radar?.longestStreak || "0m";
-  valFirstSit.textContent = data.live?.radar?.firstSitTime || (lang === "pt" ? "Não reg." : "Not reg.");
+  // Telemetry (supports both camelCase and snake_case)
+  valDesk.textContent = radar.deskTime || radar.desk_time || "0m";
+  valFocus.textContent = radar.focusTime || radar.focus_time || "0m";
+  valBreak.textContent = radar.breakTime || radar.break_time || "0m";
+  valBreaksCnt.textContent = radar.breaks !== undefined ? String(radar.breaks) : "0";
+  valScore.textContent = `${radar.score !== undefined ? radar.score : 0}%`;
+  valStreak.textContent = radar.longestStreak || radar.longest_streak || "0m";
+  valFirstSit.textContent = radar.firstSitTime || radar.first_sit_time || (lang === "pt" ? "Não reg." : "Not reg.");
 
   // Section Titles
   document.getElementById("labelPerf").textContent = t.perf;
@@ -663,20 +670,21 @@ function renderState(data) {
   document.getElementById("lFirstSit").textContent = t.firstSit;
 
   // Odometers
-  renderOdometers(data.live?.radar, lang);
+  renderOdometers(radar, lang);
 
   // Due Tasks
-  renderTasks(data.live?.due_tasks || [], t);
+  const dueTasks = data.live?.due_tasks || data.live?.dueTasks || [];
+  renderTasks(dueTasks, t);
 }
 
 function renderOdometers(radar, lang) {
   odoGrid.innerHTML = "";
-  const activeIdx = radar?.activeOdometer ?? 0;
+  const activeIdx = radar?.activeOdometer ?? radar?.active_odometer ?? 0;
   const defaultLabels = lang === "pt"
     ? ["Trabalho", "Estudo", "Odômetro 3", "Odômetro 4"]
     : ["Work", "Study", "Odometer 3", "Odometer 4"];
-  const labels = radar?.odometerLabels || defaultLabels;
-  const fmts = radar?.odometerFmt || ["00:00:00", "00:00:00", "00:00:00", "00:00:00"];
+  const labels = radar?.odometerLabels || radar?.odometer_labels || defaultLabels;
+  const fmts = radar?.odometerFmt || radar?.odometer_fmt || ["00:00:00", "00:00:00", "00:00:00", "00:00:00"];
 
   for (let i = 0; i < 4; i++) {
     const name = labels[i] || `Odo ${i+1}`;
@@ -763,6 +771,16 @@ document.getElementById("refreshBtn").addEventListener("click", () => {
 
 document.getElementById("btnQuit").addEventListener("click", () => {
   if (invoke) invoke("quit_app_cmd");
+});
+
+document.getElementById("closeWidgetBtn").addEventListener("click", () => {
+  if (invoke) invoke("hide_popup_cmd");
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (invoke) invoke("hide_popup_cmd");
+  }
 });
 
 // Tauri listeners

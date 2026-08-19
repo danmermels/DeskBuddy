@@ -206,14 +206,42 @@ fn check_device(ip: &str, port: u16) -> bool {
 
 fn fetch_radar_data(ip: &str, port: u16) -> Option<RadarData> {
     let url = format!("http://{}:{}/radar-data", ip, port);
-    let resp = ureq::get(&url).timeout(Duration::from_secs(3)).call().ok()?;
-    resp.into_json::<RadarData>().ok()
+    match ureq::get(&url).timeout(Duration::from_secs(3)).call() {
+        Ok(resp) => match resp.into_json::<RadarData>() {
+            Ok(data) => {
+                app_log(&format!("Fetched radar data successfully from {}", ip));
+                Some(data)
+            }
+            Err(e) => {
+                app_log(&format!("Failed to parse /radar-data JSON from {}: {}", ip, e));
+                None
+            }
+        },
+        Err(e) => {
+            app_log(&format!("HTTP request to {} failed: {}", url, e));
+            None
+        }
+    }
 }
 
 fn fetch_tasks_data(ip: &str, port: u16) -> Option<TodoDoc> {
     let url = format!("http://{}:{}/api/tasks", ip, port);
-    let resp = ureq::get(&url).timeout(Duration::from_secs(3)).call().ok()?;
-    resp.into_json::<TodoDoc>().ok()
+    match ureq::get(&url).timeout(Duration::from_secs(3)).call() {
+        Ok(resp) => match resp.into_json::<TodoDoc>() {
+            Ok(doc) => {
+                app_log(&format!("Fetched tasks successfully from {}", ip));
+                Some(doc)
+            }
+            Err(e) => {
+                app_log(&format!("Failed to parse /api/tasks JSON from {}: {}", ip, e));
+                None
+            }
+        },
+        Err(e) => {
+            app_log(&format!("HTTP request to {} failed: {}", url, e));
+            None
+        }
+    }
 }
 
 fn compute_due_tasks(todo: &TodoDoc) -> Vec<DisplayTask> {
@@ -758,20 +786,13 @@ fn open_settings_window(app: &tauri::AppHandle) {
         let _ = w.set_focus();
         return;
     }
-    let Ok(w) = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+    let _ = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("DeskBuddy IP Address")
-        .inner_size(420.0, 200.0)
+        .inner_size(440.0, 220.0)
         .resizable(false)
         .maximizable(false)
         .minimizable(false)
-        .build() else { return };
-
-    let win = w.clone();
-    w.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { .. } = event {
-            let _ = win.destroy();
-        }
-    });
+        .build();
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -918,7 +939,7 @@ fn get_saved_ip_cmd() -> Result<Option<String>, String> {
 #[tauri::command]
 fn close_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("settings") {
-        let _ = w.destroy();
+        let _ = w.close();
     }
     Ok(())
 }
