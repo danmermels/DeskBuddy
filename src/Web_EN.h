@@ -2878,6 +2878,8 @@ inline void handleRadarData() {
   doc["telemetryEnabled"] = appConfig.telemetryEnabled;
   doc["telemetryEndpoint"] = appConfig.telemetryEndpoint;
   doc["fwVersion"] = DESKBUDDY_VERSION;
+  doc["language"] = DESKBUDDY_LANGUAGE;
+  doc["lang"] = "en";
   doc["time24h"] = appConfig.time24h;
   doc["tempUnitF"] = appConfig.tempUnitF;
   doc["userName"] = appConfig.userName;

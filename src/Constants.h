@@ -4,6 +4,12 @@
 #ifndef DESKBUDDY_VERSION
 #define DESKBUDDY_VERSION "0.0.0"
 #endif
+
+#ifdef DESKBUDDY_LANG_PTBR
+#define DESKBUDDY_LANGUAGE "pt-BR"
+#else
+#define DESKBUDDY_LANGUAGE "en-US"
+#endif
 #ifndef TELEMETRY_ENDPOINT_DEFAULT
 #define TELEMETRY_ENDPOINT_DEFAULT ""
 #endif
@@ -29,7 +35,7 @@
 #define SLACKER_INTERVAL_MS     4500000UL   // 1h15m between slacker roasts
 #define STREAK_MINIMUM_MS        900000UL   // 15 min minimum for streak tracking
 #define FOCUS_MINIMUM_MS          300000UL  // 5 min minimum focus session
-#define WELCOME_HOLD_MS             5000UL  // 5s grace after sit-down before welcome overlay (lets clock face show first)
+#define WELCOME_HOLD_MS            10000UL  // 10s grace after sit-down before welcome overlay (lets clock face show first)
 #define AWAY_GRACE_MS              60000UL  // 1 min grace period showing clock after away
 #define ALERT_DURATION_MS           8000UL  // 8s alert message display
 #define SAVE_INTERVAL_MS          600000UL  // 10 min between stats saves
@@ -142,16 +148,21 @@
 #define MQTT_DEBUG_CMD_TOPIC      "deskbuddy/debug/cmd"
 #define MQTT_DEBUG_RESP_TOPIC     "deskbuddy/debug/resp"
 
+// Max chars for short, prominent messages formatted with larger RobotoCondensed26 font
+#define MSG_SHORT_CHAR_THRESHOLD            65
+// Vertical optical center for alert messages (leaving less space at top than bottom)
+#define MSG_VERTICAL_CENTER_Y               110
+
 // --- Captive Portal ---
 #define AP_SSID                 "DeskBuddy-Setup"
 
-inline unsigned long getAlertDurationMs(int lineCount, bool isPage1 = false) {
+inline unsigned long getAlertDurationMs(int charCount, bool isPage1 = false) {
   if (isPage1) {
     return 4000UL; // Dashboard summary page lasts exactly 4 seconds
   }
-  unsigned long ms = 3000 + (lineCount * 1800);
-  if (ms < 5000) ms = 5000;
-  if (ms > 10000) ms = 10000; // Capped at 10 seconds
+  unsigned long ms = 3000UL + ((unsigned long)charCount * 70UL);
+  if (ms < 5000UL) ms = 5000UL;
+  if (ms > 12000UL) ms = 12000UL; // Capped between 5 and 12 seconds
   return ms;
 }
 

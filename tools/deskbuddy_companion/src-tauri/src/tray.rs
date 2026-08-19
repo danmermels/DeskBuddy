@@ -2,10 +2,14 @@ use std::fs;
 use std::io::{Cursor, Write};
 use std::net::{SocketAddr, TcpStream, UdpSocket};
 use std::path::PathBuf;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use chrono::{Datelike, Local};
 use image::ImageReader;
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use serde::{Deserialize, Serialize};
@@ -34,10 +38,108 @@ impl Default for Settings {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct DeviceInfo {
     ip: String,
     port: u16,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+struct RadarData {
+    #[serde(default)]
+    lang: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+
+    // Daily Performance Stats
+    #[serde(default, rename = "deskTime")]
+    desk_time: Option<String>,
+    #[serde(default, rename = "focusTime")]
+    focus_time: Option<String>,
+    #[serde(default, rename = "breakTime")]
+    break_time: Option<String>,
+    #[serde(default)]
+    breaks: Option<u32>,
+    #[serde(default, rename = "latestBreak")]
+    latest_break: Option<String>,
+    #[serde(default, rename = "firstSitTime")]
+    first_sit_time: Option<String>,
+    #[serde(default, rename = "longestStreak")]
+    longest_streak: Option<String>,
+    #[serde(default)]
+    score: Option<u32>,
+
+    // Odometers
+    #[serde(default, rename = "activeOdometer")]
+    active_odometer: Option<usize>,
+    #[serde(default, rename = "odometerFmt")]
+    odometer_fmt: Option<Vec<String>>,
+    #[serde(default, rename = "odometerLabels")]
+    odometer_labels: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct DailyTask {
+    text: String,
+    #[serde(default)]
+    hour: Option<u32>,
+    #[serde(default)]
+    minute: Option<u32>,
+    #[serde(default)]
+    recurrent: bool,
+    #[serde(default, rename = "startDate")]
+    start_date: Option<String>,
+    #[serde(default, rename = "completedDates")]
+    completed_dates: Option<Vec<String>>,
+    #[serde(default, rename = "targetDate")]
+    target_date: Option<String>,
+    #[serde(default)]
+    completed: Option<bool>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct MonthlyTask {
+    text: String,
+    #[serde(default)]
+    day: Option<u32>,
+    #[serde(default)]
+    month: Option<u32>,
+    #[serde(default)]
+    year: Option<u32>,
+    #[serde(default)]
+    recurrent: bool,
+    #[serde(default, rename = "startMonth")]
+    start_month: Option<String>,
+    #[serde(default, rename = "completedMonths")]
+    completed_months: Option<Vec<String>>,
+    #[serde(default)]
+    completed: Option<bool>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct TodoDoc {
+    #[serde(default)]
+    daily: Vec<DailyTask>,
+    #[serde(default)]
+    monthly: Vec<MonthlyTask>,
+    #[serde(flatten)]
+    extra: serde_json::Value,
+}
+
+#[derive(Clone, Debug)]
+struct DisplayTask {
+    is_daily: bool,
+    orig_index: usize,
+    time_sort_key: u32,
+    display_label: String,
+    is_completed: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+struct LiveBuddyState {
+    radar: RadarData,
+    todo: TodoDoc,
+    due_tasks: Vec<DisplayTask>,
 }
 
 fn app_dir() -> PathBuf {
@@ -100,6 +202,191 @@ fn check_device(ip: &str, port: u16) -> bool {
     match addr {
         Ok(a) => TcpStream::connect_timeout(&a, Duration::from_secs(2)).is_ok(),
         Err(_) => false,
+    }
+}
+
+fn fetch_radar_data(ip: &str, port: u16) -> Option<RadarData> {
+    let url = format!("http://{}:{}/radar-data", ip, port);
+    let resp = ureq::get(&url).timeout(Duration::from_secs(3)).call().ok()?;
+    resp.into_json::<RadarData>().ok()
+}
+
+fn fetch_tasks_data(ip: &str, port: u16) -> Option<TodoDoc> {
+    let url = format!("http://{}:{}/api/tasks", ip, port);
+    let resp = ureq::get(&url).timeout(Duration::from_secs(3)).call().ok()?;
+    resp.into_json::<TodoDoc>().ok()
+}
+
+fn compute_due_tasks(todo: &TodoDoc) -> Vec<DisplayTask> {
+    let now = Local::now();
+    let cur_year = now.year();
+    let cur_month = now.month();
+    let cur_day = now.day();
+
+    let cur_date_str = format!("{:04}-{:02}-{:02}", cur_year, cur_month, cur_day);
+    let cur_month_str = format!("{:04}-{:02}", cur_year, cur_month);
+
+    let mut list = Vec::new();
+
+    // 1. Process Daily Tasks (due today)
+    for (idx, task) in todo.daily.iter().enumerate() {
+        let is_due_today = if task.recurrent {
+            if let Some(ref start) = task.start_date {
+                cur_date_str.as_str() >= start.as_str()
+            } else {
+                true
+            }
+        } else if let Some(ref target) = task.target_date {
+            target == &cur_date_str
+        } else {
+            true
+        };
+
+        if is_due_today {
+            let is_completed = if task.recurrent {
+                task.completed_dates
+                    .as_ref()
+                    .map(|dates| dates.iter().any(|d| d == &cur_date_str))
+                    .unwrap_or(false)
+            } else {
+                task.completed.unwrap_or(false)
+            };
+
+            let h = task.hour.unwrap_or(0);
+            let m = task.minute.unwrap_or(0);
+            let sort_key = h * 60 + m;
+            let check_char = if is_completed { "[✓]" } else { "[  ]" };
+            let display_label = format!("{} {:02}:{:02} - {}", check_char, h, m, task.text);
+
+            list.push(DisplayTask {
+                is_daily: true,
+                orig_index: idx,
+                time_sort_key: sort_key,
+                display_label,
+                is_completed,
+            });
+        }
+    }
+
+    // 2. Process Monthly Tasks (due this month)
+    for (idx, task) in todo.monthly.iter().enumerate() {
+        let is_due_this_month = if task.recurrent {
+            if let Some(ref start) = task.start_month {
+                cur_month_str.as_str() >= start.as_str()
+            } else {
+                true
+            }
+        } else if let (Some(m), Some(y)) = (task.month, task.year) {
+            m == cur_month && y as i32 == cur_year
+        } else if let Some(m) = task.month {
+            m == cur_month
+        } else {
+            true
+        };
+
+        if is_due_this_month {
+            let is_completed = if task.recurrent {
+                task.completed_months
+                    .as_ref()
+                    .map(|months| months.iter().any(|mo| mo == &cur_month_str))
+                    .unwrap_or(false)
+            } else {
+                task.completed.unwrap_or(false)
+            };
+
+            let d = task.day.unwrap_or(1);
+            // Monthly tasks sort after daily (offset by 24h = 1440 min + d * 60)
+            let sort_key = 1440 + d * 60;
+            let check_char = if is_completed { "[✓]" } else { "[  ]" };
+            let display_label = format!("{} Dia {:02} - {}", check_char, d, task.text);
+
+            list.push(DisplayTask {
+                is_daily: false,
+                orig_index: idx,
+                time_sort_key: sort_key,
+                display_label,
+                is_completed,
+            });
+        }
+    }
+
+    // Sort earliest first
+    list.sort_by_key(|t| t.time_sort_key);
+    list
+}
+
+fn set_active_odometer(ip: &str, port: u16, odo_idx: usize) -> bool {
+    let url = format!("http://{}:{}/api/odometer?active={}", ip, port, odo_idx);
+    match ureq::post(&url).timeout(Duration::from_secs(3)).call() {
+        Ok(_) => {
+            app_log(&format!("Switched active odometer to {}", odo_idx));
+            true
+        }
+        Err(e) => {
+            app_log(&format!("Failed to set active odometer {}: {}", odo_idx, e));
+            false
+        }
+    }
+}
+
+fn toggle_task_completion(ip: &str, port: u16, is_daily: bool, task_idx: usize) -> bool {
+    let Some(mut doc) = fetch_tasks_data(ip, port) else {
+        return false;
+    };
+
+    let now = Local::now();
+    let cur_year = now.year();
+    let cur_month = now.month();
+    let cur_day = now.day();
+
+    let cur_date_str = format!("{:04}-{:02}-{:02}", cur_year, cur_month, cur_day);
+    let cur_month_str = format!("{:04}-{:02}", cur_year, cur_month);
+
+    if is_daily {
+        if let Some(task) = doc.daily.get_mut(task_idx) {
+            if task.recurrent {
+                let dates = task.completed_dates.get_or_insert_with(Vec::new);
+                if let Some(pos) = dates.iter().position(|d| d == &cur_date_str) {
+                    dates.remove(pos);
+                } else {
+                    dates.push(cur_date_str);
+                }
+            } else {
+                task.completed = Some(!task.completed.unwrap_or(false));
+            }
+        }
+    } else {
+        if let Some(task) = doc.monthly.get_mut(task_idx) {
+            if task.recurrent {
+                let months = task.completed_months.get_or_insert_with(Vec::new);
+                if let Some(pos) = months.iter().position(|m| m == &cur_month_str) {
+                    months.remove(pos);
+                } else {
+                    months.push(cur_month_str);
+                }
+            } else {
+                task.completed = Some(!task.completed.unwrap_or(false));
+            }
+        }
+    }
+
+    let url = format!("http://{}:{}/api/tasks/save", ip, port);
+    match ureq::post(&url)
+        .timeout(Duration::from_secs(3))
+        .send_json(serde_json::to_value(&doc).unwrap_or_default())
+    {
+        Ok(_) => {
+            app_log(&format!(
+                "Task {}[{}] completion toggled",
+                if is_daily { "daily" } else { "monthly" },
+                task_idx
+            ));
+            true
+        }
+        Err(e) => {
+            app_log(&format!("Failed to save tasks: {}", e));
+            false
+        }
     }
 }
 
@@ -221,26 +508,218 @@ fn start_beacon_listener(app: tauri::AppHandle) {
     });
 }
 
+fn start_status_poller(
+    app: tauri::AppHandle,
+    device_state: Arc<Mutex<Option<DeviceInfo>>>,
+    live_state: Arc<Mutex<LiveBuddyState>>,
+) {
+    thread::spawn(move || {
+        app_log("Status poller thread started");
+        loop {
+            thread::sleep(Duration::from_secs(4));
+
+            let device_opt = device_state.lock().unwrap().clone();
+            if let Some(dev) = device_opt {
+                if let Some(radar) = fetch_radar_data(&dev.ip, dev.port) {
+                    let todo = fetch_tasks_data(&dev.ip, dev.port).unwrap_or_default();
+                    let due_tasks = compute_due_tasks(&todo);
+
+                    {
+                        let mut state = live_state.lock().unwrap();
+                        state.radar = radar;
+                        state.todo = todo;
+                        state.due_tasks = due_tasks;
+                    }
+
+                    let _ = app.emit("data-updated", ());
+                }
+            }
+        }
+    });
+}
+
 fn build_menu(
     app: &tauri::AppHandle,
     device: Option<&DeviceInfo>,
+    live: &LiveBuddyState,
 ) -> Result<tauri::menu::Menu<tauri::Wry>, tauri::Error> {
+    let mut builder = MenuBuilder::new(app);
+
+    // Detect language: firmware lang field ("pt" or "en"), or check firstSit fallback
+    let is_pt = live.radar.lang.as_deref() == Some("pt")
+        || live.radar.language.as_deref() == Some("pt-BR")
+        || live
+            .radar
+            .first_sit_time
+            .as_ref()
+            .map(|s| s.contains("Não") || s.contains("registrado"))
+            .unwrap_or(true); // Default to Portuguese per user preference
+
+    // ==========================================
+    // SECTION 1: TOP MOST (OPEN TODO PAGE)
+    // ==========================================
+    let todo_label = if is_pt {
+        "📝 Abrir Página de Tarefas (TODO)"
+    } else {
+        "📝 Open TODO Page"
+    };
+    let open_todo_item = MenuItemBuilder::with_id("open-todo", todo_label)
+        .enabled(device.is_some())
+        .build(app)?;
+    builder = builder.item(&open_todo_item).separator();
+
+    if device.is_some() {
+        // ==========================================
+        // SECTION 2: DAILY PERFORMANCE STATS
+        // ==========================================
+        let desk_time_val = live.radar.desk_time.as_deref().unwrap_or("0m");
+        let focus_time_val = live.radar.focus_time.as_deref().unwrap_or("0m");
+        let break_time_val = live.radar.break_time.as_deref().unwrap_or("0m");
+        let breaks_val = live.radar.breaks.unwrap_or(0);
+        let latest_break_val = live.radar.latest_break.as_deref().unwrap_or("0m");
+        let first_sit_val = live
+            .radar
+            .first_sit_time
+            .as_deref()
+            .unwrap_or(if is_pt { "Não registrado" } else { "Not registered" });
+        let longest_streak_val = live.radar.longest_streak.as_deref().unwrap_or("0m");
+        let score_val = live.radar.score.unwrap_or(0);
+
+        let (
+            l_desk,
+            l_focus,
+            l_break,
+            l_breaks_cnt,
+            l_latest_break,
+            l_first_sit,
+            l_longest_streak,
+            l_score,
+        ) = if is_pt {
+            (
+                format!("Tempo na Mesa: {}", desk_time_val),
+                format!("Tempo de Foco Profundo: {}", focus_time_val),
+                format!("Tempo em Pausas: {}", break_time_val),
+                format!("Total de Pausas: {}", breaks_val),
+                format!("Duração da Última Pausa: {}", latest_break_val),
+                format!("Horário da Primeira Sessão: {}", first_sit_val),
+                format!("Maior Sequência Sentado: {}", longest_streak_val),
+                format!("Pontuação de Produtividade: {}%", score_val),
+            )
+        } else {
+            (
+                format!("Time at Desk: {}", desk_time_val),
+                format!("Deep Focus Time: {}", focus_time_val),
+                format!("Time on Breaks: {}", break_time_val),
+                format!("Total Breaks: {}", breaks_val),
+                format!("Latest Break Duration: {}", latest_break_val),
+                format!("First Sitting Time: {}", first_sit_val),
+                format!("Longest Sitting Streak: {}", longest_streak_val),
+                format!("Productivity Score: {}%", score_val),
+            )
+        };
+
+        let stat_items = [
+            MenuItemBuilder::with_id("stat-desk", l_desk).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-focus", l_focus).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-break", l_break).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-breaks-cnt", l_breaks_cnt).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-latest-break", l_latest_break).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-first-sit", l_first_sit).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-longest-streak", l_longest_streak).enabled(false).build(app)?,
+            MenuItemBuilder::with_id("stat-score", l_score).enabled(false).build(app)?,
+        ];
+
+        for item in &stat_items {
+            builder = builder.item(item);
+        }
+        builder = builder.separator();
+
+        // ==========================================
+        // SECTION 3: TRIP ODOMETERS (4 ODOS + SWITCH)
+        // ==========================================
+        let active_odo = live.radar.active_odometer.unwrap_or(0);
+        let default_labels = if is_pt {
+            vec!["Trabalho".into(), "Estudo".into(), "Odômetro 3".into(), "Odômetro 4".into()]
+        } else {
+            vec!["Work".into(), "Study".into(), "Odometer 3".into(), "Odometer 4".into()]
+        };
+        let labels = live.radar.odometer_labels.as_ref().unwrap_or(&default_labels);
+        let default_fmts = vec!["00:00:00".into(), "00:00:00".into(), "00:00:00".into(), "00:00:00".into()];
+        let fmts = live.radar.odometer_fmt.as_ref().unwrap_or(&default_fmts);
+
+        for i in 0..4 {
+            let label = labels.get(i).cloned().unwrap_or_else(|| format!("Odo {}", i + 1));
+            let time_str = fmts.get(i).cloned().unwrap_or_else(|| "00:00:00".into());
+            let marker = if i == active_odo { "●" } else { "○" };
+            let menu_text = format!("{} {}: {}", marker, label, time_str);
+
+            let odo_item = MenuItemBuilder::with_id(format!("odo-{}", i), menu_text).build(app)?;
+            builder = builder.item(&odo_item);
+        }
+        builder = builder.separator();
+
+        // ==========================================
+        // SECTION 4: DUE TODAY & THIS MONTH TASKS
+        // ==========================================
+        if live.due_tasks.is_empty() {
+            let empty_label = if is_pt {
+                "Nenhuma tarefa pendente hoje/mês"
+            } else {
+                "No pending tasks today/this month"
+            };
+            let empty_item = MenuItemBuilder::with_id("tasks-empty", empty_label)
+                .enabled(false)
+                .build(app)?;
+            builder = builder.item(&empty_item);
+        } else {
+            for (display_idx, task) in live.due_tasks.iter().enumerate() {
+                let id = format!("task-toggle-{}", display_idx);
+                let task_item = MenuItemBuilder::with_id(id, &task.display_label).build(app)?;
+                builder = builder.item(&task_item);
+            }
+        }
+        builder = builder.separator();
+    }
+
+    // ==========================================
+    // FOOTER: DEVICE STATUS & ACTIONS
+    // ==========================================
     let status_text = match device {
         Some(info) => format!("DeskBuddy at {}:{}", info.ip, info.port),
-        None => "Searching for DeskBuddy...".into(),
+        None => if is_pt {
+            "Procurando DeskBuddy...".into()
+        } else {
+            "Searching for DeskBuddy...".into()
+        },
+    };
+
+    let (l_open_dash, l_set_ip, l_refresh, l_quit) = if is_pt {
+        (
+            "Abrir Painel Principal",
+            "Definir endereço IP...",
+            "Atualizar",
+            "Sair",
+        )
+    } else {
+        (
+            "Open Dashboard",
+            "Set IP address...",
+            "Refresh",
+            "Quit",
+        )
     };
 
     let status_item = MenuItemBuilder::with_id("status", status_text)
         .enabled(false)
         .build(app)?;
-    let open_item = MenuItemBuilder::with_id("open", "Open Dashboard")
+    let open_item = MenuItemBuilder::with_id("open", l_open_dash)
         .enabled(device.is_some())
         .build(app)?;
-    let set_ip_item = MenuItemBuilder::with_id("set-ip", "Set IP address...").build(app)?;
-    let refresh_item = MenuItemBuilder::with_id("refresh", "Refresh").build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+    let set_ip_item = MenuItemBuilder::with_id("set-ip", l_set_ip).build(app)?;
+    let refresh_item = MenuItemBuilder::with_id("refresh", l_refresh).build(app)?;
+    let quit_item = MenuItemBuilder::with_id("quit", l_quit).build(app)?;
 
-    MenuBuilder::new(app)
+    builder
         .item(&status_item)
         .separator()
         .item(&open_item)
@@ -252,19 +731,22 @@ fn build_menu(
         .build()
 }
 
-fn open_dashboard(device: Option<&DeviceInfo>) {
+fn open_dashboard(device: Option<&DeviceInfo>, subpath: Option<&str>) {
+    let path = subpath.unwrap_or("");
     match device {
         Some(info) => {
-            let url = format!("http://{}:{}/", info.ip, info.port);
+            let url = format!("http://{}:{}/{}", info.ip, info.port, path);
             log::info!("Opening {}", url);
             if let Err(e) = open::that(&url) {
                 log::error!("Failed to open browser: {}", e);
-                let _ = open::that("http://deskbuddy.local/");
+                let fallback = format!("http://deskbuddy.local/{}", path);
+                let _ = open::that(&fallback);
             }
         }
         None => {
             log::info!("No device found, trying mDNS hostname");
-            let _ = open::that("http://deskbuddy.local/");
+            let fallback = format!("http://deskbuddy.local/{}", path);
+            let _ = open::that(&fallback);
         }
     }
 }
@@ -335,16 +817,22 @@ pub fn run() {
         .setup(move |app| {
             let handle = app.handle().clone();
             let device_state: Arc<Mutex<Option<DeviceInfo>>> = Arc::new(Mutex::new(None));
+            let live_state: Arc<Mutex<LiveBuddyState>> = Arc::new(Mutex::new(LiveBuddyState::default()));
+
             let green_icon = load_icon(ICON_GREEN).expect("Failed to load green icon");
             let gray_icon = load_icon(ICON_GRAY).expect("Failed to load gray icon");
 
-            let initial_menu = build_menu(&handle, None)?;
+            let initial_menu = build_menu(&handle, None, &LiveBuddyState::default())?;
             let handle2 = handle.clone();
             let handle3 = handle.clone();
+            let handle_poller = handle.clone();
+            let handle_refresh = handle.clone();
             let device_state2 = device_state.clone();
+            let device_state_poller = device_state.clone();
             let green_icon2 = green_icon.clone();
             let gray_icon2 = gray_icon.clone();
             let saved_ip2 = saved_ip.clone();
+            let live_state2 = live_state.clone();
 
             let tray = TrayIconBuilder::with_id("deskbuddy-tray")
                 .icon(gray_icon.clone())
@@ -352,13 +840,19 @@ pub fn run() {
                 .tooltip("DeskBuddy Companion")
                 .on_menu_event({
                     let device_state = device_state.clone();
+                    let live_state = live_state.clone();
                     let handle = handle.clone();
                     let quit = quit_for_setup.clone();
                     move |app, event| {
-                        match event.id().as_ref() {
+                        let event_id = event.id().as_ref();
+                        match event_id {
                             "open" => {
                                 let device = device_state.lock().unwrap();
-                                open_dashboard(device.as_ref());
+                                open_dashboard(device.as_ref(), None);
+                            }
+                            "open-todo" => {
+                                let device = device_state.lock().unwrap();
+                                open_dashboard(device.as_ref(), Some("todo"));
                             }
                             "set-ip" => {
                                 open_settings_window(&handle);
@@ -369,6 +863,37 @@ pub fn run() {
                             "quit" => {
                                 quit.store(true, Ordering::SeqCst);
                                 app.exit(0);
+                            }
+                            id if id.starts_with("odo-") => {
+                                if let Ok(idx) = id.trim_start_matches("odo-").parse::<usize>() {
+                                    let device_opt = device_state.lock().unwrap().clone();
+                                    if let Some(dev) = device_opt {
+                                        let app_h = app.clone();
+                                        thread::spawn(move || {
+                                            if set_active_odometer(&dev.ip, dev.port, idx) {
+                                                let _ = app_h.emit("data-updated", ());
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                            id if id.starts_with("task-toggle-") => {
+                                if let Ok(disp_idx) = id.trim_start_matches("task-toggle-").parse::<usize>() {
+                                    let task_info = {
+                                        let state = live_state.lock().unwrap();
+                                        state.due_tasks.get(disp_idx).cloned()
+                                    };
+
+                                    let device_opt = device_state.lock().unwrap().clone();
+                                    if let (Some(dev), Some(task)) = (device_opt, task_info) {
+                                        let app_h = app.clone();
+                                        thread::spawn(move || {
+                                            if toggle_task_completion(&dev.ip, dev.port, task.is_daily, task.orig_index) {
+                                                let _ = app_h.emit("data-updated", ());
+                                            }
+                                        });
+                                    }
+                                }
                             }
                             _ => {}
                         }
@@ -384,19 +909,21 @@ pub fn run() {
                         } = event
                         {
                             let device = device_state.lock().unwrap();
-                            open_dashboard(device.as_ref());
+                            open_dashboard(device.as_ref(), None);
                         }
                     }
                 })
                 .build(app)?;
 
             let tray2 = tray.clone();
+            let tray_poller = tray.clone();
 
             app.listen("device-found", {
                 let tray = tray.clone();
                 let device_state = device_state2.clone();
                 let green_icon = green_icon2.clone();
                 let handle = handle2.clone();
+                let live_state = live_state2.clone();
 
                 move |event| {
                     if let Ok(payload) =
@@ -421,7 +948,8 @@ pub fn run() {
                             };
                             *device_state.lock().unwrap() = Some(info.clone());
 
-                            if let Ok(menu) = build_menu(&handle, Some(&info)) {
+                            let live = live_state.lock().unwrap().clone();
+                            if let Ok(menu) = build_menu(&handle, Some(&info), &live) {
                                 let _ = tray.set_menu(Some(menu));
                             }
                             let _ = tray.set_icon(Some(green_icon.clone()));
@@ -438,15 +966,32 @@ pub fn run() {
                 let device_state = device_state.clone();
                 let gray_icon = gray_icon2.clone();
                 let handle = handle2.clone();
+                let live_state = live_state.clone();
 
                 move |_event| {
                     app_log("Device lost");
                     *device_state.lock().unwrap() = None;
-                    if let Ok(menu) = build_menu(&handle, None) {
+                    let live = live_state.lock().unwrap().clone();
+                    if let Ok(menu) = build_menu(&handle, None, &live) {
                         let _ = tray.set_menu(Some(menu));
                     }
                     let _ = tray.set_icon(Some(gray_icon.clone()));
                     let _ = tray.set_tooltip(Some("DeskBuddy not found"));
+                }
+            });
+
+            app.listen("data-updated", {
+                let tray = tray_poller.clone();
+                let device_state = device_state.clone();
+                let live_state = live_state.clone();
+                let handle = handle_refresh.clone();
+
+                move |_event| {
+                    let dev = device_state.lock().unwrap().clone();
+                    let live = live_state.lock().unwrap().clone();
+                    if let Ok(menu) = build_menu(&handle, dev.as_ref(), &live) {
+                        let _ = tray.set_menu(Some(menu));
+                    }
                 }
             });
 
@@ -455,15 +1000,19 @@ pub fn run() {
                 let device_state = device_state.clone();
                 let gray_icon = gray_icon2.clone();
                 let handle = handle2.clone();
+                let live_state = live_state.clone();
 
                 move |_event| {
                     app_log("Manual refresh triggered");
-                    *device_state.lock().unwrap() = None;
-                    if let Ok(menu) = build_menu(&handle, None) {
+                    let dev = device_state.lock().unwrap().clone();
+                    let live = live_state.lock().unwrap().clone();
+                    if let Ok(menu) = build_menu(&handle, dev.as_ref(), &live) {
                         let _ = tray.set_menu(Some(menu));
                     }
-                    let _ = tray.set_icon(Some(gray_icon.clone()));
-                    let _ = tray.set_tooltip(Some("Refreshing..."));
+                    if dev.is_none() {
+                        let _ = tray.set_icon(Some(gray_icon.clone()));
+                        let _ = tray.set_tooltip(Some("Refreshing..."));
+                    }
                 }
             });
 
@@ -493,6 +1042,7 @@ pub fn run() {
             start_mdns(handle2);
             start_health_check(handle, saved_ip2);
             start_beacon_listener(handle3);
+            start_status_poller(handle_poller, device_state_poller, live_state);
 
             Ok(())
         })
